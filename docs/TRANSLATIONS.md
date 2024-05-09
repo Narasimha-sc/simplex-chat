@@ -72,7 +72,7 @@ Thanks a lot! This is a huge effort and a huge help for SimpleX Network to grow.
 
 ### Translating website
 
-1. You can translate a part of the website [via weblate](https://hosted.weblate.org/projects/simplex-chat/website/))
+1. You can translate a part of the website [via weblate](https://hosted.weblate.org/projects/simplex-chat/website/)
 2. The rest of the website is only translatable via [GitHub documents](https://github.com/simplex-chat/simplex-chat/tree/master/docs/lang), firstly, you must [fork SimpleX Chat git repository](https://github.com/simplex-chat/simplex-chat/fork), then copy English version of the files into a directory in docs/lang that matches your language (if it doesn't exist already, create it), and translate them. Do not forget to add link of your translation to navigation at top of the page in every language's file (so it can be switched to from every other language). Create a pull request with your translation when finished, it will be merged upon review, if it doesn't have mistakes.
 
 
