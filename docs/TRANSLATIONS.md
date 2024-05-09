@@ -70,6 +70,12 @@ Thanks a lot! This is a huge effort and a huge help for SimpleX Network to grow.
 
 <img src="./images/weblate_2.png" alt="weblate: automatic suggestions" width="100%">
 
+### Translating website
+
+1. You can translate a part of the website [via weblate](https://hosted.weblate.org/projects/simplex-chat/website/))
+2. The rest of the website is only translatable via [GitHub documents](https://github.com/simplex-chat/simplex-chat/tree/master/docs/lang), first you must clone SimpleX Chat git repository, then copy English version of the files into a directory in docs/lang that matches your language (if it doesn't exist already, create it), and translate them. Do not forget to add link of your translation to navigation at top of the page in every language's file (so it can be switched to from every other language). Create a pull request with your translation when finished, it will be merged upon review, if it doesn't have mistakes.
+
+
 ## Common translation mistakes
 
 1. The word "chat" is used in several meanings, depending on the context. It can mean either "SimpleX Chat app" (e.g. in Start/stop chat) or "a single conversation". Please ask when it is not clear, and we will be adding more translation notes.
@@ -94,9 +100,7 @@ You would make the review much easier if you could review it in advance in the s
 
 1. As we update the app, we post the updates in the group of translators. You are absolutely under no obligation to translate these additional strings. We hugely appreciate if you do though, as it makes the users experience so much better when they depend on your translations, than if some new part of the app is not translated.
 
-2. You can further help SimpleX adoption in your country / language group by translating [our website](https://simplex.chat) (also [via weblate](https://hosted.weblate.org/projects/simplex-chat/website/)) and/or [GitHub documents](https://github.com/simplex-chat/simplex-chat/tree/master/docs/lang) (this is only possible via git)!
-
-3. Also, if you want to be a moderator/admin of the users group in your language, once the app is translated we can host such group - we are preparing community guidelines and adding some moderation tools to the app to be released in v4.6 in March.
+2. Also, if you want to be a moderator/admin of the users group in your language, once the app is translated we can host such group - we are preparing community guidelines and adding some moderation tools to the app.
 
 
 Thank you very much again for helping us grow SimpleX Chat!
