@@ -84,6 +84,9 @@ fun AppearanceScope.AppearanceLayout(
     ProfileImageSection()
 
     SectionDividerSpaced()
+    TimestampsSection()
+
+    SectionDividerSpaced()
     FontScaleSection()
 
     SectionDividerSpaced()

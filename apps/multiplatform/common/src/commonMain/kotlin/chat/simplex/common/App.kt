@@ -114,6 +114,13 @@ fun MainScreen() {
       chatModel.clearOverlays.value = false
     }
   }
+  val useRelativeTimestamps by remember { chatModel.controller.appPrefs.relativeTimestamps.state }
+  LaunchedEffect(useRelativeTimestamps) {
+    while (useRelativeTimestamps) {
+      delay(60_000)
+      timestampTick.value++
+    }
+  }
 
   @Composable
   fun AuthView() {

@@ -3,7 +3,7 @@ package chat.simplex.common.views.chatlist
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.MaterialTheme
 import androidx.compose.material.Text
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
@@ -13,8 +13,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import chat.simplex.common.ui.theme.*
+import chat.simplex.common.model.ChatController
 import chat.simplex.common.model.ChatInfo
-import chat.simplex.common.model.getTimestampText
+import chat.simplex.common.model.chatTimestampText
+import chat.simplex.common.model.timestampTick
 import chat.simplex.common.views.helpers.*
 import chat.simplex.res.MR
 
@@ -47,7 +49,9 @@ fun ContactRequestView(contactRequest: ChatInfo.ContactRequest) {
         )
       )
     }
-    val ts = getTimestampText(contactRequest.contactRequest.updatedAt)
+    timestampTick.value
+    remember { ChatController.appPrefs.relativeTimestamps.state }.value
+    val ts = chatTimestampText(contactRequest.contactRequest.updatedAt)
     ChatListTimestampView(ts)
   }
 }

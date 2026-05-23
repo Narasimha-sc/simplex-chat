@@ -138,6 +138,7 @@ class AppPreferences {
   val appearanceBarsBlurRadius = mkIntPreference(SHARED_PREFS_APPEARANCE_BARS_BLUR_RADIUS, if (deviceSupportsBlur) 50 else 0)
   val experimentalCalls = mkBoolPreference(SHARED_PREFS_EXPERIMENTAL_CALLS, false)
   val showUnreadAndFavorites = mkBoolPreference(SHARED_PREFS_SHOW_UNREAD_AND_FAVORITES, false)
+  val relativeTimestamps = mkBoolPreference(SHARED_PREFS_RELATIVE_TIMESTAMPS, false)
   val chatArchiveName = mkStrPreference(SHARED_PREFS_CHAT_ARCHIVE_NAME, null)
   val chatArchiveTime = mkDatePreference(SHARED_PREFS_CHAT_ARCHIVE_TIME, null)
   val chatLastStart = mkDatePreference(SHARED_PREFS_CHAT_LAST_START, null)
@@ -404,6 +405,7 @@ class AppPreferences {
     private const val SHARED_PREFS_PRIVACY_SHOW_CHAT_PREVIEWS = "PrivacyShowChatPreviews"
     private const val SHARED_PREFS_PRIVACY_SAVE_LAST_DRAFT = "PrivacySaveLastDraft"
     private const val SHARED_PREFS_PRIVACY_DELIVERY_RECEIPTS_SET = "PrivacyDeliveryReceiptsSet"
+    private const val SHARED_PREFS_RELATIVE_TIMESTAMPS = "RelativeTimestamps"
     private const val SHARED_PREFS_PRIVACY_ENCRYPT_LOCAL_FILES = "PrivacyEncryptLocalFiles"
     private const val SHARED_PREFS_PRIVACY_ASK_TO_APPROVE_RELAYS = "PrivacyAskToApproveRelays"
     private const val SHARED_PREFS_PRIVACY_MEDIA_BLUR_RADIUS = "PrivacyMediaBlurRadius"
@@ -8068,7 +8070,8 @@ data class AppSettings(
   var uiCurrentThemeIds: Map<String, String>? = null,
   var uiThemes: List<ThemeOverrides>? = null,
   var oneHandUI: Boolean? = null,
-  var chatBottomBar: Boolean? = null
+  var chatBottomBar: Boolean? = null,
+  var relativeTimestamps: Boolean? = null,
 ) {
   fun prepareForExport(): AppSettings {
     val empty = AppSettings()
@@ -8106,6 +8109,7 @@ data class AppSettings(
     if (uiThemes != def.uiThemes) { empty.uiThemes = uiThemes }
     if (oneHandUI != def.oneHandUI) { empty.oneHandUI = oneHandUI }
     if (chatBottomBar != def.chatBottomBar) { empty.chatBottomBar = chatBottomBar }
+    if (relativeTimestamps != def.relativeTimestamps) { empty.relativeTimestamps = relativeTimestamps }
     return empty
   }
 
@@ -8154,6 +8158,7 @@ data class AppSettings(
     uiThemes?.let { def.themeOverrides.set(it.skipDuplicates()) }
     oneHandUI?.let { def.oneHandUI.set(it) }
     chatBottomBar?.let { if (appPlatform.isAndroid) def.chatBottomBar.set(it) else def.chatBottomBar.set(true) }
+    relativeTimestamps?.let { def.relativeTimestamps.set(it) }
   }
 
   companion object {
@@ -8192,6 +8197,7 @@ data class AppSettings(
         uiThemes = null,
         oneHandUI = true,
         chatBottomBar = true,
+        relativeTimestamps = false,
       )
 
     val current: AppSettings
@@ -8230,7 +8236,8 @@ data class AppSettings(
           uiCurrentThemeIds = def.currentThemeIds.get(),
           uiThemes = def.themeOverrides.get(),
           oneHandUI = def.oneHandUI.get(),
-          chatBottomBar = def.chatBottomBar.get()
+          chatBottomBar = def.chatBottomBar.get(),
+          relativeTimestamps = def.relativeTimestamps.get(),
         )
     }
   }
