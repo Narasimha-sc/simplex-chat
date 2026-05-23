@@ -8,6 +8,7 @@ import SectionItemView
 import itemHPadding
 import SectionItemViewSpaceBetween
 import SectionItemViewWithoutMinPadding
+import SectionTextFooter
 import SectionView
 import androidx.compose.foundation.*
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -175,6 +176,18 @@ object AppearanceScope {
         }
       }
     }
+  }
+
+  @Composable
+  fun TimestampsSection() {
+    SectionView {
+      SettingsPreferenceItem(
+        icon = null,
+        text = stringResource(MR.strings.relative_timestamps),
+        pref = appPreferences.relativeTimestamps,
+      )
+    }
+    SectionTextFooter(stringResource(MR.strings.relative_timestamps_desc))
   }
 
   @Composable

@@ -3098,4 +3098,13 @@
   <string name="tray_tooltip_unread">SimpleX — %d unread</string>
   <string name="appearance_minimize_to_tray">Close to tray</string>
   <string name="appearance_minimize_to_tray_desc">Runs in background to receive messages</string>
+
+<!-- Relative timestamps -->
+  <string name="relative_timestamps">Relative timestamps</string>
+  <string name="relative_timestamps_desc">Show timestamps as "2h5m ago" instead of "12:00"</string>
+  <string name="relative_time_less_than_minute">just now</string>
+  <string name="relative_time_minutes_ago">%dm ago</string>
+  <string name="relative_time_hours_minutes_ago">%1$dh%2$dm ago</string>
+  <string name="relative_time_days_ago">%dd ago</string>
+  <string name="relative_time_years_days_ago">%1$dy%2$dd ago</string>
 </resources>

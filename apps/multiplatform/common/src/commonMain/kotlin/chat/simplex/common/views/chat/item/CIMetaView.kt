@@ -4,7 +4,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material.*
 import androidx.compose.ui.graphics.painter.Painter
 import dev.icerock.moko.resources.compose.painterResource
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -38,6 +38,10 @@ fun CIMetaView(
   showTimestamp: Boolean,
   showViaProxy: Boolean,
 ) {
+  // Subscribe so the meta row redraws on each minute tick and when the pref toggles.
+  // The reads below are not used as values - their purpose is the subscription.
+  timestampTick.value
+  remember { ChatController.appPrefs.relativeTimestamps.state }.value
   Row(Modifier.padding(start = 3.dp), verticalAlignment = Alignment.CenterVertically) {
     if (chatItem.isDeletedContent) {
       Text(
@@ -169,7 +173,7 @@ fun reserveSpaceForMeta(
   }
   if (showTimestamp) {
     appendSpace()
-    res += meta.timestampText
+    res += meta.timestampReserveText
   }
   return res
 }
