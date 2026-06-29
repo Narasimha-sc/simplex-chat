@@ -2681,7 +2681,7 @@ processChatCommand cxt nm = \case
           updateCIGroupInvitationStatus user g CIGISAccepted `catchAllErrors` eToView
           pure $ CRUserAcceptedGroupSent user g {membership = membership {memberStatus = GSMemAccepted}} Nothing
         Nothing -> throwChatError $ CEContactNotActive ct
-  APIAcceptMember groupId gmId role -> withUser $ \user@User {userId} -> do
+  APIAcceptMember groupId gmId role -> withUser $ \user@User {userId} -> withGroupLock "acceptMember" groupId $ do
     (gInfo, m) <- withFastStore $ \db -> (,) <$> getGroupInfo db cxt user groupId <*> getGroupMemberById db cxt user gmId
     assertUserGroupRole gInfo $ max GRModerator role
     case memberStatus m of
@@ -3083,9 +3083,7 @@ processChatCommand cxt nm = \case
   ListGroups cName_ search_ -> withUser $ \user@User {userId} -> do
     ct_ <- forM cName_ $ \cName -> withFastStore $ \db -> getContactByName db cxt user cName
     processChatCommand cxt nm $ APIListGroups userId (contactId' <$> ct_) search_
-  APIUpdateGroupProfile groupId p' -> withUser $ \user -> do
-    gInfo <- withFastStore $ \db -> getGroupInfo db cxt user groupId
-    runUpdateGroupProfile user gInfo p'
+  APIUpdateGroupProfile groupId p' -> withUser $ \user -> updateGroupProfileById user groupId (const p')
   UpdateGroupNames gName GroupProfile {displayName, fullName, shortDescr} ->
     updateGroupProfileByName gName $ \p -> p {displayName, fullName, shortDescr}
   ShowGroupProfile gName -> withUser $ \user ->
@@ -3095,11 +3093,12 @@ processChatCommand cxt nm = \case
   ShowGroupDescription gName -> withUser $ \user ->
     CRGroupDescription user <$> withFastStore (\db -> getGroupInfoByName db cxt user gName)
   SetPublicGroupAccess gName access -> withUser $ \user -> do
-    gInfo@GroupInfo {groupProfile = p@GroupProfile {publicGroup}} <- withStore $ \db ->
-      getGroupIdByName db user gName >>= getGroupInfo db cxt user
-    case publicGroup of
-      Just pg -> runUpdateGroupProfile user gInfo p {publicGroup = Just pg {publicGroupAccess = Just access}}
-      Nothing -> throwChatError $ CECommandError "not a public group"
+    gId <- withStore $ \db -> getGroupIdByName db user gName
+    withGroupLock "updateGroupProfile" gId $ do
+      gInfo@GroupInfo {groupProfile = p@GroupProfile {publicGroup}} <- withStore $ \db -> getGroupInfo db cxt user gId
+      case publicGroup of
+        Just pg -> runUpdateGroupProfile user gInfo p {publicGroup = Just pg {publicGroupAccess = Just access}}
+        Nothing -> throwChatError $ CECommandError "not a public group"
   APICreateGroupLink groupId mRole -> withUser $ \user -> withGroupLock "createGroupLink" groupId $ do
     gInfo@GroupInfo {groupProfile} <- withFastStore $ \db -> getGroupInfo db cxt user groupId
     assertUserGroupRole gInfo GRAdmin
@@ -3940,11 +3939,18 @@ processChatCommand cxt nm = \case
       if groupFeatureUserAllowed SGFFullDelete gInfo
         then deleteGroupCIs user gInfo chatScopeInfo items m deletedTs
         else markGroupCIsDeleted user gInfo chatScopeInfo items m deletedTs
+    -- group lock + read-modify-write must be one critical section, otherwise a
+    -- concurrent profile update (e.g. another field edit, or an inbound XGrpInfo)
+    -- can clobber fields like member_admission via lost update.
+    updateGroupProfileById :: User -> GroupId -> (GroupProfile -> GroupProfile) -> CM ChatResponse
+    updateGroupProfileById user gId update =
+      withGroupLock "updateGroupProfile" gId $ do
+        gInfo@GroupInfo {groupProfile = p} <- withStore $ \db -> getGroupInfo db cxt user gId
+        runUpdateGroupProfile user gInfo $ update p
     updateGroupProfileByName :: GroupName -> (GroupProfile -> GroupProfile) -> CM ChatResponse
     updateGroupProfileByName gName update = withUser $ \user -> do
-      gInfo@GroupInfo {groupProfile = p} <- withStore $ \db ->
-        getGroupIdByName db user gName >>= getGroupInfo db cxt user
-      runUpdateGroupProfile user gInfo $ update p
+      gId <- withStore $ \db -> getGroupIdByName db user gName
+      updateGroupProfileById user gId update
     withCurrentCall :: ContactId -> (User -> Contact -> Call -> CM (Maybe Call)) -> CM ChatResponse
     withCurrentCall ctId action = do
       (user, ct) <- withStore $ \db -> do
