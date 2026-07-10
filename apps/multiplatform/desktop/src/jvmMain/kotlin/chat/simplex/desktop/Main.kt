@@ -21,6 +21,9 @@ import java.io.File
 
 fun main() {
   if (!acquireSingleInstance()) return
+  // Clean shared temp dirs only in the owning instance (not in a Files.desktop val
+  // initializer, which a transient second instance would also run). Early: before settings writes.
+  preferencesTmpDir.deleteRecursively()
   // Disable hardware acceleration
   //System.setProperty("skiko.renderApi", "SOFTWARE")
   initHaskell()
@@ -29,6 +32,8 @@ fun main() {
   initApp()
   tmpDir.deleteRecursively()
   tmpDir.mkdir()
+  // Only the owning instance cleans tmpDir on exit (see preferencesTmpDir above).
+  tmpDir.deleteOnExit()
   return showApp()
 }
 
