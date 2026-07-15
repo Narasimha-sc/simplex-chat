@@ -1,0 +1,68 @@
+# Lean, on-demand Windows .msi build for testing a branch (no release, one runner).
+# Reuses the repo's own build-lib-windows.sh + gradle packageMsi, uploads the .msi as an artifact.
+name: windows-msi-test
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - nd/ci-error-window-msi
+
+jobs:
+  build-windows-msi:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Prepare build
+        uses: ./.github/actions/prepare-build
+        with:
+          java_ver: 17
+          ghc_ver: 9.6.3
+          os: windows-latest
+          cache_path: "C:/cabal"
+          github_ref: ${{ github.ref }}
+
+      # prepare-build only sets up Java on tag builds, so do it explicitly here.
+      - name: Setup Java
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'corretto'
+          java-version: 17
+          cache: 'gradle'
+
+      - name: Configure pagefile (Windows)
+        uses: simplex-chat/configure-pagefile-action@v1.4
+        with:
+          minimum-size: 16GB
+          maximum-size: 16GB
+          disk-root: "C:"
+
+      - name: Setup MSYS2
+        uses: simplex-chat/setup-msys2@v2
+        with:
+          msystem: ucrt64
+          update: true
+          install: >-
+            git
+            perl
+            make
+          pacboy: >-
+            toolchain:p
+            cmake:p
+
+      - name: Build Desktop MSI
+        shell: msys2 {0}
+        run: |
+          export PATH=$PATH:/c/ghcup/bin:$(echo /c/tools/ghc-*/bin || echo)
+          scripts/desktop/build-lib-windows.sh
+          cd apps/multiplatform
+          ./gradlew -Psimplex.assets.dir=../../assets packageMsi
+
+      - name: Upload MSI artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: simplex-desktop-windows-x86_64-msi
+          path: apps/multiplatform/release/main/msi/*.msi
+          if-no-files-found: error
