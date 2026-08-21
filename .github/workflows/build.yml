@@ -5,6 +5,7 @@ on:
     branches:
       - master
       - stable
+      - nd/vlc-bump-msi
     tags:
       - "v*"
       - "!*-fdroid"
@@ -109,6 +110,7 @@ jobs:
   build-linux:
     name: "ubuntu-${{ matrix.os }}-${{ matrix.arch }} (CLI,Desktop), GHC: ${{ matrix.ghc }}"
     needs: [maybe-release, variables]
+    if: false  # msi-only test branch
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
@@ -482,6 +484,7 @@ jobs:
   build-macos:
     name: "${{ matrix.os }} (CLI,Desktop), GHC: ${{ matrix.ghc }}"
     needs: [maybe-release, variables]
+    if: false  # msi-only test branch
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -621,7 +624,7 @@ jobs:
           ghc_ver: ${{ matrix.ghc }}
           os: ${{ matrix.os }}
           cache_path: "C:/cabal"
-          github_ref: ${{ github.ref }}
+          github_ref: refs/tags/v0.0.0-msi  # forces Setup Java on a non-tag run
 
       - name: Configure pagefile (Windows)
         uses: simplex-chat/configure-pagefile-action@v1.4
@@ -677,13 +680,17 @@ jobs:
           github_ref: ${{ github.ref }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build Desktop
-        id: windows_desktop_build
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Build lib and prepare VLC
         shell: msys2 {0}
         run: |
           export PATH=$PATH:/c/ghcup/bin:$(echo /c/tools/ghc-*/bin || echo)
           scripts/desktop/build-lib-windows.sh
+
+      - name: Build Desktop
+        id: windows_desktop_build
+        shell: msys2 {0}
+        run: |
+          export PATH=$PATH:/c/ghcup/bin:$(echo /c/tools/ghc-*/bin || echo)
           cd apps/multiplatform
           ./gradlew -Psimplex.assets.dir=../../assets packageMsi
           rm -rf dist-newstyle/src/direct-sq* dist-newstyle/src/simplexmq*
@@ -691,15 +698,50 @@ jobs:
           echo "package_path=$path" >> $GITHUB_OUTPUT
           echo "package_hash=$(echo SHA2-256\(${{ matrix.desktop_asset_name }}\)= $(openssl sha256 $path | cut -d' ' -f 2))" >> $GITHUB_OUTPUT
 
-      - name: Upload Desktop
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: ./.github/actions/prepare-release
+      - name: Upload Desktop MSI as artifact
+        uses: actions/upload-artifact@v4
         with:
-          bin_path: ${{ steps.windows_desktop_build.outputs.package_path }}
-          bin_name: ${{ matrix.desktop_asset_name }}
-          bin_hash: ${{ steps.windows_desktop_build.outputs.package_hash }}
-          github_ref: ${{ github.ref }}
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+          name: simplex-desktop-windows-x86_64-msi
+          path: apps/multiplatform/release/main/msi/*.msi
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Verify bundled VLC
+        shell: pwsh
+        run: |
+          $expected = @{
+            'libvlc.dll'     = '19bfb096f6b67621e4d77042d4859e081eb5684470003a18d341647974361771'
+            'libvlccore.dll' = 'f5f282c42606b3c6cb6c202485838238e3f181015a00ff59a8afaa4fd16ca16f'
+          }
+          function Check-Dlls($root, $label) {
+            foreach ($name in @('libvlc.dll', 'libvlccore.dll')) {
+              $files = @(Get-ChildItem $root -Recurse -Filter $name -ErrorAction SilentlyContinue)
+              if ($files.Count -eq 0) { throw "$label : $name not found under $root" }
+              foreach ($f in $files) {
+                $sha = (Get-FileHash $f.FullName -Algorithm SHA256).Hash.ToLower()
+                "$label  $name  version=$($f.VersionInfo.ProductVersion)  sha256=$sha"
+                if ($sha -ne $expected[$name]) {
+                  throw "$label : $name is not the binary published under vlc v3.0.23-2 (expected $($expected[$name]))"
+                }
+              }
+            }
+            $plugins = @(Get-ChildItem $root -Recurse -Filter *.dll -ErrorAction SilentlyContinue | Where-Object { $_.FullName -match '\\plugins\\' })
+            "$label  plugin dlls: $($plugins.Count)"
+            if ($plugins.Count -lt 100) { throw "$label : VLC plugins missing" }
+            if (-not @(Get-ChildItem $root -Recurse -Filter plugins.dat -ErrorAction SilentlyContinue)) {
+              throw "$label : plugins.dat missing, vlc-cache-gen did not run"
+            }
+          }
+
+          Select-String -Path scripts/desktop/prepare-vlc-windows.sh -Pattern 'vlc_tag='
+          Check-Dlls 'apps/multiplatform/common/src/commonMain/cpp/desktop/libs/windows-x86_64' 'build output'
+
+          $msi = @(Get-ChildItem 'apps/multiplatform/release/main/msi' -Filter *.msi)[0]
+          "msi: $($msi.Name)  $([math]::Round($msi.Length/1MB,1)) MB  sha256=$((Get-FileHash $msi.FullName -Algorithm SHA256).Hash.ToLower())"
+          $target = 'C:\msi-extract'
+          $p = Start-Process msiexec -ArgumentList "/a `"$($msi.FullName)`" /qn TARGETDIR=`"$target`"" -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "msiexec administrative install failed with $($p.ExitCode)" }
+          Check-Dlls $target 'msi'
 
 # =========================
 #   NodeJS libs release
