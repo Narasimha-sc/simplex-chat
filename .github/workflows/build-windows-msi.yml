@@ -1,7 +1,14 @@
 name: build-windows-msi
+run-name: "Windows MSI: ${{ inputs.ref }}"
 
+# Manual only: builds the desktop MSI from the branch, tag or commit given in `ref`.
 on:
   workflow_dispatch:
+    inputs:
+      ref:
+        description: "Branch, tag or commit SHA to build"
+        required: true
+        type: string
 
 jobs:
   build-windows-msi:
@@ -10,15 +17,16 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3
+        with:
+          ref: ${{ inputs.ref }}
+          submodules: recursive
 
-      # prepare-build gates Java setup on tag ref; pass a synthetic tag ref so Java is installed.
+      # prepare-build installs Java only for tag refs, so pass a synthetic tag ref.
       - name: Prepare build
         uses: ./.github/actions/prepare-build
         with:
           java_ver: 17
           ghc_ver: 9.6.3
-          os: windows-latest
-          cache_path: "C:/cabal"
           github_ref: refs/tags/vmsi-build
 
       - name: Configure pagefile (Windows)
@@ -37,12 +45,13 @@ jobs:
             git
             perl
             make
+            zip
           pacboy: >-
             toolchain:p
             cmake:p
 
-      # Mirrors Build CLI step from build.yml: primes the cabal store and patches simplex-chat.cabal
-      # (comment out unix dep) which is required before running build-lib-windows.sh.
+      # Same as the Build CLI step in build.yml: primes the cabal store and patches simplex-chat.cabal
+      # (comments out the unix dependency), which build-lib-windows.sh needs.
       - name: Build CLI (prime deps, patch cabal)
         shell: msys2 {0}
         run: |
@@ -56,20 +65,18 @@ jobs:
           echo "    extra-include-dirs: $openssl_windows_style_path\include" >> cabal.project.local
           echo "    extra-lib-dirs: $openssl_windows_style_path" >> cabal.project.local
 
-          rm -rf dist-newstyle/src/direct-sq*
+          rm -rf dist-newstyle/src/direct-sq* dist-newstyle/src/simplexmq*
           sed -i "s/, unix /--, unix /" simplex-chat.cabal
-          cabal build -j --enable-tests
-          rm -rf dist-newstyle/src/direct-sq*
+          cabal build -j
+          rm -rf dist-newstyle/src/direct-sq* dist-newstyle/src/simplexmq*
 
       - name: Build Desktop MSI
-        id: windows_desktop_build
         shell: msys2 {0}
         run: |
           export PATH=$PATH:/c/ghcup/bin:$(echo /c/tools/ghc-*/bin || echo)
           scripts/desktop/build-lib-windows.sh
           cd apps/multiplatform
-          ./gradlew packageMsi
-          rm -rf dist-newstyle/src/direct-sq*
+          ./gradlew -Psimplex.assets.dir=../../assets packageMsi
 
       - name: Upload MSI artifact
         uses: actions/upload-artifact@v4
