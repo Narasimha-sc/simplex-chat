@@ -128,6 +128,8 @@ function Show-Folder([string]$Path, [string]$Caption) {
   }
   Save-Screenshot $Caption
   Close-ExplorerWindows
+  $unavailable = Find-InWindow 'Location is not available' 'OK' ([System.Windows.Automation.ControlType]::Button)
+  if ($unavailable) { Invoke-Element $unavailable }
 }
 
 Export-ModuleMember -Function Initialize-Evidence, Save-Screenshot, Get-TopWindow, Find-InWindow, Wait-Window, Wait-Button, Invoke-Element, Set-EditText, Close-ExplorerWindows, Show-Folder
