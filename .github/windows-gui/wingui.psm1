@@ -97,14 +97,22 @@ function Set-EditText([string]$Title, [string]$Text, [int]$TimeoutSec = 60) {
   $edit
 }
 
+function Close-ExplorerWindows {
+  foreach ($window in @((New-Object -ComObject Shell.Application).Windows())) {
+    try { $window.Quit() } catch {}
+  }
+  Start-Sleep -Seconds 1
+}
+
 function Show-Folder([string]$Path, [string]$Caption) {
-  $leaf = Split-Path $Path -Leaf
   $listing = if (Test-Path $Path) { (Get-ChildItem -Force $Path | ForEach-Object { $_.Name }) -join ', ' } else { '<folder does not exist>' }
   Write-Host "LISTING $Path : $listing"
+  Close-ExplorerWindows
   if (-not (Test-Path $Path)) {
-    Save-Screenshot $Caption
-    return
+    $Caption = "$Caption (the folder itself no longer exists, its parent is shown)"
+    $Path = Split-Path $Path -Parent
   }
+  $leaf = Split-Path $Path -Leaf
   Start-Process explorer.exe -ArgumentList "`"$Path`""
   $window = $null
   $deadline = (Get-Date).AddSeconds(20)
@@ -119,10 +127,7 @@ function Show-Folder([string]$Path, [string]$Caption) {
     Start-Sleep -Seconds 2
   }
   Save-Screenshot $Caption
-  if ($window) {
-    try { $window.GetCurrentPattern([System.Windows.Automation.WindowPattern]::Pattern).Close() } catch {}
-    Start-Sleep -Seconds 1
-  }
+  Close-ExplorerWindows
 }
 
-Export-ModuleMember -Function Initialize-Evidence, Save-Screenshot, Get-TopWindow, Find-InWindow, Wait-Window, Wait-Button, Invoke-Element, Set-EditText, Show-Folder
+Export-ModuleMember -Function Initialize-Evidence, Save-Screenshot, Get-TopWindow, Find-InWindow, Wait-Window, Wait-Button, Invoke-Element, Set-EditText, Close-ExplorerWindows, Show-Folder

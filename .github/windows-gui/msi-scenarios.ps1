@@ -84,6 +84,7 @@ function Reset-State {
     $path = Join-Path $Desktop $name
     if (Test-Path $path) { Remove-Item -Recurse -Force $path }
   }
+  New-Item -ItemType Directory -Force $Desktop | Out-Null
 }
 
 function Add-UserFiles {
