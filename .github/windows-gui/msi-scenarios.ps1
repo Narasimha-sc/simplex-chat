@@ -26,6 +26,8 @@ $Setup = 'SimpleX Setup'
 $UserFiles = @('My notes.txt', 'Tax return 2025.txt', 'Holiday photos\beach.txt')
 $SeededNames = @('My notes.txt', 'Tax return 2025.txt', 'Holiday photos')
 $InstalledNames = @('SimpleX.exe', 'app', 'runtime')
+$FolderUserFiles = @('My profile notes.txt', '.my-settings\settings.txt')
+$FolderUserNames = @('My profile notes.txt', '.my-settings')
 $script:Failures = @()
 
 function Write-Check([string]$Name, $Value) {
@@ -68,17 +70,23 @@ function Invoke-MsiSql($Database, [string]$Sql) {
 function Read-MsiColumn([string]$Msi, [string]$Sql) {
   $db = Open-MsiDatabase $Msi 0
   $values = Invoke-MsiSql $db $Sql
-  [System.Runtime.InteropServices.Marshal]::ReleaseComObject($db) | Out-Null
+  Close-MsiHandles
   $values
+}
+
+function Close-MsiHandles {
+  [GC]::Collect()
+  [GC]::WaitForPendingFinalizers()
 }
 
 function New-LaterVersionMsi([string]$Msi, [string]$Path) {
   Copy-Item $Msi $Path
-  $version = Read-MsiColumn $Path 'SELECT `Value` FROM `Property` WHERE `Property`=''ProductVersion'''
+  Set-ItemProperty $Path -Name IsReadOnly -Value $false
+  $db = Open-MsiDatabase $Path 1
+  $version = Invoke-MsiSql $db 'SELECT `Value` FROM `Property` WHERE `Property`=''ProductVersion'''
   $parts = $version.Split('.')
   $later = "$($parts[0]).$($parts[1]).$([int]$parts[2] + 1)"
-  $upgradeCode = Read-MsiColumn $Path 'SELECT `Value` FROM `Property` WHERE `Property`=''UpgradeCode'''
-  $db = Open-MsiDatabase $Path 1
+  $upgradeCode = Invoke-MsiSql $db 'SELECT `Value` FROM `Property` WHERE `Property`=''UpgradeCode'''
   Invoke-MsiSql $db "UPDATE ``Property`` SET ``Value``='$later' WHERE ``Property``='ProductVersion'" | Out-Null
   Invoke-MsiSql $db "UPDATE ``Property`` SET ``Value``='{$([guid]::NewGuid().ToString().ToUpper())}' WHERE ``Property``='ProductCode'" | Out-Null
   Invoke-MsiSql $db 'DELETE FROM `Upgrade`' | Out-Null
@@ -96,7 +104,9 @@ function New-LaterVersionMsi([string]$Msi, [string]$Path) {
   $summary.GetType().InvokeMember('Property', [Reflection.BindingFlags]::SetProperty, $null, $summary, @(9, "{$([guid]::NewGuid().ToString().ToUpper())}")) | Out-Null
   Invoke-Com $summary 'Persist' @() | Out-Null
   Invoke-Com $db 'Commit' @() | Out-Null
-  [System.Runtime.InteropServices.Marshal]::ReleaseComObject($db) | Out-Null
+  $summary = $null
+  $db = $null
+  Close-MsiHandles
   $Path
 }
 
@@ -133,10 +143,21 @@ function Reset-State {
   foreach ($code in $script:ProductCodes) {
     Start-Process msiexec.exe -ArgumentList @('/x', $code, '/qn') -Wait
   }
-  foreach ($path in @($SeededNames | ForEach-Object { Join-Path $Desktop $_ }) + @($InstalledNames | ForEach-Object { Join-Path $Desktop $_; Join-Path $UserProfile $_ })) {
+  $installFolders = @($Desktop, $UserProfile, $env:APPDATA)
+  $paths = @($SeededNames | ForEach-Object { Join-Path $Desktop $_ })
+  foreach ($folder in $installFolders) {
+    $paths += @($InstalledNames + $FolderUserNames | ForEach-Object { Join-Path $folder $_ })
+  }
+  foreach ($path in $paths) {
     if (Test-Path $path) { Remove-Item -Recurse -Force $path }
   }
   New-Item -ItemType Directory -Force $Desktop | Out-Null
+}
+
+function Add-FolderUserFiles([string]$Folder) {
+  Set-Content (Join-Path $Folder 'My profile notes.txt') 'A user file next to the install folder contents.'
+  New-Item -ItemType Directory -Force (Join-Path $Folder '.my-settings') | Out-Null
+  Set-Content (Join-Path $Folder '.my-settings\settings.txt') 'A user folder that sorts before AppData.'
 }
 
 function Add-UserFiles {
@@ -242,22 +263,27 @@ function Test-DefaultFolder {
   Test-UserFiles 'default-folder after uninstall'
 }
 
-function Test-ProfileFolder {
+function Test-DataFolder([string]$Tag, [string]$Folder, [string]$What) {
   Reset-State
-  Install-WithUi $script:NewMsi "$UserProfile\" 'profile-folder' 'Install into the user profile folder'
-  Assert-Check 'profile-folder - app running after 45 s' (Start-App (Join-Path $UserProfile 'SimpleX.exe') 'SimpleX started from the user profile folder') $true
+  Install-WithUi $script:NewMsi "$Folder\" $Tag "Install into $What"
+  Assert-Check "$Tag - app running after 45 s" (Start-App (Join-Path $Folder 'SimpleX.exe') "SimpleX started from $What") $true
+  Add-FolderUserFiles $Folder
   $dataFiles = @(Get-ChildItem -Recurse -File $DataDir | ForEach-Object { $_.FullName })
-  Write-Check 'profile-folder - SimpleX data files before uninstall' ($dataFiles -join ', ')
-  Assert-Check 'profile-folder - chat database exists before uninstall' (Test-Path (Join-Path $DataDir 'simplex_v1_chat.db')) $true
+  Write-Check "$Tag - SimpleX data files before uninstall" ($dataFiles -join ', ')
+  Assert-Check "$Tag - chat database exists before uninstall" (Test-Path (Join-Path $DataDir 'simplex_v1_chat.db')) $true
+  Show-Folder $Folder "$What with SimpleX and the user's files, before uninstalling"
   Show-Folder $DataDir 'SimpleX data folder (database) before uninstalling'
-  Uninstall-WithUi $script:NewMsi 'profile-folder' 'Uninstall from the user profile folder'
+  Uninstall-WithUi $script:NewMsi $Tag "Uninstall from $What"
+  Show-Folder $Folder "$What after uninstalling SimpleX"
   Show-Folder $DataDir 'SimpleX data folder (database) after uninstalling'
-  Assert-Check 'profile-folder after uninstall - user profile folder exists' (Test-Path $UserProfile) $true
+  foreach ($file in $FolderUserFiles) {
+    Assert-Check "$Tag after uninstall - $file in $What exists" (Test-Path (Join-Path $Folder $file)) $true
+  }
   foreach ($file in $dataFiles) {
-    Assert-Check "profile-folder after uninstall - $file exists" (Test-Path $file) $true
+    Assert-Check "$Tag after uninstall - $file exists" (Test-Path $file) $true
   }
   foreach ($name in $InstalledNames) {
-    Assert-Check "profile-folder after uninstall - $name in profile exists" (Test-Path (Join-Path $UserProfile $name)) $false
+    Assert-Check "$Tag after uninstall - $name in $What exists" (Test-Path (Join-Path $Folder $name)) $false
   }
 }
 
@@ -291,7 +317,8 @@ $scenarios = [ordered]@{
   'update-desktop' = { Test-Update 'update-desktop' $script:OldMsi $script:NewMsi 'the old version' 'the new version' }
   'update-same-build' = { Test-Update 'update-same-build' $script:NewMsi $script:LaterMsi 'the new version' 'a later version of the same build' }
   'default-folder' = { Test-DefaultFolder }
-  'profile-folder' = { Test-ProfileFolder }
+  'profile-folder' = { Test-DataFolder 'profile-folder' $UserProfile 'the user profile folder' }
+  'appdata-folder' = { Test-DataFolder 'appdata-folder' $env:APPDATA 'the AppData Roaming folder' }
 }
 $selected = if ($Scenario -eq 'all') { $scenarios.Keys } else { @($Scenario) }
 $errors = @()

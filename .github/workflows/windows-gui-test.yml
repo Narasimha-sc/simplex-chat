@@ -12,7 +12,7 @@ on:
         required: true
         default: all
         type: choice
-        options: [all, uninstall-desktop, update-desktop, update-same-build, default-folder, profile-folder]
+        options: [all, uninstall-desktop, update-desktop, update-same-build, default-folder, profile-folder, appdata-folder]
       label:
         description: "Free text shown in the run name"
         required: false
