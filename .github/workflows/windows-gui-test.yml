@@ -23,6 +23,11 @@ on:
         required: false
         default: ""
         type: string
+      new_msi_artifact:
+        description: "Name of the MSI artifact in that run"
+        required: false
+        default: "simplex-desktop-windows-x86_64-msi"
+        type: string
       new_msi_url:
         description: "URL of the new MSI when new_msi_run_id is empty"
         required: false
@@ -65,7 +70,7 @@ jobs:
         if: inputs.new_msi_run_id != ''
         uses: actions/download-artifact@v4
         with:
-          name: simplex-desktop-windows-x86_64-msi
+          name: ${{ inputs.new_msi_artifact }}
           run-id: ${{ inputs.new_msi_run_id }}
           github-token: ${{ github.token }}
           path: C:\msitest\artifact
