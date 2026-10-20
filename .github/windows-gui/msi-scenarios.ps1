@@ -3,6 +3,7 @@ param(
   [string]$NewMsiUrl = '',
   [string]$NewMsiDir = '',
   [string]$OldMsiUrl = '',
+  [string]$PatchScript = '',
   [string]$Work = 'C:\msitest'
 )
 
@@ -226,6 +227,7 @@ function Test-Update([string]$Tag, [string]$FromMsi, [string]$ToMsi, [string]$Fr
     Assert-Check "$Tag after update - Desktop\$name exists" (Test-Path (Join-Path $Desktop $name)) $false
   }
   Assert-Check "$Tag - updated SimpleX.exe in Program Files" (Test-Path (Join-Path $ProgramFilesDir 'SimpleX.exe')) $true
+  Assert-Check "$Tag - updated app running after 45 s" (Start-App (Join-Path $ProgramFilesDir 'SimpleX.exe') "SimpleX started after updating to $ToWhat") $true
 }
 
 function Test-DefaultFolder {
@@ -268,6 +270,12 @@ Write-Check 'user profile' $UserProfile
 Save-Screenshot 'Runner screen at start'
 
 $script:NewMsi = Get-Msi $NewMsiUrl $NewMsiDir 'new'
+if ($PatchScript) {
+  & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Resolve-Path $PatchScript) $script:NewMsi
+  Assert-Check 'patch script exit code' $LASTEXITCODE 0
+  Write-Check 'patched new MSI - ClearOlderVersionsInstallDirWipe action' ((Read-MsiColumn $script:NewMsi 'SELECT `Target` FROM `CustomAction` WHERE `Action`=''ClearOlderVersionsInstallDirWipe''') -join ' | ')
+  Write-Check 'patched new MSI - RemoveExistingProducts sequence' (Read-MsiColumn $script:NewMsi 'SELECT `Sequence` FROM `InstallExecuteSequence` WHERE `Action`=''RemoveExistingProducts''')
+}
 $script:OldMsi = Get-Msi $OldMsiUrl '' 'old'
 $script:ProductCodes = @((Describe-Msi $script:NewMsi 'new'), (Describe-Msi $script:OldMsi 'old'))
 $script:LaterMsi = $null

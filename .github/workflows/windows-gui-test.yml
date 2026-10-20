@@ -33,6 +33,11 @@ on:
         required: false
         default: "https://github.com/simplex-chat/simplex-chat/releases/download/v7.0.2/simplex-desktop-windows-x86_64.msi"
         type: string
+      patch_with_ref:
+        description: "Branch whose scripts/desktop/disable-msi-install-dir-wipe-windows.ps1 is applied to the new MSI (empty: no patch)"
+        required: false
+        default: ""
+        type: string
 
 permissions:
   contents: read
@@ -47,6 +52,14 @@ jobs:
         uses: actions/checkout@v4
         with:
           sparse-checkout: .github/windows-gui
+
+      - name: Checkout MSI patch script
+        if: inputs.patch_with_ref != ''
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.patch_with_ref }}
+          path: patchsrc
+          sparse-checkout: scripts/desktop
 
       - name: Download new MSI from build run
         if: inputs.new_msi_run_id != ''
@@ -64,9 +77,10 @@ jobs:
           NEW_MSI_URL: ${{ inputs.new_msi_url }}
           NEW_MSI_DIR: ${{ inputs.new_msi_run_id != '' && 'C:\msitest\artifact' || '' }}
           OLD_MSI_URL: ${{ inputs.old_msi_url }}
+          PATCH_SCRIPT: ${{ inputs.patch_with_ref != '' && 'patchsrc\scripts\desktop\disable-msi-install-dir-wipe-windows.ps1' || '' }}
         run: |
           New-Item -ItemType Directory -Force C:\msitest | Out-Null
-          & .github/windows-gui/msi-scenarios.ps1 -Scenario $env:SCENARIO -NewMsiUrl $env:NEW_MSI_URL -NewMsiDir $env:NEW_MSI_DIR -OldMsiUrl $env:OLD_MSI_URL
+          & .github/windows-gui/msi-scenarios.ps1 -Scenario $env:SCENARIO -NewMsiUrl $env:NEW_MSI_URL -NewMsiDir $env:NEW_MSI_DIR -OldMsiUrl $env:OLD_MSI_URL -PatchScript $env:PATCH_SCRIPT
 
       - name: Upload evidence
         if: always()
