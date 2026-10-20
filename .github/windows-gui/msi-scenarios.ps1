@@ -296,6 +296,8 @@ Write-Check 'user profile' $UserProfile
 Save-Screenshot 'Runner screen at start'
 
 $script:NewMsi = Get-Msi $NewMsiUrl $NewMsiDir 'new'
+Write-Check 'direct COM call WindowsInstaller.Installer.OpenDatabase' $(try { $null = (New-Object -ComObject WindowsInstaller.Installer).OpenDatabase($script:NewMsi, 0); 'works' } catch { "fails: $($_.Exception.Message)" })
+Close-MsiHandles
 if ($PatchScript) {
   & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Resolve-Path $PatchScript) $script:NewMsi
   Assert-Check 'patch script exit code' $LASTEXITCODE 0
