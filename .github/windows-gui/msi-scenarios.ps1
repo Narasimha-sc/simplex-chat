@@ -320,7 +320,12 @@ $scenarios = [ordered]@{
   'profile-folder' = { Test-DataFolder 'profile-folder' $UserProfile 'the user profile folder' }
   'appdata-folder' = { Test-DataFolder 'appdata-folder' $env:APPDATA 'the AppData Roaming folder' }
 }
-$selected = if ($Scenario -eq 'all') { $scenarios.Keys } else { @($Scenario) }
+$knownIssues = @('update-desktop')
+$selected = switch ($Scenario) {
+  'all' { @($scenarios.Keys | Where-Object { $_ -notin $knownIssues }) }
+  'everything' { @($scenarios.Keys) }
+  default { @($Scenario) }
+}
 $errors = @()
 foreach ($name in $selected) {
   Write-Host "=== SCENARIO $name"

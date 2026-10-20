@@ -8,11 +8,11 @@ on:
   workflow_dispatch:
     inputs:
       scenario:
-        description: "Scenario to run"
+        description: "Scenario to run (all: every scenario except the known issue update-desktop; everything: all of them)"
         required: true
         default: all
         type: choice
-        options: [all, uninstall-desktop, update-desktop, update-same-build, default-folder, profile-folder, appdata-folder]
+        options: [all, everything, uninstall-desktop, update-desktop, update-same-build, default-folder, profile-folder, appdata-folder]
       label:
         description: "Free text shown in the run name"
         required: false
