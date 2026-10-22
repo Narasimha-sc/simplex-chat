@@ -3,6 +3,7 @@ package chat.simplex.app.ui.chat
 import chat.simplex.app.ui.harness.CONNECT_TIMEOUT_MS
 import chat.simplex.app.ui.harness.UiScope
 import chat.simplex.app.ui.harness.UiTest
+import chat.simplex.app.ui.harness.awaitRowText
 import chat.simplex.app.ui.harness.backToChatList
 import chat.simplex.app.ui.harness.confirmAlert
 import chat.simplex.app.ui.harness.connect
@@ -12,7 +13,9 @@ import chat.simplex.app.ui.harness.openItemInfo
 import chat.simplex.app.ui.harness.openTimedMenu
 import chat.simplex.app.ui.harness.ownGroup
 import chat.simplex.common.model.CIDeleted
+import chat.simplex.common.model.CIForwardedFrom
 import chat.simplex.common.model.CIStatus
+import chat.simplex.common.model.ChatItem
 import chat.simplex.common.model.SndCIStatusProgress
 import chat.simplex.common.model.localTimestamp
 import chat.simplex.common.platform.chatModel
@@ -109,6 +112,7 @@ class ItemInfoTest : UiTest() {
     val alice = app("alice"); val bob = cli("bob")
     connect(bob)
     bob sends "@alice question"
+    awaitRowText(alice, "bob", "question")
     val chat = alice.chatList.open("bob")
     chat.itemId("question")
     chat.send("plain")
@@ -138,6 +142,7 @@ class ItemInfoTest : UiTest() {
     emptyGroup(alice, "team")
     backToChatList()
     bob sends "@alice hi"
+    awaitRowText(alice, "bob", "hi")
     val chat = alice.chatList.open("bob")
     chat.itemId("hi")
     hideKeyboard()
@@ -158,9 +163,10 @@ class ItemInfoTest : UiTest() {
     hideKeyboard()
     chat.forwardTo("hi", "Private notes")
     val notesId = alice.chatList.chatId("Private notes")
-    poll(what = "the notes open with the saved `hi`") { chatModel.chatId.value == notesId && chat.itemTexts().contains("hi") }
+    val savedFromBob = { ci: ChatItem -> ci.content.text == "hi" && (ci.meta.itemForwarded as? CIForwardedFrom.Contact)?.chatName == "bob" }
+    poll(what = "the notes open with the saved `hi`") { chatModel.chatId.value == notesId && chatModel.chatsContext.chatItems.value.any(savedFromBob) }
     hideKeyboard()
-    openItemInfo(chat.itemId("hi"), "Saved message").run {
+    openItemInfo(chat.itemId("the `hi` saved from bob in the notes", savedFromBob), "Saved message").run {
       poll(what = "the `Saved` tab, with the history shown first") { exists(SAVED_TAB) && !exists(Ui.ItemInfo.ForwardedFrom) }
       click(SAVED_TAB)
       poll(what = "`Saved from` bob, without the recipients line") {

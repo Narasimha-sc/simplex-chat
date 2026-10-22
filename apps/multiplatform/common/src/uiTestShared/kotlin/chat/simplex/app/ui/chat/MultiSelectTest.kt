@@ -3,6 +3,7 @@ package chat.simplex.app.ui.chat
 import chat.simplex.app.ui.harness.CONNECT_TIMEOUT_MS
 import chat.simplex.app.ui.harness.KnownAppIssue
 import chat.simplex.app.ui.harness.UiTest
+import chat.simplex.app.ui.harness.awaitRowText
 import chat.simplex.app.ui.harness.connect
 import chat.simplex.app.ui.harness.described
 import chat.simplex.common.ui.Ui
@@ -15,6 +16,7 @@ class MultiSelectTest : UiTest() {
     connect(bob)
     bob sends "@alice one"
     bob sends "@alice two"
+    awaitRowText(alice, "bob", "two")
     val chat = alice.chatList.open("bob")
     chat.send("mine")
     bob expectsMessage "alice> mine"
@@ -75,11 +77,12 @@ class MultiSelectTest : UiTest() {
     poll(what = "alice's two messages collapsed into `2 messages marked deleted`") { "2 messages marked deleted" in textsOf(Ui.Chat.Item(bye)) && !exists(Ui.Chat.Item(hi)) }
   }
 
-  @KnownAppIssue("15.5 item 22", "Forward disabled and Delete enabled after bob deleted it")
+  @KnownAppIssue("15.5 item 22", "Forward disabled and Delete enabled after bob deleted it", intermittent = true)
   @Test fun select_itemDeletedByPeer_recheck() = uiTest {
     val alice = app("alice"); val bob = cli("bob")
     connect(bob)
     bob sends "@alice one"
+    awaitRowText(alice, "bob", "one")
     val chat = alice.chatList.open("bob")
     chat.send("mine")
     bob expectsMessage "alice> mine"
