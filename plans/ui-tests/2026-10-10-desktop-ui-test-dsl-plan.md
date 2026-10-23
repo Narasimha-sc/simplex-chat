@@ -1601,6 +1601,18 @@ Each entry gives the symptom, the cause (how it was confirmed), and the fix or m
 
 - `UnreadScrollTest.unread_openChat_scrollsToFirstUnread` (GitHub emulator, trial 7, 2026-10-23): bob's CLI sent `m1`..`m60` to alice; after 60 s alice's row showed `m52` with unread 52, and nothing more arrived. In trial 5 the same wait took 574 ms. Logcat has no error in that window, and the bridge log has no per-message lines. So it is not known whether bob's CLI did not send the last eight messages or alice did not receive them. Next step: log bob's sent-message count when the wait times out.
 
+### 15.4.1f Fixed flake: the reply's quote scrolled out of the chat before the click (desktop CI, 1 of 4 runs)
+
+- `ReceivedMessagesTest.reply_received_showsQuote_clickScrollsToOriginal` (trial 9, 2026-10-23) failed waiting for `chat.item.quote[<id>]` to stop moving, with no matching node left. bob's reply was composed at the bottom edge, under the message field and the bottom toolbar, so the test's "scroll until the reply exists" step stopped there.
+- Two causes, both fixed:
+  1. Desktop `scrollIntoView` did not flip the scroll direction for reversed lists, so it scrolled the reply further down, out of composition. It now negates the offset when `VerticalScrollAxisRange.reverseScrolling` is set, as the Android harness does.
+  2. Even scrolled the right way, the target only has to be 48 dp above the window bottom, which is still under the chat's composer. The test now scrolls toward newer messages until the chat stops moving, so the reply rests above the composer.
+- Verified with a throwaway probe from three starting positions (0, 1 and 2 pages toward older): the quote was at y 697–747 every time, above the composer top 788, and the click scrolled to the original.
+
+### 15.4.1g Open flake: the item info menu entry did nothing (Android CI, 1 of 3 runs)
+
+- `ItemInfoTest.info_moderated_showsModeratedAt` (trial 9, 2026-10-23): after the `info` menu entry of bob's `spam` was clicked, no item info opened within 10 s. The screenshot shows the group chat with the menu closed, no alert, and no API call in flight. Passed in trials 7 and 8. Not resolved: it is not known whether the tap was lost or the app dropped the request.
+
 ### 15.4.2 Test strength limits (second review, 2026-10-14)
 
 Under the minimal-app-code rule (item 31) some states are asserted through the model, not the UI. These tests pass if the model is right even when the UI fails to render the state:
