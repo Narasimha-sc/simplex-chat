@@ -651,6 +651,7 @@ fun ComposeView(
   }
 
   suspend fun sendConnectPreparedContact() {
+    if (composeState.value.inProgress) return
     val mc = checkLinkPreview()
     sending()
     val incognito = if (chat.chatInfo.profileChangeProhibited) chat.chatInfo.incognito else chatModel.controller.appPrefs.incognito.get()
@@ -692,6 +693,7 @@ fun ComposeView(
   }
 
   suspend fun connectPreparedGroup() {
+    if (composeState.value.inProgress) return
     val mc = checkLinkPreview()
     sending()
     val incognito = if (chat.chatInfo.profileChangeProhibited) chat.chatInfo.incognito else chatModel.controller.appPrefs.incognito.get()
@@ -1684,7 +1686,7 @@ fun ComposeView(
 
   LaunchedEffect(composeState.value.inProgress) {
     val newProgressByTimeout = if (composeState.value.inProgress) {
-      delay(1000)
+      delay(500)
       composeState.value.inProgress
     } else {
       false
@@ -1777,7 +1779,7 @@ fun ComposeView(
 
     Surface(color = MaterialTheme.colors.background, contentColor = MaterialTheme.colors.onBackground) {
       Divider()
-      if (chat.chatInfo is ChatInfo.Group && chat.chatInfo.groupInfo.nextConnectPrepared) {
+      if (chat.chatInfo is ChatInfo.Group && chat.chatInfo.groupInfo.nextConnectPrepared && chat.chatInfo.groupChatScope() == null) {
         if (chat.chatInfo.groupInfo.businessChat == null) {
           val isChannel = chat.chatInfo.groupInfo.useRelays
           ConnectButtonView(
@@ -1827,7 +1829,7 @@ fun ComposeView(
               SendContactRequestView(
                 disableSendButton = disableSendButton,
                 icon = MR.images.ic_person_add_filled,
-                sendRequest = { showSendConnectPreparedContactAlert() }
+                sendRequest = { if (!AlertManager.shared.hasAlertsShown()) showSendConnectPreparedContactAlert() }
               )
             }
         }
