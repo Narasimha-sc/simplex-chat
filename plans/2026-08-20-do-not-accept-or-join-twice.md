@@ -121,15 +121,18 @@ UNIQUE constraint failed: connections.group_member_id
 
 That is now `throwCmdError "group is already being joined"`, replacing a `connect'` call the code
 itself questioned (`-- why not "already connected" for host member?`). It cannot be reached by a
-retry, only by connecting again after success — which is what fix 3 stops the UI from offering.
+retry, only by connecting again after the first connect succeeded. Two connects via a group link
+that is not relayed, sent at once, usually do not reach it (see "Not covered"); fix 5 stops the
+Android and desktop composer from sending them on a double click.
 
 **3. Client: do not offer to accept or join while accepting or joining** (android, desktop, ios).
 
 An invitation being accepted is a fact about the invitation, not about the view that shows it, but
-every view kept its own flag: `ComposeContextContactRequestActionsView` and
-`CIGroupInvitationView` a `rememberSaveable`, `ChatListNavLinkView` a third that was threaded as a
-`MutableState<Boolean>` parameter through `groupChatAction` → `acceptGroupInvitationAlertDialog` →
-`JoinGroupAction`, and the notification action, the chat list menu and the accept alert none at all.
+every view kept its own flag: `ComposeContextContactRequestActionsView` a `rememberSaveable`,
+`CIGroupInvitationView` a `remember`, `ChatListNavLinkView` a third that was threaded as a
+`MutableState<Boolean>` parameter through `groupChatAction` → `acceptGroupInvitationAlertDialog` and
+through `GroupMenuItems` → `JoinGroupAction`, and the notification action, `ContactRequestMenuItems`
+and the chat list row's `contactRequestAlertDialog` none at all.
 So the chat list Join and the in-chat "tap to join" for the same group could not see each other, and
 accepting from a notification left the in-chat banner fully enabled.
 
@@ -142,9 +145,15 @@ accept re-enables the buttons. The views this change covers derive from the reco
 a flag, which deletes the parameter chain, the per-view flags and the `KeyChangeEffect` that existed
 only to reset them on chat change. The contacts list is not covered - see "Not covered".
 
-The record is taken before the request is sent rather than inside the background coroutine, so a
-second tap in the same view is blocked too — the previous per-view flags were set synchronously at
-the click site and moving to the model must not lose that.
+On Android and desktop the id is recorded before the request is sent rather than inside the
+background coroutine, and `acceptContactRequest` and `joinGroup` return when their id is already
+recorded. The handlers that start the accept or join do not check the record before calling them -
+the views stop showing the action only when they are recomposed - so, without these returns, a
+double click on the banner, the chat list menu, the invitation alert or the chat item sent the
+accept or join twice, and the second failed with `contact request already accepted` or
+`groupAlreadyJoined`. `groupChatAction` also opens the "Join group?" alert only when no alert is
+shown: two clicks on the chat list row handled before the alert was drawn opened two alerts, one
+over the other, and confirming the second failed with `groupAlreadyJoined`.
 
 The chat list long-press menu offers no Accept while an accept is in flight, matching what
 `GroupMenuItems` already did for Join. Reject stays, so the menu is never empty.
@@ -156,7 +165,20 @@ same group in `ModalManager.end`. In the desktop two-pane layout both composers 
 and the condition at `ComposeView.kt` had no scope check, so a prepared group showed two independent
 Join buttons. The connect composer belongs to the chat itself, not to a scope within it.
 
-**5. Client: the progress indicator appears after 0.5s instead of 1s** (android, desktop, ios).
+**5. Client: a second click on the connect composer is ignored** (`ComposeView.kt`).
+
+`connectPreparedGroup` and `sendConnectPreparedContact` return when `composeState.value.inProgress` is
+true. Each click handler launches a coroutine on the main thread (`withApi`), and the first sets
+`inProgress` before its first suspension point, so the second call returns at the check - without
+this, "Join group" on
+a group link sent the connect twice (`UNIQUE constraint failed: connections.group_member_id`, or the
+host received a second join request), and "Connect" on a one-time link failed with
+`connection is not RcvDirectMsgConnection: ...`. On a contact address, the composer's Connect and send
+buttons open the "Send contact request?" alert only when no alert is shown: a double click opened two
+alerts, one over the other, and confirming the second ran the connect again, which returned
+`contactAlreadyExists`, shown as a connection error.
+
+**6. Client: the progress indicator appears after 0.5s instead of 1s** (android, desktop, ios).
 
 Accepting a request or joining a group usually takes longer than 1s, so the button looked inert for
 a second before anything acknowledged the tap - which is what prompts a second tap. The threshold is
@@ -201,14 +223,44 @@ re-issues the same command (`SimpleXAPI.kt`). `apiAcceptContactRequest`, `apiJoi
 accept whose first attempt may have partially landed. No button is involved, so nothing in this
 change addresses it.
 
+**iOS has the double-click gaps that the early returns in fixes 3 and 5 close on Android and
+desktop** - `acceptContactRequest` and `joinGroup` do not return when the id is already recorded,
+`acceptContactRequest` records it only inside `await MainActor.run`, and the connect composer sets
+`inProgress` inside its `Task`. This change leaves them as they are; it was not built or tested on
+iOS.
+
+**Two connects of a prepared group via a link that is not relayed, or of a contact via its address,
+that reach the core at once** can both pass its checks: `APIConnectPreparedGroup` and
+`APIConnectPreparedContact` read the host member or the contact before `withInvitationLock` is
+taken. For a channel the second connect fails with `group is already being joined`. The Android and desktop apps no longer send
+them on a double click, but iOS (see above), the CLI, bots and other clients can; a core change that
+runs the whole command under the lock is left for a separate change.
+
+**An id can stay recorded until the app restarts.** `sendCmdWithRetry` waits for its Retry alert to
+be answered; when the alert is removed without an answer - `hideAllAlerts` after a critical or
+internal agent error, on a remote host switch or on self-destruct, or a `hideAlert` that removes the
+top alert - `sendCmdWithRetry` never returns, so the `finally` in `acceptContactRequest` or
+`joinGroup` never runs, and that request or group stays
+recorded: its Accept or Join is not offered again, and where it still is (the contacts list, the
+notification action) `acceptContactRequest` returns without accepting. Removing an alert this way
+was not reproduced in testing (locking the app did not leave an id recorded).
+
+**Other alerts and sends with the same double-click shape are not guarded**: the chat list contact
+request row's `contactRequestAlertDialog`, the banner's `showAcceptRequestAlert` when the address
+has no short link data, and `sendMemberContactInvitation`. In testing the contact request row opened
+the chat rather than an alert, and an address without short link data could not be created, so
+neither was reproduced; `sendMemberContactInvitation` was not tested.
+
 **`acceptMemberContact` and `apiAcceptMember`** keep their per-view flags; they are the same shape
 but were left out of scope.
 
 **The contacts list still offers Accept while an accept is in flight** - `ContactListNavView.kt`
 opens `contactRequestAlertDialog` without checking, and `ContactListNavLink.swift` has its own
 buttons rather than the ones this change gates. It is the same defect in one more view on each
-platform, left out to keep the change small; the outcome is now a clear error from fix 1 rather than
-the agent error, and the contacts list is a sheet, so the other views are not tappable behind it.
+platform, left out to keep the change small; its Accept does nothing while an accept is in flight,
+because `acceptContactRequest` returns, and after the accept completed it fails with the error from
+fix 1 rather than the agent error. The contacts list is a sheet, so the other views are not tappable
+behind it.
 
 ## Testing
 
@@ -227,8 +279,9 @@ the agent error, and the contacts list is a sheet, so the other views are not ta
   connection established by the first accept is intact. The expected string exists only in the guard
   and the test, so the test cannot pass without the fix.
 - `cabal build lib:simplex-chat` and `:common:compileKotlinDesktop` build clean.
-- The in-flight state is not covered by an automated test — it is UI state, reachable only by
-  holding two views of the same invitation open at once.
+- The in-flight state is not covered by an automated test — it is UI state, reached by a double click
+  or by two views of the same invitation open at once; the double-click cases were tested by hand in
+  the desktop app.
 
 ### Manual check
 
@@ -241,3 +294,9 @@ the agent error, and the contacts list is a sheet, so the other views are not ta
    Tap to join in the chat item — the chat list row greys out too, and its long-press menu stops
    offering Join.
 4. In each case the progress indicator appears after 0.5s rather than 1s.
+5. Double click, with the app paused between the clicks so that both are handled before it redraws
+   (`kill -STOP`, two clicks, `kill -CONT` on desktop): Accept on the banner and in the chat list
+   menu, Join in the chat list menu, in the "Join group?" alert and on the chat item, the chat list
+   row of an invited group, "Join group" on a group link, and Connect on a one-time link and on a
+   contact address. In each case the app accepts, joins or connects once, opens at most one alert,
+   and shows no error.

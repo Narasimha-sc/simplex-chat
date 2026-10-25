@@ -196,7 +196,7 @@ suspend fun directChatAction(rhId: Long?, contact: Contact, chatModel: ChatModel
 
 suspend fun groupChatAction(rhId: Long?, groupInfo: GroupInfo, chatModel: ChatModel) {
   when (groupInfo.membership.memberStatus) {
-    GroupMemberStatus.MemInvited -> acceptGroupInvitationAlertDialog(rhId, groupInfo, chatModel)
+    GroupMemberStatus.MemInvited -> if (!AlertManager.shared.hasAlertsShown()) acceptGroupInvitationAlertDialog(rhId, groupInfo, chatModel)
     GroupMemberStatus.MemAccepted -> groupInvitationAcceptedAlert(rhId)
     else -> openGroupChat(rhId, groupInfo.groupId)
   }
@@ -728,6 +728,7 @@ fun acceptContactRequest(
   chatModel: ChatModel,
   close: ((chat: Chat) -> Unit)? = null
 ) {
+  if (contactRequestId in chatModel.acceptingContactRequests) return
   chatModel.acceptingContactRequests.add(contactRequestId)
   withBGApi {
     try {
@@ -750,6 +751,7 @@ fun acceptContactRequest(
 }
 
 fun joinGroup(rhId: Long?, groupId: Long) {
+  if (groupId in chatModel.joiningGroups) return
   chatModel.joiningGroups.add(groupId)
   withBGApi {
     try {
