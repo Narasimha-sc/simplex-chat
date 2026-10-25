@@ -8,12 +8,12 @@ The chat console (Android, desktop) crashes with `IllegalArgumentException: Key 
 
 ## Fix
 
-Key the rows by a per-item number from a shared `AtomicLong`, assigned when the item is created. `createdAtNanos` had no other reader and is removed. `TerminalItem.id` is now set but read nowhere; it is the creation millisecond and not unique, so it must never be used as a key (this is what #4812's key tripped on).
+Key the rows by a per-item number from a shared `AtomicLong`, assigned when the item is created. `createdAtNanos` had no other reader and is removed. `TerminalItem.id` is now set but read nowhere; it is the creation millisecond and not unique, so it must never be used as a key. #4812's key paired it with `nanoTime`, and that pair still collided because both parts, the millisecond and `nanoTime`, can tie. `id` is left in place to keep the diff minimal (see the second alternative below).
 
 ## Alternatives considered
 
 - Reuse `id` as the counter, assigned in the factories: items constructed directly (e.g. `sampleData`) bypass it.
-- Make `id` itself the counter, assigned in the base class, and key rows by `item.id`: one identity field that is unique, the same mechanism as `ChatInfo.InvalidJSON.apiId`. It removes the `id` parameter from both constructors and changes both factory bodies and the two `sampleData` lines, about 7 more partial-line edits; the factory call signatures stay, so no call site changes. Not taken: the diff is larger, and `id` would change meaning, since the factories' creation millisecond and `sampleData`'s 0 and 1 would become sequence numbers.
+- Make `id` itself the counter, assigned in the base class, and key rows by `item.id`: one identity field that is unique, the same idea as `ChatInfo.InvalidJSON.idGenerator`, which fills its id from its own counter as a default constructor argument. It removes the `id` parameter from both constructors and changes both factory bodies and the two `sampleData` lines, about 7 more partial-line edits; the factory call signatures stay, so no call site changes. Not taken: the diff is larger, and `id` would change meaning, since the factories' creation millisecond and `sampleData`'s 0 and 1 would become sequence numbers.
 - No key: no crash, but when scrolled up, new items shift the visible rows (which #4812's key also prevents).
 - Number items when they are added to the list: `addTerminalItem` runs on several threads, so this still needs an atomic counter, plus a mutable field or a wrapper; larger.
 - Generator in the `TerminalItem` companion object: the same size, but it would have to be declared before `sampleData`, which constructs items while the companion is initialised. A top-level property does not depend on order, because no other top-level initializer in the file constructs an item.
