@@ -2,17 +2,18 @@
 
 ## Problem
 
-The chat console (Android, desktop) crashes with `IllegalArgumentException: Key "(…, …)" was already used`. Its rows are keyed by `item.id to item.createdAtNanos`, i.e. the creation time in milliseconds and `System.nanoTime()`. Terminal items are created on several threads: commands in `sendCmd` on the IO dispatcher, received events in the receiver coroutine (also on the IO dispatcher), and items created on the main thread. Two items created within one clock tick get the same key — on different threads, or on the main thread when the clock is coarse (a rejected console command and its error response are created back to back) — and the next measure pass throws. This shows the "View crashed" alert: desktop closes the console, Android recreates the activity.
+The chat console (Android, desktop) crashes with `IllegalArgumentException: Key "(…, …)" was already used`. Its rows are keyed by `item.id to item.createdAtNanos`, i.e. the creation time in milliseconds (set by the factories; `sampleData` uses 0 and 1) and `System.nanoTime()`. Terminal items are created on several threads: commands in `sendCmd` on the IO dispatcher, received events in the receiver coroutine (also on the IO dispatcher), and items created on the main thread. Two items created in the same millisecond and within one `nanoTime` tick get the same key — on different threads, or on the main thread when the clock is coarse (a rejected console command and its error response are created back to back) — and the next measure pass throws. This shows the "View crashed" alert: desktop closes the console, Android recreates the activity.
 
 `nanoTime` never goes backwards but is not unique; how often ties happen depends on the clock's granularity (finer on Linux x86 than on Windows or ARM). #4812 added this key (with `createdAtNanos`); it also keeps rows in place while new items arrive.
 
 ## Fix
 
-Key the rows by a per-item number from a shared `AtomicLong`, assigned when the item is created. `createdAtNanos` had no other reader and is removed.
+Key the rows by a per-item number from a shared `AtomicLong`, assigned when the item is created. `createdAtNanos` had no other reader and is removed. `TerminalItem.id` is now set but read nowhere; it is the creation millisecond and not unique, so it must never be used as a key (this is what #4812's key tripped on).
 
 ## Alternatives considered
 
-- Reuse `id` as the counter: assigned in the factories, it is bypassed by items constructed directly (e.g. `sampleData`); assigned in the base class, it works like this fix but changes both constructors and every factory call.
+- Reuse `id` as the counter, assigned in the factories: items constructed directly (e.g. `sampleData`) bypass it.
+- Make `id` itself the counter, assigned in the base class, and key rows by `item.id`: one identity field that is unique, the same mechanism as `ChatInfo.InvalidJSON.apiId`. It removes the `id` parameter from both constructors and changes both factory bodies and the two `sampleData` lines, about 7 more partial-line edits; the factory call signatures stay, so no call site changes. Not taken: the diff is larger, and `id` would change meaning, since the factories' creation millisecond and `sampleData`'s 0 and 1 would become sequence numbers.
 - No key: no crash, but when scrolled up, new items shift the visible rows (which #4812's key also prevents).
 - Number items when they are added to the list: `addTerminalItem` runs on several threads, so this still needs an atomic counter, plus a mutable field or a wrapper; larger.
 - Generator in the `TerminalItem` companion object: the same size, but it would have to be declared before `sampleData`, which constructs items while the companion is initialised. A top-level property does not depend on order, because no other top-level initializer in the file constructs an item.
