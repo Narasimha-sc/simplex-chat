@@ -7620,13 +7620,15 @@ sealed class GroupLinkPlan {
   @Serializable @SerialName("updateRequired") class UpdateRequired(val groupSLinkData_: GroupShortLinkData? = null): GroupLinkPlan()
 }
 
+private val terminalItemNoGenerator = AtomicLong(0)
+
 abstract class TerminalItem {
   abstract val id: Long
   abstract val remoteHostId: Long?
   val date: Instant = Clock.System.now()
   abstract val label: String
   abstract val details: String
-  val itemNo: Long = itemNoGenerator.incrementAndGet()
+  val itemNo: Long = terminalItemNoGenerator.incrementAndGet()
 
   class Cmd(override val id: Long, override val remoteHostId: Long?, val cmd: CC): TerminalItem() {
     override val label get() = "> ${cmd.cmdString}"
@@ -7639,8 +7641,6 @@ abstract class TerminalItem {
   }
 
   companion object {
-    private val itemNoGenerator = AtomicLong(0)
-
     val sampleData = listOf(
         Cmd(0, null, CC.ShowActiveUser()),
         Resp(1, null, API.Result(null, CR.ActiveUser(User.sampleData)))
