@@ -1,0 +1,147 @@
+name: android-core
+run-name: "${{ github.event_name == 'workflow_dispatch' && format('android-core {0} {1} {2}@{3}', inputs.arch, inputs.key, inputs.repo, inputs.sha) || 'android-core: registered by a push to its branch, nothing built' }}"
+
+# Builds libsimplex.so + libsupport.so for Android from one commit, with the nix jobs that
+# scripts/android/build-android.sh and upstream's android-emu.yml build. Started by ~/build/lib/ci-core.sh.
+# The push trigger only makes GitHub list this workflow (it is not on the default branch); it builds nothing.
+on:
+  push:
+    branches: [ci/android-core]
+    paths: [.github/workflows/android-core.yml]
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: Full commit SHA to build
+        required: true
+        type: string
+      repo:
+        description: Repository holding the commit
+        type: choice
+        default: Narasimha-sc/simplex-chat
+        options: [Narasimha-sc/simplex-chat, simplex-chat/simplex-chat]
+      arch:
+        description: Android arch (armv7a is untested)
+        type: choice
+        default: aarch64
+        options: [aarch64, armv7a]
+      key:
+        description: Expected android-core key of the commit (the run fails if it differs); empty to skip the check
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-core-${{ inputs.arch }}-${{ inputs.key || inputs.sha || github.sha }}
+
+jobs:
+  core:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    steps:
+      - name: Check inputs
+        env:
+          SHA: ${{ inputs.sha }}
+          KEY: ${{ inputs.key }}
+        run: |
+          [[ $SHA =~ ^[0-9a-f]{40}$ ]] || { echo "::error::sha must be a full commit SHA"; exit 1; }
+          [[ -z $KEY || $KEY =~ ^[0-9a-f]{24}$ ]] || { echo "::error::key must be 24 hex digits"; exit 1; }
+
+      # The key script and the build steps come from this workflow's own commit, never from the commit built.
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: ci
+          sparse-checkout: .github/scripts
+          persist-credentials: false
+
+      - uses: actions/checkout@v6
+        with:
+          repository: ${{ inputs.repo }}
+          ref: ${{ inputs.sha }}
+          path: chat
+          fetch-depth: 0
+          filter: tree:0
+          persist-credentials: false
+
+      - name: Key
+        id: key
+        working-directory: chat
+        env:
+          SHA: ${{ inputs.sha }}
+          ARCH: ${{ inputs.arch }}
+          KEY: ${{ inputs.key }}
+        run: |
+          [ "$(git rev-parse HEAD)" = "$SHA" ]
+          key=$(sh ../ci/.github/scripts/android-core-key.sh HEAD "$ARCH")
+          echo "key $key"
+          [[ -z $KEY || $KEY == "$key" ]] || { echo "::error::the commit's key is $key, not $KEY: the two copies of android-core-key.sh differ"; exit 1; }
+          echo "key=$key" >> "$GITHUB_OUTPUT"
+
+      # Same Nix version, settings and caches as scripts/ci/android/build-core.sh on upstream master.
+      - name: Install Nix
+        run: |
+          set -euo pipefail
+          sudo mkdir -p /nix
+          sudo chown "$USER" /nix
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          curl --proto '=https' --tlsv1.2 -sSf -o "$RUNNER_TEMP/install" https://releases.nixos.org/nix/nix-2.22.0/install
+          echo "4fed7db867186c01ce2a2077da4a6950ed16232efbf78d0cd19700cff80559f9  $RUNNER_TEMP/install" | sha256sum -c
+          mkdir -p ~/.config/nix
+          printf '%s\n' 'sandbox = true' 'max-jobs = auto' 'cores = 0' 'experimental-features = nix-command flakes' \
+            'substituters = https://cache.nixos.org https://cache.zw3rk.com https://cache.iog.io' \
+            'trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= loony-tools:pr9m4BkM/5/eSTZlkQyRt57Jz7OMBxNSUiMC4FkcNfk= hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ=' \
+            > ~/.config/nix/nix.conf
+          sh "$RUNNER_TEMP/install" --no-daemon
+
+      - name: Build
+        working-directory: chat
+        env:
+          SHA: ${{ inputs.sha }}
+          REPO: ${{ inputs.repo }}
+          ARCH: ${{ inputs.arch }}
+          KEY: ${{ steps.key.outputs.key }}
+        run: |
+          set -euo pipefail
+          . "$HOME/.nix-profile/etc/profile.d/nix.sh"
+          out="$RUNNER_TEMP/pkg"
+          mkdir -p "$out"
+          for lib in simplex-chat support; do
+            echo "::group::nix build $ARCH-android:lib:$lib"
+            started=$SECONDS
+            nix build -L --out-link "$RUNNER_TEMP/r-$lib" ".#hydraJobs.x86_64-linux.$ARCH-android:lib:$lib"
+            echo "::endgroup::"
+            echo "$lib built in $(((SECONDS - started) / 60)) min"
+            unzip -o "$RUNNER_TEMP/r-$lib"/pkg-*.zip -d "$out"
+            echo "nix-$lib=$(readlink -f "$RUNNER_TEMP/r-$lib")" >> "$RUNNER_TEMP/nix-paths"
+          done
+          ls -la "$out"
+          cd "$out"
+          libs=$(ls)
+          if [ "$ARCH" = aarch64 ] && [ "$(echo $libs)" != "libsimplex.so libsupport.so" ]; then
+            echo "::error::expected libsimplex.so and libsupport.so, the nix jobs made: $(echo $libs)"; exit 1
+          fi
+          {
+            echo "repo=$REPO"
+            echo "sha=$SHA"
+            echo "key=$KEY"
+            echo "arch=$ARCH"
+            echo "run=$GITHUB_RUN_ID"
+            echo "workflow_sha=$GITHUB_WORKFLOW_SHA"
+            echo "simplexmq=$(sed -n '/simplex-chat\/simplexmq.git/{n;s/^ *tag: *//p}' "$GITHUB_WORKSPACE/chat/cabal.project")"
+            cat "$RUNNER_TEMP/nix-paths"
+            for f in $libs; do echo "sha256.$f=$(sha256sum < "$f" | cut -d' ' -f1)"; done
+          } > BUILD-INFO
+          cat BUILD-INFO
+          tar --owner=0 --group=0 --numeric-owner -czf "$RUNNER_TEMP/android-core.tar.gz" BUILD-INFO $libs
+          ls -la "$RUNNER_TEMP/android-core.tar.gz"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: android-core-${{ inputs.arch }}-${{ steps.key.outputs.key }}
+          path: ${{ runner.temp }}/android-core.tar.gz
+          compression-level: 0
+          retention-days: 7
+          if-no-files-found: error
