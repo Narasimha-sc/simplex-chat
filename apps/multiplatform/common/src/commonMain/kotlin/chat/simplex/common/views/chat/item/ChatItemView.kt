@@ -156,7 +156,7 @@ fun ChatItemView(
             }
           }
 
-          var modifier = Modifier.ui(Ui.Chat.ReactionChip(cItem.id, r.reaction.text)).padding(horizontal = 5.dp, vertical = 2.dp).clip(RoundedCornerShape(8.dp))
+          var modifier = Modifier.ui { Ui.Chat.ReactionChip(cItem.id, r.reaction.text) }.padding(horizontal = 5.dp, vertical = 2.dp).clip(RoundedCornerShape(8.dp))
           if (cInfo.featureEnabled(ChatFeature.Reactions)) {
             fun showReactionsMenu() {
               when (cInfo) {
@@ -274,7 +274,7 @@ fun ChatItemView(
       IconButton(
         onClick,
         Modifier
-          .ui(Ui.Chat.Item(cItem.id).part("goTo"))
+          .ui { Ui.Chat.Item(cItem.id).part("goTo") }
           .padding(start = if (alignStart) 0.dp else DEFAULT_PADDING_HALF + 3.dp, end = if (alignStart) DEFAULT_PADDING_HALF + 3.dp else 0.dp)
           .then(if (fullyVisible) Modifier.background(mixedBackgroundColor, CircleShape) else Modifier)
           .size(22.dp),
@@ -327,7 +327,7 @@ fun ChatItemView(
           }
           Column(
             Modifier
-              .ui(Ui.Chat.Item(cItem.id))
+              .ui { Ui.Chat.Item(cItem.id) }
               .clipChatItem(cItem, itemSeparation.largeGap, revealed.value)
               .hoverable(bubbleInteractionSource)
               .combinedClickable(
@@ -385,7 +385,7 @@ fun ChatItemView(
                 DeleteItemAction(chatsCtx, cInfo, cItem, revealed, showMenu, questionText = deleteMessageQuestionText(), deleteMessage, deleteMessages)
                 if (cItem.canBeDeletedForSelf) {
                   Divider()
-                  SelectItemAction(showMenu, Ui.Chat.ItemMenu(cItem.id, "select"), selectChatItem)
+                  SelectItemAction(showMenu, selectChatItem, uiKey = Ui.Chat.ItemMenu(cItem.id, "select"))
                 }
               }
             }
@@ -402,7 +402,7 @@ fun ChatItemView(
                     }
                     DeleteItemAction(chatsCtx, cInfo, cItem, revealed, showMenu, questionText = deleteMessageQuestionText(), deleteMessage, deleteMessages, buttonText = stringResource(MR.strings.delete_report))
                     Divider()
-                    SelectItemAction(showMenu, Ui.Chat.ItemMenu(cItem.id, "select"), selectChatItem)
+                    SelectItemAction(showMenu, selectChatItem, uiKey = Ui.Chat.ItemMenu(cItem.id, "select"))
                   }
                 }
                 cItem.content.msgContent != null && cItem.id >= 0 && !cItem.isReport -> {
@@ -484,10 +484,10 @@ fun ChatItemView(
                     }
                     ItemInfoAction(cInfo, cItem, showItemDetails, showMenu)
                     if (revealed.value) {
-                      HideItemAction(revealed, showMenu, Ui.Chat.ItemMenu(cItem.id, "hide"), reveal)
+                      HideItemAction(revealed, showMenu, reveal, uiKey = Ui.Chat.ItemMenu(cItem.id, "hide"))
                     }
                     if (cItem.meta.itemDeleted == null && cItem.file != null && cItem.file.cancelAction != null && !cItem.localNote) {
-                      CancelFileItemAction(cItem.file.fileId, showMenu, Ui.Chat.ItemMenu(cItem.id, "cancelFile"), cancelFile = cancelFile, cancelAction = cItem.file.cancelAction)
+                      CancelFileItemAction(cItem.file.fileId, showMenu, cancelFile = cancelFile, cancelAction = cItem.file.cancelAction, uiKey = Ui.Chat.ItemMenu(cItem.id, "cancelFile"))
                     }
                     if (!(live && cItem.meta.isLive) && !preview) {
                       DeleteItemAction(chatsCtx, cInfo, cItem, revealed, showMenu, questionText = deleteMessageQuestionText(), deleteMessage, deleteMessages)
@@ -502,24 +502,24 @@ fun ChatItemView(
                     }
                     if (cItem.canBeDeletedForSelf) {
                       Divider()
-                      SelectItemAction(showMenu, Ui.Chat.ItemMenu(cItem.id, "select"), selectChatItem)
+                      SelectItemAction(showMenu, selectChatItem, uiKey = Ui.Chat.ItemMenu(cItem.id, "select"))
                     }
                   }
                 }
                 cItem.meta.itemDeleted != null -> {
                   DefaultDropdownMenu(showMenu) {
                     if (revealed.value) {
-                      HideItemAction(revealed, showMenu, reveal = reveal)
+                      HideItemAction(revealed, showMenu, reveal)
                     } else if (!cItem.isDeletedContent) {
-                      RevealItemAction(revealed, showMenu, reveal = reveal)
+                      RevealItemAction(revealed, showMenu, reveal)
                     } else if (range.value != null) {
-                      ExpandItemAction(revealed, showMenu, Ui.Chat.ItemMenu(cItem.id, "expand"), reveal)
+                      ExpandItemAction(revealed, showMenu, reveal, uiKey = Ui.Chat.ItemMenu(cItem.id, "expand"))
                     }
                     ItemInfoAction(cInfo, cItem, showItemDetails, showMenu)
                     DeleteItemAction(chatsCtx, cInfo, cItem, revealed, showMenu, questionText = deleteMessageQuestionText(), deleteMessage, deleteMessages)
                     if (cItem.canBeDeletedForSelf) {
                       Divider()
-                      SelectItemAction(showMenu, Ui.Chat.ItemMenu(cItem.id, "select"), selectChatItem)
+                      SelectItemAction(showMenu, selectChatItem, uiKey = Ui.Chat.ItemMenu(cItem.id, "select"))
                     }
                   }
                 }
@@ -529,21 +529,21 @@ fun ChatItemView(
                     DeleteItemAction(chatsCtx, cInfo, cItem, revealed, showMenu, questionText = deleteMessageQuestionText(), deleteMessage, deleteMessages)
                     if (cItem.canBeDeletedForSelf) {
                       Divider()
-                      SelectItemAction(showMenu, Ui.Chat.ItemMenu(cItem.id, "select"), selectChatItem)
+                      SelectItemAction(showMenu, selectChatItem, uiKey = Ui.Chat.ItemMenu(cItem.id, "select"))
                     }
                   }
                 }
                 cItem.mergeCategory != null && ((range.value?.count() ?: 0) > 1 || revealed.value) -> {
                   DefaultDropdownMenu(showMenu) {
                     if (revealed.value) {
-                      ShrinkItemAction(revealed, showMenu, Ui.Chat.ItemMenu(cItem.id, "collapse"), reveal)
+                      ShrinkItemAction(revealed, showMenu, reveal, uiKey = Ui.Chat.ItemMenu(cItem.id, "collapse"))
                     } else {
-                      ExpandItemAction(revealed, showMenu, Ui.Chat.ItemMenu(cItem.id, "expand"), reveal)
+                      ExpandItemAction(revealed, showMenu, reveal, uiKey = Ui.Chat.ItemMenu(cItem.id, "expand"))
                     }
                     DeleteItemAction(chatsCtx, cInfo, cItem, revealed, showMenu, questionText = deleteMessageQuestionText(), deleteMessage, deleteMessages)
                     if (cItem.canBeDeletedForSelf) {
                       Divider()
-                      SelectItemAction(showMenu, Ui.Chat.ItemMenu(cItem.id, "select"), selectChatItem)
+                      SelectItemAction(showMenu, selectChatItem, uiKey = Ui.Chat.ItemMenu(cItem.id, "select"))
                     }
                   }
                 }
@@ -552,7 +552,7 @@ fun ChatItemView(
                     DeleteItemAction(chatsCtx, cInfo, cItem, revealed, showMenu, questionText = deleteMessageQuestionText(), deleteMessage, deleteMessages)
                     if (selectedChatItems.value == null) {
                       Divider()
-                      SelectItemAction(showMenu, Ui.Chat.ItemMenu(cItem.id, "select"), selectChatItem)
+                      SelectItemAction(showMenu, selectChatItem, uiKey = Ui.Chat.ItemMenu(cItem.id, "select"))
                     }
                   }
                 }
@@ -563,13 +563,13 @@ fun ChatItemView(
             fun MarkedDeletedItemDropdownMenu() {
               DefaultDropdownMenu(showMenu) {
                 if (!cItem.isDeletedContent) {
-                  RevealItemAction(revealed, showMenu, Ui.Chat.ItemMenu(cItem.id, "reveal"), reveal)
+                  RevealItemAction(revealed, showMenu, reveal, uiKey = Ui.Chat.ItemMenu(cItem.id, "reveal"))
                 }
                 ItemInfoAction(cInfo, cItem, showItemDetails, showMenu)
                 DeleteItemAction(chatsCtx, cInfo, cItem, revealed, showMenu, questionText = deleteMessageQuestionText(), deleteMessage, deleteMessages)
                 if (cItem.canBeDeletedForSelf) {
                   Divider()
-                  SelectItemAction(showMenu, Ui.Chat.ItemMenu(cItem.id, "select"), selectChatItem)
+                  SelectItemAction(showMenu, selectChatItem, uiKey = Ui.Chat.ItemMenu(cItem.id, "select"))
                 }
               }
             }
@@ -598,7 +598,7 @@ fun ChatItemView(
                 DeleteItemAction(chatsCtx, cInfo, cItem, revealed, showMenu, questionText = deleteMessageQuestionText(), deleteMessage, deleteMessages)
                 if (cItem.canBeDeletedForSelf) {
                   Divider()
-                  SelectItemAction(showMenu, Ui.Chat.ItemMenu(cItem.id, "select"), selectChatItem)
+                  SelectItemAction(showMenu, selectChatItem, uiKey = Ui.Chat.ItemMenu(cItem.id, "select"))
                 }
               }
             }
@@ -662,17 +662,17 @@ fun ChatItemView(
               MarkedDeletedItemView(chatsCtx, cItem, cInfo, cInfo.timedMessagesTTL, revealed, showViaProxy = showViaProxy, showTimestamp = showTimestamp)
               DefaultDropdownMenu(showMenu) {
                 if (revealed.value) {
-                  HideItemAction(revealed, showMenu, reveal = reveal)
+                  HideItemAction(revealed, showMenu, reveal)
                 } else if (!cItem.isDeletedContent) {
-                  RevealItemAction(revealed, showMenu, reveal = reveal)
+                  RevealItemAction(revealed, showMenu, reveal)
                 } else if (range.value != null) {
-                  ExpandItemAction(revealed, showMenu, Ui.Chat.ItemMenu(cItem.id, "expand"), reveal)
+                  ExpandItemAction(revealed, showMenu, reveal, uiKey = Ui.Chat.ItemMenu(cItem.id, "expand"))
                 }
                 ItemInfoAction(cInfo, cItem, showItemDetails, showMenu)
                 DeleteItemAction(chatsCtx, cInfo, cItem, revealed, showMenu, questionText = generalGetString(MR.strings.delete_message_cannot_be_undone_warning), deleteMessage, deleteMessages)
                 if (cItem.canBeDeletedForSelf) {
                   Divider()
-                  SelectItemAction(showMenu, Ui.Chat.ItemMenu(cItem.id, "select"), selectChatItem)
+                  SelectItemAction(showMenu, selectChatItem, uiKey = Ui.Chat.ItemMenu(cItem.id, "select"))
                 }
               }
             }
@@ -839,9 +839,9 @@ expect fun SaveContentItemAction(cItem: ChatItem, saveFileLauncher: FileChooserL
 fun CancelFileItemAction(
   fileId: Long,
   showMenu: MutableState<Boolean>,
-  uiKey: UiKey? = null,
   cancelFile: (Long) -> Unit,
-  cancelAction: CancelAction
+  cancelAction: CancelAction,
+  uiKey: UiKey? = null
 ) {
   ItemAction(
     stringResource(cancelAction.uiActionId),
@@ -946,8 +946,8 @@ fun ModerateItemAction(
 @Composable
 fun SelectItemAction(
   showMenu: MutableState<Boolean>,
-  uiKey: UiKey? = null,
   selectItem: () -> Unit,
+  uiKey: UiKey? = null,
 ) {
   ItemAction(
     stringResource(MR.strings.select_verb),
@@ -961,7 +961,7 @@ fun SelectItemAction(
 }
 
 @Composable
-private fun RevealItemAction(revealed: State<Boolean>, showMenu: MutableState<Boolean>, uiKey: UiKey? = null, reveal: (Boolean) -> Unit) {
+private fun RevealItemAction(revealed: State<Boolean>, showMenu: MutableState<Boolean>, reveal: (Boolean) -> Unit, uiKey: UiKey? = null) {
   ItemAction(
     stringResource(MR.strings.reveal_verb),
     painterResource(MR.images.ic_visibility),
@@ -974,7 +974,7 @@ private fun RevealItemAction(revealed: State<Boolean>, showMenu: MutableState<Bo
 }
 
 @Composable
-private fun HideItemAction(revealed: State<Boolean>, showMenu: MutableState<Boolean>, uiKey: UiKey? = null, reveal: (Boolean) -> Unit) {
+private fun HideItemAction(revealed: State<Boolean>, showMenu: MutableState<Boolean>, reveal: (Boolean) -> Unit, uiKey: UiKey? = null) {
   ItemAction(
     stringResource(MR.strings.hide_verb),
     painterResource(MR.images.ic_visibility_off),
@@ -987,7 +987,7 @@ private fun HideItemAction(revealed: State<Boolean>, showMenu: MutableState<Bool
 }
 
 @Composable
-private fun ExpandItemAction(revealed: State<Boolean>, showMenu: MutableState<Boolean>, uiKey: UiKey? = null, reveal: (Boolean) -> Unit) {
+private fun ExpandItemAction(revealed: State<Boolean>, showMenu: MutableState<Boolean>, reveal: (Boolean) -> Unit, uiKey: UiKey? = null) {
   ItemAction(
     stringResource(MR.strings.expand_verb),
     painterResource(MR.images.ic_expand_all),
@@ -1000,7 +1000,7 @@ private fun ExpandItemAction(revealed: State<Boolean>, showMenu: MutableState<Bo
 }
 
 @Composable
-private fun ShrinkItemAction(revealed: State<Boolean>, showMenu: MutableState<Boolean>, uiKey: UiKey? = null, reveal: (Boolean) -> Unit) {
+private fun ShrinkItemAction(revealed: State<Boolean>, showMenu: MutableState<Boolean>, reveal: (Boolean) -> Unit, uiKey: UiKey? = null) {
   ItemAction(
     stringResource(MR.strings.hide_verb),
     painterResource(MR.images.ic_collapse_all),

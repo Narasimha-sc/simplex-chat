@@ -1077,8 +1077,8 @@ fun InfoViewActionButton(
   title: String,
   disabled: Boolean,
   disabledLook: Boolean,
-  uiKey: UiKey? = null,
-  onClick: () -> Unit
+  onClick: () -> Unit,
+  uiKey: UiKey? = null
 ) {
   Box(modifier) {
     Column(
@@ -1178,7 +1178,7 @@ fun SimplexServers(text: String, servers: List<String>, uiKey: UiKey? = null) {
 }
 
 @Composable
-fun SwitchAddressButton(disabled: Boolean, uiKey: UiKey? = null, switchAddress: () -> Unit) {
+fun SwitchAddressButton(disabled: Boolean, switchAddress: () -> Unit, uiKey: UiKey? = null) {
   SectionItemView(switchAddress, disabled = disabled, uiKey = uiKey) {
     Text(
       stringResource(MR.strings.switch_receiving_address),
@@ -1188,7 +1188,7 @@ fun SwitchAddressButton(disabled: Boolean, uiKey: UiKey? = null, switchAddress: 
 }
 
 @Composable
-fun AbortSwitchAddressButton(disabled: Boolean, uiKey: UiKey? = null, abortSwitchAddress: () -> Unit) {
+fun AbortSwitchAddressButton(disabled: Boolean, abortSwitchAddress: () -> Unit, uiKey: UiKey? = null) {
   SectionItemView(abortSwitchAddress, disabled = disabled, uiKey = uiKey) {
     Text(
       stringResource(MR.strings.abort_switch_receiving_address),
