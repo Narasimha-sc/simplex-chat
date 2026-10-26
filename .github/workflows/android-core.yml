@@ -2,7 +2,8 @@ name: android-core
 run-name: "${{ github.event_name == 'workflow_dispatch' && format('android-core {0} {1} {2}@{3}', inputs.arch, inputs.key, inputs.repo, inputs.sha) || 'android-core: registered by a push to its branch, nothing built' }}"
 
 # Builds libsimplex.so + libsupport.so for Android from one commit, with the nix jobs that
-# scripts/android/build-android.sh and upstream's android-emu.yml build. Started by ~/build/lib/ci-core.sh.
+# scripts/android/build-android.sh and upstream's android-emu.yml build. Started by ~/build/android.sh.
+# The build steps run from this workflow's commit, never from the commit built.
 # The push trigger only makes GitHub list this workflow (it is not on the default branch); it builds nothing.
 on:
   push:
@@ -49,14 +50,6 @@ jobs:
           [[ $SHA =~ ^[0-9a-f]{40}$ ]] || { echo "::error::sha must be a full commit SHA"; exit 1; }
           [[ -z $KEY || $KEY =~ ^[0-9a-f]{24}$ ]] || { echo "::error::key must be 24 hex digits"; exit 1; }
 
-      # The key script and the build steps come from this workflow's own commit, never from the commit built.
-      - uses: actions/checkout@v6
-        with:
-          ref: ${{ github.workflow_sha }}
-          path: ci
-          sparse-checkout: .github/scripts
-          persist-credentials: false
-
       - uses: actions/checkout@v6
         with:
           repository: ${{ inputs.repo }}
@@ -66,6 +59,9 @@ jobs:
           filter: tree:0
           persist-credentials: false
 
+      # android-core key v1. Shared definition: the line after CORE_ARCH= is byte-identical in ~/build/android.sh
+      # (android_core_key); change both together and bump v1, or android.sh and CI name the same libs differently.
+      # The run fails here when android.sh passed a different key.
       - name: Key
         id: key
         working-directory: chat
@@ -75,9 +71,10 @@ jobs:
           KEY: ${{ inputs.key }}
         run: |
           [ "$(git rev-parse HEAD)" = "$SHA" ]
-          key=$(sh ../ci/.github/scripts/android-core-key.sh HEAD "$ARCH")
+          CORE_TREE=HEAD CORE_ARCH=$ARCH
+          key=$({ for p in src cabal.project simplex-chat.cabal PRIVACY.md flake.nix flake.lock scripts/nix; do git rev-parse --verify -q "$CORE_TREE:$p" || echo "missing:$p"; done; echo "android-core v1 $CORE_ARCH"; } | sha256sum | cut -c1-24)
           echo "key $key"
-          [[ -z $KEY || $KEY == "$key" ]] || { echo "::error::the commit's key is $key, not $KEY: the two copies of android-core-key.sh differ"; exit 1; }
+          [[ -z $KEY || $KEY == "$key" ]] || { echo "::error::this commit's key is $key, not $KEY: the key definitions in android-core.yml and ~/build/android.sh differ"; exit 1; }
           echo "key=$key" >> "$GITHUB_OUTPUT"
 
       # Same Nix version, settings and caches as scripts/ci/android/build-core.sh on upstream master.
