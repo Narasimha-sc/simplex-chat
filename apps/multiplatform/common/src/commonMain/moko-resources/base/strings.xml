@@ -697,6 +697,7 @@
   <string name="file_will_be_received_when_contact_completes_uploading">File will be received when your contact completes uploading it.</string>
   <string name="file_will_be_received_when_contact_is_online">File will be received when your contact is online, please wait or check later!</string>
   <string name="file_saved">File saved</string>
+  <string name="file_already_exists_replace_question">File already exists. Replace it?</string>
   <string name="file_not_found">File not found</string>
   <string name="error_saving_file">Error saving file</string>
   <string name="markdown_formatted_view">Formatted view</string>
@@ -2304,6 +2305,11 @@
   <string name="chat_theme_apply_to_all_modes">All color modes</string>
   <string name="chat_theme_apply_to_light_mode">Light mode</string>
   <string name="chat_theme_apply_to_dark_mode">Dark mode</string>
+  <string name="chat_layout">Chat layout</string>
+  <string name="chat_layout_classic">Classic</string>
+  <string name="chat_layout_terminal">Terminal</string>
+  <string name="chat_layout_chat_suffix">(chat)</string>
+  <string name="chat_layout_default_suffix">(default)</string>
 
 
   <!-- Preferences.kt -->

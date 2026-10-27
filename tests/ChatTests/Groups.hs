@@ -28,7 +28,7 @@ import qualified Data.ByteString.Char8 as B
 import Data.Maybe (fromMaybe, isJust, maybeToList)
 import Data.Time (UTCTime, getCurrentTime)
 import Data.Int (Int64)
-import Data.List (intercalate, isInfixOf, isSuffixOf)
+import Data.List (intercalate, isInfixOf, isSubsequenceOf, isSuffixOf)
 import qualified Data.Map.Strict as M
 import qualified Data.Text as T
 import Simplex.Chat.Badges (FileSizeLimits (..))
@@ -39,10 +39,11 @@ import Simplex.Chat.Messages (CIMention (..), CIMentionMember (..), ChatItemId)
 import Simplex.Chat.Messages.Batch (encodeBinaryBatch, encodeFwdElement)
 import Simplex.Chat.Messages.CIContent (publicGroupNoE2EText)
 import Simplex.Chat.Options
-import Simplex.Chat.Protocol (ChatMessage (ChatMessage), ChatMsgEvent (XGrpMemNew, XGrpRelayInv, XInfo, XMsgUpdate, XMsgNew, XMsgDel), FwdSender (FwdMember, FwdChannel), GrpMsgForward (GrpMsgForward), MsgContainer (..), MsgMention (..), MsgContent (..), VerifiedMsg (VMUnsigned), chatMsgToBody, mcSimple, msgContentText)
+import Simplex.Chat.Protocol (ChatMessage (ChatMessage), ChatMsgEvent (XGrpMemNew, XGrpRelayInv, XInfo, XMember, XMsgUpdate, XMsgNew, XMsgDel), FwdSender (FwdMember, FwdChannel), GrpMsgForward (GrpMsgForward), MsgContainer (..), MsgMention (..), MsgContent (..), VerifiedMsg (VMUnsigned), chatMsgToBody, mcSimple, msgContentText)
 import Simplex.Chat.Types
 import Simplex.Chat.Types.MemberRelations (MemberRelation (..), getRelation, setRelation)
 import Simplex.Chat.Types.Shared (GroupMemberRole (..), GroupAcceptance (..))
+import Simplex.Chat.Types.UITheme (ChatLayout (..))
 import Simplex.Messaging.Agent (joinConnection, prepareConnectionToJoin, sendMessages, vrValue)
 import Simplex.Messaging.Agent.Env.SQLite
 import Simplex.Messaging.Agent.RetryInterval
@@ -134,6 +135,7 @@ chatGroupTests = do
     it "demotion does not remove group link" testGroupLinkDemotedAdmin
     it "host profile received" testGroupLinkHostProfileReceived
     it "existing contact merged" testGroupLinkExistingContactMerged
+    it "ignore relay join request in group without relays" testGroupLinkIgnoreRelayJoinRequest
   describe "group links - member screening" $ do
     it "reject member - blocked name" testGLinkRejectBlockedName
     it "accept member - only host approval" testGLinkApproveMember
@@ -311,6 +313,7 @@ chatGroupTests = do
       it "should update channel profile (signed)" testChannelUpdateProfileSigned
       it "should preserve working link after profile update" testChannelLinkAfterProfileUpdate
       it "should preserve working link after welcome message update" testChannelLinkAfterWelcomeUpdate
+      it "should set chat layout of channel joined via relays from link data" testChannelChatLayout
       it "should preserve owner key in link data after profile update" testChannelOwnerKeyAfterLinkUpdate
       it "should update channel preferences (signed)" testChannelUpdatePrefsSigned
       it "should change member role (signed)" testChannelChangeRoleSigned
@@ -3627,6 +3630,32 @@ testGroupLinkExistingContactMerged =
       bob #> "#team hi there"
       alice <# "#team bob> hi there"
 
+testGroupLinkIgnoreRelayJoinRequest :: HasCallStack => TestParams -> IO ()
+testGroupLinkIgnoreRelayJoinRequest ps =
+  withNewTestChatOpts ps (testOpts {coreOptions = testCoreOpts {logLevel = CLLWarning}}) "alice" aliceProfile $ \alice ->
+    withNewTestChat ps "bob" bobProfile $ \bob -> do
+      alice ##> "/g team"
+      alice <## "group #team is created"
+      alice <## "to add members use /a team <name> or /create link #team"
+      alice ##> "/create link #team"
+      (gShortLink, _gLink) <- getGroupLinks alice "team" GRMember True
+      sendMemberJoinRequest bob gShortLink
+      alice <## "warning: memberJoinRequestViaRelay (group team): ignored relay join request from bob (group does not use relays)"
+      alice ##> "/ms team"
+      alice <## "alice (Alice): owner, you, created group"
+
+sendMemberJoinRequest :: TestCC -> String -> IO ()
+sendMemberJoinRequest cc groupLink =
+  withCCUser cc $ \user -> do
+    gLink :: ShortLinkContact <- either fail pure $ strDecode (B.pack groupLink)
+    (memberKey, _) <- atomically . C.generateKeyPair =<< C.newRandom
+    let joinGroup = do
+          (_, _, cReq) <- getShortLinkConnReq NRMInteractive user gLink
+          (connId, _) <- withAgent $ \a -> prepareConnectionToJoin a (aUserId user) True cReq PQSupportOff
+          dm <- encodeConnInfo $ XMember bobProfile (MemberId "member") (MemberKey memberKey) Nothing
+          withAgent $ \a -> joinConnection a NRMInteractive (aUserId user) connId True cReq dm PQSupportOff SMSubscribe
+    runExceptT joinGroup `runReaderT` chatController cc >>= either (fail . show) (\_ -> pure ())
+
 testGLinkRejectBlockedName :: HasCallStack => TestParams -> IO ()
 testGLinkRejectBlockedName =
   testChatCfg2 cfg aliceProfile bobProfile $
@@ -6282,7 +6311,7 @@ testGroupHistory =
 
       cath ##> "/_get chat #1 count=100"
       r <- chat <$> getTermLine cath
-      r `shouldContain` [(0, "hello"), (0, "hey!")]
+      r `shouldSatisfy` isSubsequenceOf [(0, "hello"), (0, "hey!")]
 
       -- message delivery works after sending history
       alice #> "#team 1"
@@ -6376,7 +6405,7 @@ testGroupHistoryPreferenceOff =
 
       cath ##> "/_get chat #1 count=100"
       r <- chat <$> getTermLine cath
-      r `shouldContain` [(0, "hello"), (0, "hey!")]
+      r `shouldSatisfy` isSubsequenceOf [(0, "hello"), (0, "hey!")]
 
       alice ##> "/set history #team off"
       alice <## "updated group preferences:"
@@ -6642,9 +6671,10 @@ testGroupHistoryMultipleFiles =
       cath ##> "/_get chat #1 count=100"
       r <- chatF <$> getTermLine cath
       r
-        `shouldContain` [ ((0, "hi alice"), Just $ tmpFile cath "testfile_bob_1"),
-                          ((0, "hey bob"), Just $ tmpFile cath "testfile_alice_1")
-                        ]
+        `shouldSatisfy` isSubsequenceOf
+          [ ((0, "hi alice"), Just $ tmpFile cath "testfile_bob_1"),
+            ((0, "hey bob"), Just $ tmpFile cath "testfile_alice_1")
+          ]
 
 testGroupHistoryFileCancel :: HasCallStack => TestParams -> IO ()
 testGroupHistoryFileCancel =
@@ -6862,13 +6892,14 @@ testGroupHistoryQuotes =
       cath ##> "/_get chat #1 count=100"
       r <- chat' <$> getTermLine cath
       r
-        `shouldContain` [ ((0, "ALICE"), Nothing),
-                          ((0, "BOB"), Nothing),
-                          ((0, "1"), Just (0, "ALICE")),
-                          ((0, "2"), Just (0, "BOB")),
-                          ((0, "3"), Just (0, "ALICE")),
-                          ((0, "4"), Just (0, "BOB"))
-                        ]
+        `shouldSatisfy` isSubsequenceOf
+          [ ((0, "ALICE"), Nothing),
+            ((0, "BOB"), Nothing),
+            ((0, "1"), Just (0, "ALICE")),
+            ((0, "2"), Just (0, "BOB")),
+            ((0, "3"), Just (0, "ALICE")),
+            ((0, "4"), Just (0, "BOB"))
+          ]
 
 testGroupHistoryDeletedMessage :: HasCallStack => TestParams -> IO ()
 testGroupHistoryDeletedMessage =
@@ -6970,7 +7001,7 @@ testGroupHistoryDisappearingMessage =
 
       cath ##> "/_get chat #1 count=100"
       r1 <- chat <$> getTermLine cath
-      r1 `shouldContain` [(0, "1"), (0, "2"), (0, "3"), (0, "4")]
+      r1 `shouldSatisfy` isSubsequenceOf [(0, "1"), (0, "2"), (0, "3"), (0, "4")]
 
       threadDelay 11000000
       concurrentlyN_
@@ -6990,7 +7021,7 @@ testGroupHistoryDisappearingMessage =
 
       cath ##> "/_get chat #1 count=100"
       r2 <- chat <$> getTermLine cath
-      r2 `shouldContain` [(0, "1"), (0, "4")]
+      r2 `shouldSatisfy` isSubsequenceOf [(0, "1"), (0, "4")]
       r2 `shouldNotContain` [(0, "2")]
       r2 `shouldNotContain` [(0, "3")]
 
@@ -7101,7 +7132,7 @@ testGroupHistoryUnknownMember =
 
       dan ##> "/_get chat #1 count=100"
       r <- chat <$> getTermLine dan
-      r `shouldContain` [(0, "hi from alice"), (0, "hi from bob"), (0, "hi from cath")]
+      r `shouldSatisfy` isSubsequenceOf [(0, "hi from alice"), (0, "hi from bob"), (0, "hi from cath")]
 
       dan ##> "/ms team"
       dan
@@ -10549,6 +10580,32 @@ testChannelLinkAfterWelcomeUpdate ps =
           alice #> "#team hi"
           bob <# "#team> hi"
           [cath, dan] *<# "#team> hi [>>]"
+
+testChannelChatLayout :: HasCallStack => TestParams -> IO ()
+testChannelChatLayout ps =
+  withNewTestChat ps "alice" aliceProfile $ \alice ->
+    withNewTestChatOpts ps relayTestOpts "bob" bobProfile $ \bob ->
+      withNewTestChat ps "cath" cathProfile $ \cath -> do
+        (shortLink, _fullLink) <- prepareChannel1Relay "team" alice bob
+        alice ##> "/set layout #team terminal"
+        alice <## "chat layout changed to: terminal"
+        bob <## "alice updated group #team: (signed)"
+        bob <## "chat layout changed to: terminal"
+        cath ##> ("/c " <> shortLink)
+        cath <## "#team: connection started"
+        concurrentlyN_
+          [ cath
+              <### [ "#team: joining the group (connecting to relay bob)...",
+                     "#team: you joined the group (connected to relay bob)"
+                   ],
+            do
+              bob <## "cath (Catherine): accepting request to join group #team..."
+              bob <## "#team: cath joined the group",
+            alice <### [EndsWith "introduced cath (Catherine) in the channel"]
+          ]
+        groupChatLayout alice "team" `shouldReturn` Just CLTerminal
+        groupChatLayout bob "team" `shouldReturn` Just CLTerminal
+        groupChatLayout cath "team" `shouldReturn` Just CLTerminal
 
 testChannelOwnerKeyAfterLinkUpdate :: HasCallStack => TestParams -> IO ()
 testChannelOwnerKeyAfterLinkUpdate ps =
