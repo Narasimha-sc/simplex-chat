@@ -77,7 +77,7 @@ import Simplex.Messaging.Protocol (ErrorType (..))
 import Simplex.Messaging.SimplexName (SimplexNameInfo (..), SimplexNameType (..), shortNameInfoStr)
 import Simplex.Messaging.TMap (TMap)
 import qualified Simplex.Messaging.TMap as TM
-import Simplex.Messaging.Util (eitherToMaybe, raceAny_, safeDecodeUtf8, tshow, unlessM, (<$$>))
+import Simplex.Messaging.Util (eitherToMaybe, raceAny_, safeDecodeUtf8, tshow, unlessM, whenM, (<$$>))
 import System.Directory (getAppUserDataDirectory, removeFile)
 import System.Exit (exitFailure)
 import System.Process (readProcess)
@@ -321,8 +321,8 @@ directoryServiceEvent opts@DirectoryOpts {adminUsers, superUsers, serviceName, o
     DEServiceJoinedGroup ctId g owner -> deServiceJoinedGroup ctId g owner
     DEGroupUpdated {member, fromGroup, toGroup} -> deGroupUpdated member fromGroup toGroup
     DEGroupLinkCheck g -> deGroupLinkCheck g
-    DEPendingMember g m -> dePendingMember g m
-    DEPendingMemberMsg g m ciId t -> dePendingMemberMsg g m ciId t
+    DEPendingMember g m -> whenM (stillPendingApproval g m) $ dePendingMember g m
+    DEPendingMemberMsg g m ciId t -> whenM (stillPendingApproval g m) $ dePendingMemberMsg g m ciId t
     DEGroupItemProhibited g m ciId gf -> when prohibitedToObserver $ deGroupItemProhibited g m ciId gf
     DEContactRoleChanged g ctId gmId role -> deContactRoleChanged g ctId gmId role
     DEServiceRoleChanged g role -> deServiceRoleChanged g role
@@ -673,6 +673,11 @@ directoryServiceEvent opts@DirectoryOpts {adminUsers, superUsers, serviceName, o
     canSendVoiceCaptcha gInfo m =
       isJust (voiceCaptchaGenerator opts)
         && (groupFeatureUserAllowed SGFVoice gInfo || supportsVersion m memberSupportVoiceVersion)
+
+    stillPendingApproval :: GroupInfo -> GroupMember -> IO Bool
+    stillPendingApproval GroupInfo {groupId} m =
+      either (const False) ((== GSMemPendingApproval) . memberStatus)
+        <$> withDB "getGroupMember" cc (\db -> withExceptT show $ getGroupMember db (storeCxt cc) user groupId (groupMemberId' m))
 
     approvePendingMember :: DirectoryMemberAcceptance -> GroupInfo -> GroupMember -> IO ()
     approvePendingMember a g@GroupInfo {groupId} m@GroupMember {memberProfile = LocalProfile {displayName, image}} = do
