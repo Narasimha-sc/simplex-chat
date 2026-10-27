@@ -173,6 +173,7 @@ library
           Simplex.Chat.Store.Postgres.Migrations.M20261012_delivery_job_notification
           Simplex.Chat.Store.Postgres.Migrations.M20261016_badge_store_receipts
           Simplex.Chat.Store.Postgres.Migrations.M20261019_chat_layout
+          Simplex.Chat.Store.Postgres.Migrations.M20261027_member_role_index
   else
       exposed-modules:
           Simplex.Chat.Archive
@@ -356,6 +357,7 @@ library
           Simplex.Chat.Store.SQLite.Migrations.M20261016_badge_store_receipts
           Simplex.Chat.Store.SQLite.Migrations.M20261018_autoincrement_ids
           Simplex.Chat.Store.SQLite.Migrations.M20261019_chat_layout
+          Simplex.Chat.Store.SQLite.Migrations.M20261027_member_role_index
   other-modules:
       Paths_simplex_chat
   hs-source-dirs:
