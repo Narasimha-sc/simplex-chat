@@ -39,7 +39,7 @@ fun ContactConnectionInfoView(
   close: () -> Unit
 ) {
   LaunchedEffect(connLinkInvitation) {
-    if (connLinkInvitation != null && contactConnection.initiated) {
+    if (connLinkInvitation != null) {
       chatModel.showingInvitation.value = ShowingInvitation(contactConnection.id, connLinkInvitation, false, conn = contactConnection)
     }
   }

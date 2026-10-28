@@ -42,14 +42,7 @@ fun ModalData.MemberSupportView(
     ModalManager.end.closeModals()
   }
   LaunchedEffect(Unit) {
-    if (rhId != null) setGroupMembers(rhId, groupInfo, chatModel)
-  }
-  LaunchedEffect(chatModel.membersLoaded.value) {
-    if (rhId != null || chatModel.chatId.value != groupInfo.id) return@LaunchedEffect
-    val otherGroupMembers = chatModel.groupMembers.value.firstOrNull()?.let { it.groupId != groupInfo.groupId } == true
-    if (!chatModel.membersLoaded.value || otherGroupMembers) {
-      setGroupMembers(rhId, groupInfo, chatModel)
-    }
+    setGroupMembers(rhId, groupInfo, chatModel)
   }
   ModalView(
     close = close,

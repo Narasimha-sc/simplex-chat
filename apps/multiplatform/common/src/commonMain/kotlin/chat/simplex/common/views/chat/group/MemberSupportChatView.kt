@@ -160,14 +160,12 @@ suspend fun showMemberSupportChatView(staleChatId: State<String?>, scrollToItemI
   val memberSupportChatsCtx = ChatModel.ChatsContext(secondaryContextFilter = SecondaryContextFilter.GroupChatScopeContext(scopeInfo))
   openChat(secondaryChatsCtx = memberSupportChatsCtx, chatModel.remoteHostId(), chatInfo)
   ModalManager.end.showCustomModal(true, id = ModalViewId.SECONDARY_CHAT) { close ->
-    key(memberSupportChatsCtx) {
-      ModalView({}, showAppBar = false) {
-        if (chatInfo is ChatInfo.Group && chatInfo.groupChatScope != null) {
-          MemberSupportChatView(chatInfo, memberSupportChatsCtx, staleChatId, scrollToItemId)
-        } else {
-          LaunchedEffect(Unit) {
-            close()
-          }
+    ModalView({}, showAppBar = false) {
+      if (chatInfo is ChatInfo.Group && chatInfo.groupChatScope != null) {
+        MemberSupportChatView(chatInfo, memberSupportChatsCtx, staleChatId, scrollToItemId)
+      } else {
+        LaunchedEffect(Unit) {
+          close()
         }
       }
     }

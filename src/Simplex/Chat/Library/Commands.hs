@@ -460,7 +460,7 @@ parseChatCommand = A.parseOnly chatCommandP . B.dropWhileEnd isSpace
 processChatCommand :: StoreCxt -> NetworkRequestMode -> ChatCommand -> CM ChatResponse
 processChatCommand cxt nm = \case
   ShowActiveUser -> withUser' $ pure . CRActiveUser
-  CreateActiveUser NewUser {profile, pastTimestamp, userChatRelay, clientService, keepActiveUser} -> do
+  CreateActiveUser NewUser {profile, pastTimestamp, userChatRelay, clientService} -> do
     forM_ profile $ \p@Profile {displayName, image} -> do
       checkValidName displayName
       checkProfileImageSize image
@@ -472,19 +472,17 @@ processChatCommand cxt nm = \case
       when (n == displayName) . throwChatError $
         if activeUser || isNothing viewPwdHash then CEUserExists displayName else CEInvalidDisplayName {displayName, validName = ""}
       when (isTrue userChatRelay && isTrue userChatRelay') $ throwChatError CEChatRelayExists
-    curUser_ <- readTVarIO u
-    (uss, (smp', xftp')) <- chooseServers curUser_
+    (uss, (smp', xftp')) <- chooseServers =<< readTVarIO u
     let service = isTrue clientService
-        activateNewUser = isNothing curUser_ || not (isTrue keepActiveUser)
     auId <- withAgent $ \a -> createUser a service smp' xftp'
     ts <- liftIO $ getCurrentTime >>= if pastTimestamp then coupleDaysAgo else pure
     user <- withFastStore $ \db -> do
-      user <- createUserRecordAt db (AgentUserId auId) (isTrue userChatRelay) service p activateNewUser ts
+      user <- createUserRecordAt db (AgentUserId auId) (isTrue userChatRelay) service p True ts
       mapM_ (setUserServers db user ts) uss
       createNoteFolder db user
       createPresetContactCards db user `catchAllErrors` \_ -> pure ()
       pure user
-    when activateNewUser $ atomically . writeTVar u $ Just user
+    atomically . writeTVar u $ Just user
     pure $ CRActiveUser user
     where
       createPresetContactCards :: DB.Connection -> User -> ExceptT StoreError IO ()
@@ -1330,12 +1328,12 @@ processChatCommand cxt nm = \case
         gInfo <- getGroupInfo db cxt user chatId
         pure (user, gInfo)
       chatScopeInfo <- mapM (getChatScopeInfo cxt user) scope
-      (timedItems, gInfo', chatScopeInfo') <- withFastStore $ \db -> do
-        (timedItems, gInfo', chatScopeInfo') <- updateGroupChatItemsReadList db cxt user gInfo chatScopeInfo itemIds
+      (timedItems, gInfo') <- withFastStore $ \db -> do
+        (timedItems, gInfo') <- updateGroupChatItemsReadList db cxt user gInfo chatScopeInfo itemIds
         timedItems' <- liftIO $ setGroupChatItemsDeleteAt db user chatId timedItems =<< getCurrentTime
-        pure (timedItems', gInfo', chatScopeInfo')
+        pure (timedItems', gInfo')
       forM_ timedItems $ \(itemId, deleteAt) -> startProximateTimedItemThread user (chatRef, itemId) deleteAt
-      pure $ CRItemsReadForChat user (AChatInfo SCTGroup $ GroupChat gInfo' chatScopeInfo')
+      pure $ CRItemsReadForChat user (AChatInfo SCTGroup $ GroupChat gInfo' Nothing)
     CTLocal -> throwCmdError "not supported"
     CTContactRequest -> throwCmdError "not supported"
     CTContactConnection -> throwCmdError "not supported"
@@ -1443,8 +1441,7 @@ processChatCommand cxt nm = \case
       withFastStore' $ \db -> deleteGroupChatItemsMessages db user gInfo
       membersToDelete <- withFastStore' $ \db -> getGroupMembersForExpiration db cxt user gInfo
       forM_ membersToDelete $ \m -> withFastStore' $ \db -> deleteGroupMember db user m
-      gInfo' <- withFastStore $ \db -> getGroupInfo db cxt user chatId
-      pure $ CRChatCleared user (AChatInfo SCTGroup $ GroupChat gInfo' Nothing)
+      pure $ CRChatCleared user (AChatInfo SCTGroup $ GroupChat gInfo Nothing)
     CTLocal -> do
       nf <- withFastStore $ \db -> getNoteFolder db user chatId
       filesInfo <- withFastStore' $ \db -> getNoteFolderFileInfo db user nf
@@ -4994,7 +4991,7 @@ processChatCommand cxt nm = \case
           (chatMsgEvents, quotedItems_) <- L.unzip <$> prepareMsgs (L.zip cmrs fInvs_) timed_
           (msgs_, gsr) <- sendGroupMessages user g Nothing showGroupAsSender recipients signMsgs chatMsgEvents
           let itemsData = prepareSndItemsData (L.toList cmrs) (L.toList ciFiles_) (L.toList quotedItems_) (L.toList msgs_)
-          (sentChatInfo, cis_) <- saveSndChatItems' user (CDGroupSnd gInfo chatScopeInfo) showGroupAsSender itemsData timed_ live
+          cis_ <- saveSndChatItems user (CDGroupSnd gInfo chatScopeInfo) showGroupAsSender itemsData timed_ live
           when (length cis_ /= length cmrs) $ logError "sendGroupContentMessages: cmrs and cis_ length mismatch"
           createMemberSndStatuses cis_ msgs_ gsr
           let r@(_, cis) = partitionEithers cis_
@@ -5002,7 +4999,7 @@ processChatCommand cxt nm = \case
           forM_ (timed_ >>= timedDeleteAt') $ \deleteAt ->
             forM_ cis $ \ci ->
               startProximateTimedItemThread user (ChatRef CTGroup groupId scope, chatItemId' ci) deleteAt
-          pure $ CRNewChatItems user (map (AChatItem SCTGroup SMDSnd sentChatInfo) cis)
+          pure $ CRNewChatItems user (map (AChatItem SCTGroup SMDSnd (GroupChat gInfo chatScopeInfo)) cis)
           where
             setupSndFileTransfers :: Int -> CM (NonEmpty (Maybe FileInvitation, Maybe (CIFile 'MDSnd)))
             setupSndFileTransfers n =
@@ -7175,7 +7172,7 @@ chatCommandP =
       (cName, shortDescr) <- profileNameDescr
       service <- (" service=" *> onOffP) <|> pure False
       let profile = Just Profile {displayName = cName, fullName = "", shortDescr, description = Nothing, image = Nothing, contactLink = Nothing, peerType = Nothing, preferences = Nothing, badge = Nothing, contactDomain = Nothing}
-      pure NewUser {profile, pastTimestamp = False, userChatRelay = BoolDef relay, clientService = BoolDef service, keepActiveUser = BoolDef False}
+      pure NewUser {profile, pastTimestamp = False, userChatRelay = BoolDef relay, clientService = BoolDef service}
     newBotUserP = do
       files_ <- optional $ "files=" *> onOffP <* A.space
       service <- ("service=" *> onOffP <* A.space) <|> pure False
@@ -7184,7 +7181,7 @@ chatCommandP =
             Just True -> Nothing
             _ -> Just (emptyChatPrefs :: Preferences) {files = Just FilesPreference {allow = FANo}}
           profile = Just Profile {displayName = cName, fullName = "", shortDescr, description = Nothing, image = Nothing, contactLink = Nothing, peerType = Just CPTBot, preferences, badge = Nothing, contactDomain = Nothing}
-      pure NewUser {profile, pastTimestamp = False, userChatRelay = BoolDef False, clientService = BoolDef service, keepActiveUser = BoolDef False}
+      pure NewUser {profile, pastTimestamp = False, userChatRelay = BoolDef False, clientService = BoolDef service}
     jsonP :: J.FromJSON a => Parser a
     jsonP = J.eitherDecodeStrict' <$?> A.takeByteString
     groupProfile = do

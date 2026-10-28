@@ -3289,7 +3289,6 @@ SubscribeError:
 - pastTimestamp: bool
 - userChatRelay: bool
 - clientService: bool
-- keepActiveUser: bool
 
 
 ---

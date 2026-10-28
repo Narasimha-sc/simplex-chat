@@ -210,7 +210,6 @@ testChatRelayTest ps =
         -- Scenario 1: Happy path - test relay address succeeds
         alice ##> ("/relay test " <> bobSLink)
         alice <## "relay test passed, profile: bob (Bob)"
-        bob @@@ []
 
         -- Scenario 2: Non-relay address - cath is not a relay user,
         -- her address has ContactShortLinkData, not RelayAddressLinkData

@@ -60,6 +60,7 @@ module Simplex.Chat.Store.Groups
     getMentionedMemberByMemberId,
     getGroupMemberById,
     getNonRemovedMemberById,
+    getGroupMemberByIndex,
     getGroupMemberByMemberId,
     getCreateUnknownGMByMemberId,
     getGroupMemberIdViaMemberId,
@@ -263,7 +264,6 @@ import Database.PostgreSQL.Simple.SqlQQ (sql)
 #else
 import Database.SQLite.Simple (Only (..), Query, (:.) (..))
 import Database.SQLite.Simple.QQ (sql)
-import Simplex.Messaging.Util (encodeJSON)
 #endif
 
 type MaybeGroupMemberRow = (Maybe GroupMemberId, Maybe GroupId, Maybe Int64, Maybe MemberId, Maybe VersionChat, Maybe VersionChat, Maybe GroupMemberRole, Maybe GroupMemberCategory, Maybe GroupMemberStatus, Maybe BoolInt, Maybe MemberRestrictionStatus) :. (Maybe Int64, Maybe GroupMemberId, Maybe ContactName, Maybe ContactId, Maybe ProfileId) :. ((Maybe ProfileId, Maybe ContactName, Maybe Text, Maybe Text, Maybe Text, Maybe ImageData, Maybe ConnLinkContact, Maybe ChatPeerType, Maybe LocalAlias, Maybe Text, Maybe Text) :. BadgeRow :. ContactDomainRow) :. (Maybe UTCTime, Maybe UTCTime) :. (Maybe UTCTime, Maybe Int64, Maybe Int64, Maybe Int64, Maybe UTCTime, Maybe C.PublicKeyEd25519, Maybe ShortLinkContact, Maybe Text, Maybe UTCTime)
@@ -1200,6 +1200,24 @@ getNonRemovedMemberById db cxt user@User {userId} groupMemberId = do
       (groupMemberQuery <> " WHERE m.group_member_id = ? AND m.user_id = ? AND m.member_status NOT IN (?,?,?,?)")
       (groupMemberId, userId, GSMemRejected, GSMemRemoved, GSMemLeft, GSMemGroupDeleted)
 
+getGroupMemberByIndex :: DB.Connection -> StoreCxt -> User -> GroupInfo -> Int64 -> ExceptT StoreError IO GroupMember
+getGroupMemberByIndex db cxt user GroupInfo {groupId} indexInGroup = do
+  currentTs <- liftIO getCurrentTime
+  ExceptT . firstRow (toContactMember currentTs cxt user) (SEGroupMemberNotFoundByIndex indexInGroup) $
+    DB.query
+      db
+      (groupMemberQuery <> " WHERE m.group_id = ? AND m.index_in_group = ?")
+      (groupId, indexInGroup)
+
+getSupportScopeMemberByIndex :: DB.Connection -> StoreCxt -> User -> GroupInfo -> GroupMemberId -> Int64 -> ExceptT StoreError IO GroupMember
+getSupportScopeMemberByIndex db cxt user GroupInfo {groupId} scopeGMId indexInGroup = do
+  currentTs <- liftIO getCurrentTime
+  ExceptT . firstRow (toContactMember currentTs cxt user) (SEGroupMemberNotFoundByIndex indexInGroup) $
+    DB.query
+      db
+      (groupMemberQuery <> " WHERE m.group_id = ? AND m.index_in_group = ? AND (m.member_role IN (?,?,?) OR m.group_member_id = ?)")
+      (groupId, indexInGroup, GRModerator, GRAdmin, GROwner, scopeGMId)
+
 getGroupMemberByMemberId :: DB.Connection -> StoreCxt -> User -> GroupInfo -> MemberId -> ExceptT StoreError IO GroupMember
 getGroupMemberByMemberId db cxt user GroupInfo {groupId} memberId = do
   currentTs <- liftIO getCurrentTime
@@ -1250,31 +1268,31 @@ getGroupMembers db cxt user@User {userId, userContactId} GroupInfo {groupId} = d
       (userId, groupId, userContactId)
 
 getGroupMembersByIndexes :: DB.Connection -> StoreCxt -> User -> GroupInfo -> [Int64] -> IO [GroupMember]
-getGroupMembersByIndexes db cxt user GroupInfo {groupId} indexesInGroup = do
+getGroupMembersByIndexes db cxt user gInfo indexesInGroup = do
+#if defined(dbPostgres)
   currentTs <- getCurrentTime
+  let GroupInfo {groupId} = gInfo
   map (toContactMember currentTs cxt user) <$>
     DB.query
       db
-#if defined(dbPostgres)
       (groupMemberQuery <> " WHERE m.group_id = ? AND m.index_in_group IN ?")
       (groupId, In indexesInGroup)
 #else
-      (groupMemberQuery <> " WHERE m.group_id = ? AND m.index_in_group IN (SELECT value FROM json_each(?))")
-      (groupId, encodeJSON indexesInGroup)
+  rights <$> mapM (runExceptT . getGroupMemberByIndex db cxt user gInfo) indexesInGroup
 #endif
 
 getSupportScopeMembersByIndexes :: DB.Connection -> StoreCxt -> User -> GroupInfo -> GroupMemberId -> [Int64] -> IO [GroupMember]
-getSupportScopeMembersByIndexes db cxt user GroupInfo {groupId} scopeGMId indexesInGroup = do
+getSupportScopeMembersByIndexes db cxt user gInfo scopeGMId indexesInGroup = do
+#if defined(dbPostgres)
   currentTs <- getCurrentTime
+  let GroupInfo {groupId} = gInfo
   map (toContactMember currentTs cxt user) <$>
     DB.query
       db
-#if defined(dbPostgres)
       (groupMemberQuery <> " WHERE m.group_id = ? AND m.index_in_group IN ? AND (m.member_role IN (?,?,?) OR m.group_member_id = ?)")
       (groupId, In indexesInGroup, GRModerator, GRAdmin, GROwner, scopeGMId)
 #else
-      (groupMemberQuery <> " WHERE m.group_id = ? AND m.index_in_group IN (SELECT value FROM json_each(?)) AND (m.member_role IN (?,?,?) OR m.group_member_id = ?)")
-      (groupId, encodeJSON indexesInGroup, GRModerator, GRAdmin, GROwner, scopeGMId)
+  rights <$> mapM (runExceptT . getSupportScopeMemberByIndex db cxt user gInfo scopeGMId) indexesInGroup
 #endif
 
 getGroupModerators :: DB.Connection -> StoreCxt -> User -> GroupInfo -> IO [GroupMember]
@@ -2304,7 +2322,7 @@ updatePreparedRelayedGroup db cxt user@User {userId} gInfo cReq cReqHash incogni
   getGroupInfoKeys db cxt user (groupId' gInfo)
 
 updatePublicMemberCount :: DB.Connection -> StoreCxt -> User -> GroupInfo -> ExceptT StoreError IO GroupInfo
-updatePublicMemberCount db cxt user@User {userId} GroupInfo {groupId} = do
+updatePublicMemberCount db cxt user GroupInfo {groupId} = do
   liftIO $ do
     totalCount <- fromMaybe 0 <$> maybeFirstRow fromOnly
       (DB.query db "SELECT summary_current_members_count FROM groups WHERE group_id = ?" (Only groupId))
@@ -2312,11 +2330,11 @@ updatePublicMemberCount db cxt user@User {userId} GroupInfo {groupId} = do
       (DB.query
         db
 #if defined(dbPostgres)
-        "SELECT COUNT(1) FROM group_members WHERE user_id = ? AND group_id = ? AND member_role = ? AND is_current_member(member_status)"
+        "SELECT COUNT(1) FROM group_members WHERE group_id = ? AND member_role = ? AND is_current_member(member_status)"
 #else
-        "SELECT COUNT(1) FROM group_members m JOIN group_member_status_predicates sp ON m.member_status = sp.member_status WHERE m.user_id = ? AND m.group_id = ? AND m.member_role = ? AND sp.current_member = 1"
+        "SELECT COUNT(1) FROM group_members m JOIN group_member_status_predicates sp ON m.member_status = sp.member_status WHERE m.group_id = ? AND m.member_role = ? AND sp.current_member = 1"
 #endif
-        (userId, groupId, GRRelay))
+        (groupId, GRRelay))
     let publicCount = max 0 (totalCount - relayCount) :: Int64
     currentTs <- getCurrentTime
     DB.execute db "UPDATE groups SET public_member_count = ?, updated_at = ? WHERE group_id = ?" (publicCount, currentTs, groupId)
@@ -2802,15 +2820,12 @@ updateGroupPreferences db User {userId} g@GroupInfo {groupId, groupProfile = p} 
     (prefsToRow (Just ps) :. (currentTs, userId, groupId))
   pure (g :: GroupInfo) {groupProfile = p {groupPreferences = Just ps}, fullGroupPreferences = mergeGroupPreferences $ Just ps}
 
-updateGroupProfileFromMember :: DB.Connection -> User -> GroupInfo -> BusinessChatType -> Profile -> ExceptT StoreError IO GroupInfo
-updateGroupProfileFromMember db user g@GroupInfo {groupId} chatType Profile {displayName = n, fullName = fn, shortDescr = sd, description = descr, image = img} = do
+updateGroupProfileFromMember :: DB.Connection -> User -> GroupInfo -> Profile -> ExceptT StoreError IO GroupInfo
+updateGroupProfileFromMember db user g@GroupInfo {groupId} Profile {displayName = n, fullName = fn, shortDescr = sd, description = descr, image = img} = do
   p_ <- liftIO $ getGroupProfileById db groupId -- to avoid any race conditions with UI
-  p@GroupProfile {description = gDescr} <- maybe (throwError $ SEGroupNotFound groupId) pure p_
+  p <- maybe (throwError $ SEGroupNotFound groupId) pure p_
   let g' = g {groupProfile = p} :: GroupInfo
-      descr' = case chatType of
-        BCBusiness -> descr
-        BCCustomer -> gDescr
-      p' = p {displayName = n, fullName = fn, shortDescr = sd, description = descr', image = img} :: GroupProfile
+      p' = p {displayName = n, fullName = fn, shortDescr = sd, description = descr, image = img} :: GroupProfile
   updateGroupProfile db user g' p'
 
 getGroupProfileById :: DB.Connection -> GroupId -> IO (Maybe GroupProfile)

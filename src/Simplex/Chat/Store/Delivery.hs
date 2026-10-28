@@ -52,9 +52,11 @@ import Text.Read (readMaybe)
 import Database.PostgreSQL.Simple (In (..), Only (..), (:.) (..))
 import Database.PostgreSQL.Simple.SqlQQ (sql)
 #else
+import Control.Monad.Except
+import Data.Either (rights)
 import Database.SQLite.Simple (Only (..), (:.) (..))
 import Database.SQLite.Simple.QQ (sql)
-import Simplex.Messaging.Util (encodeJSON)
+import Simplex.Chat.Store.Groups (getGroupMemberById)
 #endif
 
 type DeliveryJobScopeRow = (DeliveryWorkerScope, Maybe DeliveryJobSpecTag, Maybe BoolInt, Maybe GroupMemberId)
@@ -365,19 +367,15 @@ getGroupMembersByCursor db cxt user@User {userContactId} GroupInfo {groupId} cur
           ( (groupId, userContactId, singleSenderGMId_, GSMemIntroduced, GSMemIntroInvited, GSMemAccepted, GSMemAnnounced, GSMemConnected, GSMemComplete)
               :. (cursorGMId, count)
           )
-  if null gmIds
-    then pure []
-    else do
-      currentTs <- getCurrentTime
-      map (toContactMember currentTs cxt user) <$>
-        DB.query
-          db
 #if defined(dbPostgres)
-          (groupMemberQuery <> " WHERE m.group_member_id IN ? ORDER BY m.group_member_id ASC")
-          (Only (In gmIds))
+  currentTs <- getCurrentTime
+  map (toContactMember currentTs cxt user) <$>
+    DB.query
+      db
+      (groupMemberQuery <> " WHERE m.group_member_id IN ? ORDER BY m.group_member_id ASC")
+      (Only (In gmIds))
 #else
-          (groupMemberQuery <> " WHERE m.group_member_id IN (SELECT value FROM json_each(?)) ORDER BY m.group_member_id ASC")
-          (Only (encodeJSON gmIds))
+  rights <$> mapM (runExceptT . getGroupMemberById db cxt user) gmIds
 #endif
   where
     query =

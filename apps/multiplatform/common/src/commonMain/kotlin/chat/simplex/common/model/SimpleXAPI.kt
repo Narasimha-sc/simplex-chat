@@ -1032,8 +1032,8 @@ object ChatController {
     return null
   }
 
-  suspend fun apiCreateActiveUser(rh: Long?, p: Profile?, pastTimestamp: Boolean = false, keepActiveUser: Boolean = false, ctrl: ChatCtrl? = null): User? {
-    val r = sendCmd(rh, CC.CreateActiveUser(p, pastTimestamp = pastTimestamp, keepActiveUser = keepActiveUser), ctrl)
+  suspend fun apiCreateActiveUser(rh: Long?, p: Profile?, pastTimestamp: Boolean = false, ctrl: ChatCtrl? = null): User? {
+    val r = sendCmd(rh, CC.CreateActiveUser(p, pastTimestamp = pastTimestamp), ctrl)
     if (r is API.Result && r.res is CR.ActiveUser) return r.res.user.updateRemoteHostId(rh)
     val e = (r as? API.Error)?.err
     if (
@@ -1269,10 +1269,7 @@ object ChatController {
   private suspend fun processSendMessageCmd(rh: Long?, cmd: CC): List<AChatItem>? {
     val r = sendCmd(rh, cmd)
     return when {
-      r is API.Result && r.res is CR.NewChatItems -> {
-        r.res.chatItems.lastOrNull()?.let { withContext(Dispatchers.Main) { chatModel.upsertSupportChatMember(rh, it.chatInfo) } }
-        r.res.chatItems
-      }
+      r is API.Result && r.res is CR.NewChatItems -> r.res.chatItems
       r is API.Error && r.err is ChatError.ChatErrorStore && r.err.storeError is StoreError.LargeMsg && cmd is CC.ApiSendMessages -> {
         val mc = cmd.composedMessages.last().msgContent
         AlertManager.shared.showAlertMsg(
@@ -3075,7 +3072,6 @@ object ChatController {
                 chatModel.chatsContext.increaseGroupReportsCounter(rhId, cInfo.id)
               }
               chatModel.secondaryChatsContext.value?.addChatItem(rhId, cInfo, cItem)
-              chatModel.upsertSupportChatMember(rhId, cInfo)
             }
           } else if (cItem.isRcvNew && cInfo.ntfsEnabled(cItem)) {
             withContext(Dispatchers.Main) {
@@ -3157,7 +3153,6 @@ object ChatController {
             if (cItem.isActiveReport) {
               chatModel.chatsContext.decreaseGroupReportsCounter(rhId, cInfo.id)
             }
-            chatModel.upsertSupportChatMember(rhId, cInfo)
           }
           withContext(Dispatchers.Main) {
             if (toChatItem == null) {
@@ -3233,7 +3228,7 @@ object ChatController {
       is CR.JoinedGroupMemberConnecting ->
         if (active(r.user)) {
           withContext(Dispatchers.Main) {
-            chatModel.chatsContext.upsertGroupMember(rhId, r.groupInfo, chatModel.withLoadedSupportChat(r.member))
+            chatModel.chatsContext.upsertGroupMember(rhId, r.groupInfo, r.member)
           }
         }
       is CR.MemberAcceptedByOther ->
@@ -3272,10 +3267,6 @@ object ChatController {
               chatModel.secondaryChatsContext.value?.removeMemberItems(rhId, r.deletedMember, byMember = r.byMember, r.groupInfo)
             }
           }
-        } else {
-          val users = chatController.listUsers(rhId)
-          chatModel.users.clear()
-          chatModel.users.addAll(users)
         }
       is CR.LeftMember ->
         if (active(r.user)) {
@@ -3286,10 +3277,6 @@ object ChatController {
           withContext(Dispatchers.Main) {
             chatModel.secondaryChatsContext.value?.upsertGroupMember(rhId, r.groupInfo, r.member)
           }
-        } else {
-          val users = chatController.listUsers(rhId)
-          chatModel.users.clear()
-          chatModel.users.addAll(users)
         }
       is CR.MemberRole ->
         if (active(r.user)) {
@@ -3352,7 +3339,7 @@ object ChatController {
       is CR.JoinedGroupMember ->
         if (active(r.user)) {
           withContext(Dispatchers.Main) {
-            chatModel.chatsContext.upsertGroupMember(rhId, r.groupInfo, chatModel.withLoadedSupportChat(r.member))
+            chatModel.chatsContext.upsertGroupMember(rhId, r.groupInfo, r.member)
           }
         }
       is CR.ConnectedToGroupMember -> {
@@ -4018,7 +4005,7 @@ sealed class BadgePurchaseResult {
 sealed class CC {
   class Console(val cmd: String): CC()
   class ShowActiveUser: CC()
-  class CreateActiveUser(val profile: Profile?, val pastTimestamp: Boolean, val keepActiveUser: Boolean): CC()
+  class CreateActiveUser(val profile: Profile?, val pastTimestamp: Boolean): CC()
   class ListUsers: CC()
   class ApiSetActiveUser(val userId: Long, val viewPwd: String?): CC()
   class SetAllContactReceipts(val enable: Boolean): CC()
@@ -4209,7 +4196,7 @@ sealed class CC {
     is Console -> cmd
     is ShowActiveUser -> "/u"
     is CreateActiveUser -> {
-      val user = NewUser(profile, pastTimestamp = pastTimestamp, keepActiveUser = keepActiveUser)
+      val user = NewUser(profile, pastTimestamp = pastTimestamp)
       "/_create user ${json.encodeToString(user)}"
     }
     is ListUsers -> "/users"
@@ -4714,8 +4701,7 @@ private fun storeReceiptOriginParam(origin: StoreReceiptOrigin): String = when (
 data class NewUser(
   val profile: Profile?,
   val pastTimestamp: Boolean,
-  val userChatRelay: Boolean = false,
-  val keepActiveUser: Boolean = false
+  val userChatRelay: Boolean = false
 )
 
 sealed class ChatPagination {
