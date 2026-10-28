@@ -1741,27 +1741,8 @@ getGroupReportsCount_ db User {userId} GroupInfo {groupId} archived =
 
 queryUnreadGroupItems :: (ToField p, FromRow r) => DB.Connection -> User -> GroupInfo -> Maybe GroupChatScopeInfo -> Maybe MsgContentTag -> Query -> p -> Query -> Query -> ExceptT StoreError IO [r]
 queryUnreadGroupItems db User {userId} GroupInfo {groupId} scopeInfo_ contentFilter statusCond statusParam baseQuery orderLimit =
-  case (scopeInfo_, contentFilter) of
-    (Nothing, Nothing) ->
-      liftIO $
-        DB.query
-          db
-          (baseQuery <> " AND group_scope_tag IS NULL AND group_scope_group_member_id IS NULL AND " <> statusCond <> orderLimit)
-          (userId, groupId, statusParam)
-    (Nothing, Just mcTag) ->
-      liftIO $
-        DB.query
-          db
-          (baseQuery <> " AND msg_content_tag = ? AND " <> statusCond <> orderLimit)
-          (userId, groupId, mcTag, statusParam)
-    (Just GCSIMemberSupport {groupMember_ = m}, Nothing) ->
-      liftIO $
-        DB.query
-          db
-          (baseQuery <> " AND group_scope_tag = ? AND group_scope_group_member_id IS NOT DISTINCT FROM ? AND " <> statusCond <> orderLimit)
-          (userId, groupId, GCSTMemberSupport_, groupMemberId' <$> m, statusParam)
-    (Just _scope, Just _mcTag) ->
-      throwError $ SEInternalError "group scope and content filter are not supported together"
+  withGroupItemsCond scopeInfo_ contentFilter $ \cond params ->
+    DB.query db (baseQuery <> cond <> "AND " <> statusCond <> orderLimit) ((userId, groupId) :. params :. Only statusParam)
 
 getGroupNavInfo_ :: DB.Connection -> User -> GroupInfo -> CChatItem 'CTGroup -> IO NavigationInfo
 getGroupNavInfo_ db User {userId} GroupInfo {groupId} afterCI = do
