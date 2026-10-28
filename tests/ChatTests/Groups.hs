@@ -9297,6 +9297,7 @@ testScopedSupportUnreadStatsOnClearChat =
     alice <## "members require attention: 1"
     alice <## "bob (Bob) (id 2): unread: 1, require attention: 1, mentions: 0"
     bob ##> "/member support chats #team"
+    bob <## "members require attention: 0"
     bob <## "support: unread: 1, require attention: 0, mentions: 0"
 
     alice #$> ("/clear #team", id, "#team: all messages are removed locally ONLY")
@@ -9306,6 +9307,7 @@ testScopedSupportUnreadStatsOnClearChat =
     alice <## "members require attention: 0"
     alice <## "bob (Bob) (id 2): unread: 0, require attention: 0, mentions: 0"
     bob ##> "/member support chats #team"
+    bob <## "members require attention: 0"
     bob <## "support: unread: 0, require attention: 0, mentions: 0"
   where
     opts =
