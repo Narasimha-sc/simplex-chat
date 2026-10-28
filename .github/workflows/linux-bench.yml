@@ -35,22 +35,37 @@ jobs:
           free -h
           df -h /
 
+      - name: Restore core library
+        id: core-cache
+        if: inputs.cache
+        uses: actions/cache/restore@v5
+        with:
+          path: |
+            apps/multiplatform/common/src/commonMain/cpp/desktop/libs/linux-x86_64
+            apps/multiplatform/build/links
+          key: linux-bench-core-${{ hashFiles('src/**', 'cabal.project', 'simplex-chat.cabal', 'PRIVACY.md', 'scripts/desktop/build-lib-linux.sh') }}
+
       - name: Setup Haskell
         id: haskell
+        if: steps.core-cache.outputs.cache-hit != 'true'
         uses: simplex-chat/setup-haskell-action@v2
         with:
           ghc-version: 9.6.3
           cabal-version: 3.10.2.0
 
+      # each run starts from the newest store and saves its own, so dist-newstyle never goes stale
       - name: Restore cabal store
         id: cabal-cache
-        if: inputs.cache
-        uses: actions/cache@v4
+        if: inputs.cache && steps.core-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/restore@v5
         with:
           path: |
             ${{ steps.haskell.outputs.cabal-store }}
             dist-newstyle
-          key: linux-bench-ghc9.6.3-${{ hashFiles('cabal.project', 'simplex-chat.cabal') }}
+          key: linux-bench-store-ghc9.6.3-${{ hashFiles('cabal.project', 'simplex-chat.cabal') }}-${{ github.run_id }}
+          restore-keys: |
+            linux-bench-store-ghc9.6.3-${{ hashFiles('cabal.project', 'simplex-chat.cabal') }}-
+            linux-bench-store-ghc9.6.3-
 
       - name: Install libraries
         run: |
@@ -58,13 +73,38 @@ jobs:
           sudo apt-get install -y libgmp3-dev zlib1g-dev libnuma-dev libssl-dev patchelf strip-nondeterminism libfuse2 desktop-file-utils file
 
       - name: Prepare cabal.project.local
+        if: steps.core-cache.outputs.cache-hit != 'true'
         run: |
           echo "ignore-project: False"    >> cabal.project.local
           echo "package direct-sqlcipher" >> cabal.project.local
           echo "    flags: +openssl"      >> cabal.project.local
+          # a restored dist-newstyle can hold an older version's build directory, which breaks the script's simplex-chat-* glob
+          version=$(sed -n 's/^version: *//p' simplex-chat.cabal)
+          find "dist-newstyle/build/$(uname -m)-linux/ghc-9.6.3" -maxdepth 1 -name 'simplex-chat-*' ! -name "simplex-chat-$version" -exec rm -rf {} + 2> /dev/null || true
 
       - name: Build core library
+        id: core
+        if: steps.core-cache.outputs.cache-hit != 'true'
         run: scripts/desktop/build-lib-linux.sh
+
+      # saved even when a later step fails
+      - name: Save cabal store
+        if: ${{ !cancelled() && inputs.cache && steps.core-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v5
+        with:
+          path: |
+            ${{ steps.haskell.outputs.cabal-store }}
+            dist-newstyle
+          key: ${{ steps.cabal-cache.outputs.cache-primary-key }}
+
+      - name: Save core library
+        if: ${{ steps.core.outcome == 'success' && inputs.cache }}
+        uses: actions/cache/save@v5
+        with:
+          path: |
+            apps/multiplatform/common/src/commonMain/cpp/desktop/libs/linux-x86_64
+            apps/multiplatform/build/links
+          key: ${{ steps.core-cache.outputs.cache-primary-key }}
 
       - name: Setup Java
         uses: actions/setup-java@v5
