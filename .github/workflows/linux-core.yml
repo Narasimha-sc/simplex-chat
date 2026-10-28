@@ -128,6 +128,8 @@ jobs:
       - name: Build core library
         id: core
         if: steps.core-cache.outputs.cache-hit != 'true'
+        env:
+          SKIP_VLC: '1'
         run: scripts/desktop/build-lib-linux.sh
 
       # saved even when a later step fails
