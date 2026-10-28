@@ -1,0 +1,80 @@
+name: linux-bench
+run-name: "${{ github.event_name == 'workflow_dispatch' && format('linux-bench cache={0}', inputs.cache) || 'linux-bench: registered by a push to its branch, nothing built' }}"
+
+# Times the Linux core library and the AppImage on a GitHub runner, as build.yml does for a release (Ubuntu 22.04, GHC 9.6.3, Corretto 17).
+# The push trigger only makes GitHub list this workflow; it builds nothing.
+on:
+  push:
+    branches: [bench/linux-build-timing]
+    paths: [.github/workflows/linux-bench.yml]
+  workflow_dispatch:
+    inputs:
+      cache:
+        description: Restore and save the cabal store, dist-newstyle and Gradle caches
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  bench:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 180
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          submodules: recursive
+
+      - name: Show runner
+        run: |
+          lsb_release -ds
+          nproc
+          free -h
+          df -h /
+
+      - name: Setup Haskell
+        id: haskell
+        uses: simplex-chat/setup-haskell-action@v2
+        with:
+          ghc-version: 9.6.3
+          cabal-version: 3.10.2.0
+
+      - name: Restore cabal store
+        id: cabal-cache
+        if: inputs.cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ steps.haskell.outputs.cabal-store }}
+            dist-newstyle
+          key: linux-bench-ghc9.6.3-${{ hashFiles('cabal.project', 'simplex-chat.cabal') }}
+
+      - name: Install libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgmp3-dev zlib1g-dev libnuma-dev libssl-dev patchelf strip-nondeterminism libfuse2 desktop-file-utils file
+
+      - name: Prepare cabal.project.local
+        run: |
+          echo "ignore-project: False"    >> cabal.project.local
+          echo "package direct-sqlcipher" >> cabal.project.local
+          echo "    flags: +openssl"      >> cabal.project.local
+
+      - name: Build core library
+        run: scripts/desktop/build-lib-linux.sh
+
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: corretto
+          java-version: 17
+          cache: ${{ inputs.cache && 'gradle' || '' }}
+
+      - name: Build AppImage
+        run: |
+          export ASSETS_DIR='../../assets'
+          scripts/desktop/make-appimage-linux.sh
+          ls -la apps/multiplatform/release/main/*.AppImage
