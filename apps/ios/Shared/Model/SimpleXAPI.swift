@@ -2850,12 +2850,30 @@ func processReceivedMsg(_ res: ChatEvent) async {
                     m.removeMemberItems(deletedMember, byMember: byMember, groupInfo)
                 }
             }
+        } else {
+            do {
+                let users = try listUsers()
+                await MainActor.run {
+                    m.users = users
+                }
+            } catch {
+                logger.error("Error loading users: \(error)")
+            }
         }
     case let .leftMember(user, groupInfo, member):
         if active(user) {
             await MainActor.run {
                 m.updateGroup(groupInfo)
                 _ = m.upsertGroupMember(groupInfo, member)
+            }
+        } else {
+            do {
+                let users = try listUsers()
+                await MainActor.run {
+                    m.users = users
+                }
+            } catch {
+                logger.error("Error loading users: \(error)")
             }
         }
     case let .groupDeleted(user, groupInfo, _): // TODO update user member

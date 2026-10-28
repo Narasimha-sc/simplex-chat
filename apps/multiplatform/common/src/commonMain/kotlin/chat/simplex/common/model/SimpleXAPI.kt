@@ -3267,6 +3267,10 @@ object ChatController {
               chatModel.secondaryChatsContext.value?.removeMemberItems(rhId, r.deletedMember, byMember = r.byMember, r.groupInfo)
             }
           }
+        } else {
+          val users = chatController.listUsers(rhId)
+          chatModel.users.clear()
+          chatModel.users.addAll(users)
         }
       is CR.LeftMember ->
         if (active(r.user)) {
@@ -3277,6 +3281,10 @@ object ChatController {
           withContext(Dispatchers.Main) {
             chatModel.secondaryChatsContext.value?.upsertGroupMember(rhId, r.groupInfo, r.member)
           }
+        } else {
+          val users = chatController.listUsers(rhId)
+          chatModel.users.clear()
+          chatModel.users.addAll(users)
         }
       is CR.MemberRole ->
         if (active(r.user)) {

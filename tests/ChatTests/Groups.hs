@@ -142,6 +142,7 @@ chatGroupTests = do
     it "accept member - only moderators review" testGLinkReviewMember
     it "accept member - host approval, then moderators review" testGLinkApproveThenReviewMember
     it "delete pending approval member" testGLinkDeletePendingApprovalMember
+    it "pending approval member leaves the group" testGLinkPendingApprovalMemberLeaves
     it "admin that joined via link introduces member for moderator review" testGLinkReviewIntroduce
   describe "group link connection plan" $ do
     it "ok to connect; known group" testPlanGroupLinkKnown
@@ -276,6 +277,7 @@ chatGroupTests = do
     it "should remove support chat with member when member is removed" testScopedSupportMemberRemoved
     it "should remove support chat with member when user removes member" testScopedSupportUserRemovesMember
     it "should remove support chat with member when member leaves" testScopedSupportMemberLeaves
+    it "should drop support scope message to member who left" testScopedSupportMessageToLeftMemberDropped
     it "should respect support preference in group" testSupportPreferenceGroup
     it "should respect support preference in channel" testSupportPreferenceChannel
   -- TODO [relays] add tests for channels
@@ -4062,6 +4064,36 @@ testGLinkDeletePendingApprovalMember =
       alice <## "#team: you removed cath from the group (signed)"
       cath <## "#team: alice removed you from the group (signed)"
       cath <## "use /d #team to delete the group"
+  where
+    cfg = testCfg {chatHooks = defaultChatHooks {acceptMember = Just (\_ _ _ -> pure $ Right (GAPendingApproval, GRObserver))}}
+
+testGLinkPendingApprovalMemberLeaves :: HasCallStack => TestParams -> IO ()
+testGLinkPendingApprovalMemberLeaves =
+  testChatCfg3 cfg aliceProfile bobProfile cathProfile $
+    \alice bob cath -> do
+      createGroup2 "team" alice bob
+
+      alice ##> "/create link #team"
+      gLink <- getGroupLink alice "team" GRMember True
+      cath ##> ("/c " <> gLink)
+      cath <## "connection request sent!"
+      alice <## "cath (Catherine): accepting request to join group #team..."
+      concurrentlyN_
+        [ alice <## "#team: cath connected and pending approval, use /_accept member #1 3 <role> to accept member",
+          do
+            cath <## "#team: joining the group..."
+            cath <## "#team: you joined the group, pending approval"
+        ]
+
+      cath ##> "/leave #team"
+      concurrentlyN_
+        [ do
+            cath <## "#team: you left the group"
+            cath <## "use /d #team to delete the group",
+          alice <## "#team: cath left the group (signed)"
+        ]
+
+      alice #$> ("/_get chat #1 count=1", chat, [(0, "left (signed)")])
   where
     cfg = testCfg {chatHooks = defaultChatHooks {acceptMember = Just (\_ _ _ -> pure $ Right (GAPendingApproval, GRObserver))}}
 
@@ -8984,6 +9016,10 @@ testScopedSupportForwardLeave =
       bob <## "#team: eve left the group (signed)"
       dan <## "#team: eve left the group (signed)"
 
+      alice #$> ("/_get chat #1 count=1", chat, [(0, "left (signed)")])
+      bob #$> ("/_get chat #1 count=1", chat, [(0, "left (signed)")])
+      dan #$> ("/_get chat #1 count=1", chat, [(0, "left (signed)")])
+
       alice ##> "#team (support: eve) hi"
       alice <## "bad chat command: support member not current or pending"
       bob ##> "#team (support: eve) hi"
@@ -9447,6 +9483,42 @@ testScopedSupportMemberLeaves =
 
     alice ##> "/member support chats #team"
     alice <## "members require attention: 0"
+  where
+    opts =
+      testOpts
+        { markRead = False
+        }
+
+testScopedSupportMessageToLeftMemberDropped :: HasCallStack => TestParams -> IO ()
+testScopedSupportMessageToLeftMemberDropped =
+  testChatOpts3 opts aliceProfile bobProfile cathProfile $ \alice bob cath -> do
+    createGroup3' "team" alice (bob, GRModerator) (cath, GRMember)
+
+    cath #> "#team (support) hi"
+    alice <# "#team (support: cath) cath> hi"
+    bob <# "#team (support: cath) cath> hi"
+
+    threadDelay 100000
+    cath ##> "/l team"
+    concurrentlyN_
+      [ do
+          cath <## "#team: you left the group"
+          cath <## "use /d #team to delete the group",
+        alice <## "#team: cath left the group (signed)",
+        bob <## "#team: cath left the group (signed)"
+      ]
+
+    void $ withCCTransaction bob $ \db ->
+      DB.execute db "UPDATE group_members SET member_status='connected' WHERE group_member_id=?" (Only (3 :: Int64))
+
+    bob #> "#team (support: cath) late"
+    alice <## "bad chat command: support member not current or pending"
+
+    alice ##> "/member support chats #team"
+    alice <## "members require attention: 0"
+
+    withCCTransaction alice (\db -> DB.query_ db "SELECT count(1) FROM chat_items WHERE group_scope_group_member_id = 3" :: IO [[Int]]) `shouldReturn` [[0]]
+    withCCTransaction alice (\db -> DB.query_ db "SELECT support_chat_items_unread FROM group_members WHERE group_member_id = 3 AND support_chat_ts IS NULL" :: IO [[Int]]) `shouldReturn` [[0]]
   where
     opts =
       testOpts
