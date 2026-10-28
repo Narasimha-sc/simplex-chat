@@ -2543,6 +2543,7 @@ class NewUser(TypedDict):
     pastTimestamp: bool
     userChatRelay: bool
     clientService: bool
+    keepActiveUser: bool
 
 class NoteFolder(TypedDict):
     noteFolderId: int  # int64
