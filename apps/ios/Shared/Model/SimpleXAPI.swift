@@ -12,6 +12,7 @@ import UIKit
 import Dispatch
 import BackgroundTasks
 import SwiftUI
+import StoreKit
 @preconcurrency import SimpleXChat
 
 private var chatController: chat_ctrl?
@@ -257,8 +258,8 @@ func apiGetActiveUser(ctrl: chat_ctrl? = nil) throws -> User? {
     }
 }
 
-func apiCreateActiveUser(_ p: Profile?, pastTimestamp: Bool = false, ctrl: chat_ctrl? = nil) throws -> User {
-    let r: ChatResponse0 = try chatSendCmdSync(.createActiveUser(profile: p, pastTimestamp: pastTimestamp), ctrl: ctrl)
+func apiCreateActiveUser(_ p: Profile?, pastTimestamp: Bool = false, keepActiveUser: Bool = false, ctrl: chat_ctrl? = nil) throws -> User {
+    let r: ChatResponse0 = try chatSendCmdSync(.createActiveUser(profile: p, pastTimestamp: pastTimestamp, keepActiveUser: keepActiveUser), ctrl: ctrl)
     if case let .activeUser(user) = r { return user }
     throw r.unexpected
 }
@@ -592,6 +593,9 @@ private func processSendMessageCmd(toChatType: ChatType, cmd: ChatCommand) async
     } else {
         r = await chatApiSendCmd(cmd, bgDelay: msgDelay)
         if case let .result(.newChatItems(_, aChatItems)) = r {
+            if let last = aChatItems.last {
+                await MainActor.run { chatModel.upsertSupportChatMember(last.chatInfo) }
+            }
             return aChatItems.map { $0.chatItem }
         }
         sendMessageErrorAlert(r.unexpected)
@@ -1927,6 +1931,7 @@ func apiMarkChatItemsRead(_ im: ItemsModel, _ cInfo: ChatInfo, _ itemIds: [ChatI
         let updatedChatInfo = try await apiChatItemsRead(type: cInfo.chatType, id: cInfo.apiId, scope: cInfo.groupChatScope(), itemIds: itemIds)
         await MainActor.run {
             ChatModel.shared.updateChatInfo(updatedChatInfo)
+            ChatModel.shared.upsertSupportChatMember(updatedChatInfo)
             ChatModel.shared.markChatItemsRead(im, cInfo, itemIds, mentionsRead)
         }
     } catch {
@@ -2204,16 +2209,26 @@ func apiRedeemBadgeCode(_ userId: Int64, _ code: String) async throws -> (user: 
 enum BadgePurchaseResult {
     case held(user: UserRef, badgeState: BadgeState?, storePurchases: [OpenStorePurchase])
     case credited(user: User, badgeState: BadgeState?)
+    // listed, and no record here has it: another device's purchase on the same Apple ID
+    case notRecorded
 }
 
 // log: false because a store receipt is a bearer secret, like a badge code - it is in the command.
-func apiPurchaseBadge(_ userId: Int64, _ echoedInvoiceId: String?, _ payment: ServicePayment) async throws -> BadgePurchaseResult {
-    let r: ChatResponse2 = try await chatSendCmd(.apiPurchaseBadge(userId: userId, echoedInvoiceId: echoedInvoiceId, payment: payment), log: false)
+func apiPurchaseBadge(_ userId: Int64, _ echoedInvoiceId: String?, origin: StoreReceiptOrigin, _ payment: ServicePayment) async throws -> BadgePurchaseResult {
+    let r: ChatResponse2 = try await chatSendCmd(.apiPurchaseBadge(userId: userId, echoedInvoiceId: echoedInvoiceId, origin: origin, payment: payment), log: false)
     switch r {
     case let .badgeState(user, badgeState, storePurchases): return .held(user: user, badgeState: badgeState, storePurchases: storePurchases ?? [])
     case let .badgeRedeemed(user, _, _, badgeState): return .credited(user: user, badgeState: badgeState)
+    case .storeReceiptNotRecorded: return .notRecorded
     default: throw r.unexpected
     }
+}
+
+// the device store's view of a subscription it charges, which changes what is shown and alerted, and retires its badge once ended
+func apiSetBadgeSubscriptionStatus(_ status: BadgeSubscriptionState, _ payment: ServicePayment) async throws {
+    let r: ChatResponse2 = try await chatSendCmd(.apiSetBadgeSubscriptionStatus(status: status, payment: payment), log: false)
+    if case .cmdOk = r { return }
+    throw r.unexpected
 }
 
 func apiCreateBadgeInvoice(_ userId: Int64) async throws -> String {
@@ -2236,10 +2251,31 @@ func redeemErrorText(_ error: Error, purchase: Bool) -> String {
             return purchase
                 ? NSLocalizedString("This profile already has a badge.", comment: "alert message")
                 : NSLocalizedString("This profile already has a badge. Redeem the code on another profile, or once this badge ends.", comment: "alert message")
+        case .storePurchaseOpen:
+            return purchase
+                ? NSLocalizedString("A store purchase is being added to this profile.", comment: "alert message")
+                : NSLocalizedString("A store purchase is being added to this profile. Redeem the code once it is added, or on another profile.", comment: "alert message")
         case let .serviceError(code): if let text = badgeServiceErrorText(code) { return text }
         case let .invalidResponse(message):
             return String.localizedStringWithFormat(NSLocalizedString("The badge service sent an unexpected response: %@", comment: "alert message"), message)
         case .unknownKeyIndex, .credentialNotVerified: return NSLocalizedString("This app version cannot verify this badge. Please update the app.", comment: "alert message")
+        }
+    }
+    if case .subscribedBefore? = error as? BadgeStoreError {
+        return NSLocalizedString("This Apple ID already has a badge subscription. Only the profile that bought it can continue it.", comment: "alert message")
+    }
+    if let e = error as? Product.PurchaseError {
+        switch e {
+        case .productUnavailable: return NSLocalizedString("This badge is not on sale.", comment: "alert message")
+        case .purchaseNotAllowed: return NSLocalizedString("In-app purchases are not allowed on this device.", comment: "alert message")
+        default: break
+        }
+    }
+    if let e = error as? StoreKitError {
+        switch e {
+        case .networkError: return NSLocalizedString("The store could not be reached.", comment: "alert message")
+        case .notAvailableInStorefront: return NSLocalizedString("This badge is not on sale.", comment: "alert message")
+        default: break
         }
     }
     return String.localizedStringWithFormat(NSLocalizedString("Error: %@", comment: "alert message"), responseError(error))
@@ -2675,6 +2711,7 @@ func processReceivedMsg(_ res: ChatEvent) async {
                     if cItem.isActiveReport {
                         m.increaseGroupReportsCounter(cInfo.id)
                     }
+                    m.upsertSupportChatMember(cInfo)
                 } else if cItem.isRcvNew && cInfo.ntfsEnabled(chatItem: cItem) {
                     m.increaseUnreadCounter(user: user)
                 }
@@ -2740,6 +2777,7 @@ func processReceivedMsg(_ res: ChatEvent) async {
                 if item.deletedChatItem.chatItem.isActiveReport {
                     m.decreaseGroupReportsCounter(item.deletedChatItem.chatInfo.id)
                 }
+                m.upsertSupportChatMember(item.deletedChatItem.chatInfo)
             }
             if let updatedChatInfo = items.last?.deletedChatItem.chatInfo {
                 m.updateChatInfo(updatedChatInfo)
@@ -2790,7 +2828,7 @@ func processReceivedMsg(_ res: ChatEvent) async {
     case let .joinedGroupMemberConnecting(user, groupInfo, _, member):
         if active(user) {
             await MainActor.run {
-                _ = m.upsertGroupMember(groupInfo, member)
+                _ = m.upsertGroupMember(groupInfo, m.withLoadedSupportChat(member))
             }
         }
     case let .memberAcceptedByOther(user, groupInfo, _, member):
@@ -2818,12 +2856,30 @@ func processReceivedMsg(_ res: ChatEvent) async {
                     m.removeMemberItems(deletedMember, byMember: byMember, groupInfo)
                 }
             }
+        } else {
+            do {
+                let users = try listUsers()
+                await MainActor.run {
+                    m.users = users
+                }
+            } catch {
+                logger.error("Error loading users: \(error)")
+            }
         }
     case let .leftMember(user, groupInfo, member):
         if active(user) {
             await MainActor.run {
                 m.updateGroup(groupInfo)
                 _ = m.upsertGroupMember(groupInfo, member)
+            }
+        } else {
+            do {
+                let users = try listUsers()
+                await MainActor.run {
+                    m.users = users
+                }
+            } catch {
+                logger.error("Error loading users: \(error)")
             }
         }
     case let .groupDeleted(user, groupInfo, _): // TODO update user member
@@ -2853,7 +2909,7 @@ func processReceivedMsg(_ res: ChatEvent) async {
     case let .joinedGroupMember(user, groupInfo, member):
         if active(user) {
             await MainActor.run {
-                _ = m.upsertGroupMember(groupInfo, member)
+                _ = m.upsertGroupMember(groupInfo, m.withLoadedSupportChat(member))
             }
         }
     case let .connectedToGroupMember(user, groupInfo, member, memberContact):

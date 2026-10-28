@@ -10,6 +10,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TupleSections #-}
@@ -148,7 +149,7 @@ import Control.Monad
 import Control.Monad.Except
 import Control.Monad.IO.Class
 import Crypto.Random (ChaChaDRG)
-import Data.Bifunctor (first)
+import Data.Bifunctor (first, second)
 import Data.ByteString.Char8 (ByteString)
 import Data.Char (toLower)
 import Data.Either (fromRight, rights)
@@ -234,6 +235,28 @@ deleteGroupChatItemsMessages db User {userId} GroupInfo {groupId} = do
   DB.execute db "DELETE FROM messages WHERE group_id = ?" (Only groupId)
   DB.execute db "DELETE FROM chat_item_reactions WHERE group_id = ?" (Only groupId)
   DB.execute db "DELETE FROM chat_items WHERE user_id = ? AND group_id = ? AND item_content_tag != 'chatBanner'" (userId, groupId)
+  DB.execute
+    db
+    [sql|
+      UPDATE group_members
+      SET support_chat_items_unread = 0,
+          support_chat_items_member_attention = 0,
+          support_chat_items_mentions = 0
+      WHERE group_id = ?
+    |]
+    (Only groupId)
+  DB.execute
+    db
+    [sql|
+      UPDATE groups
+      SET members_require_attention = (
+        SELECT COUNT(1)
+        FROM group_members
+        WHERE group_id = ? AND member_category != ? AND member_status IN (?,?)
+      )
+      WHERE user_id = ? AND group_id = ?
+    |]
+    (groupId, GCUserMember, GSMemPendingApproval, GSMemPendingReview, userId, groupId)
 
 createNewSndMessage :: MsgEncodingI e => DB.Connection -> TVar ChaChaDRG -> ConnOrGroupId -> ChatMsgEvent e -> Maybe MsgSigning -> (SharedMsgId -> EncodedChatMessage) -> ExceptT StoreError IO SndMessage
 createNewSndMessage db gVar connOrGroupId chatMsgEvent msgSigning_ encodeMessage =
@@ -1197,14 +1220,14 @@ getContactConnectionChatPreviews_ db User {userId} pagination clq = case clq of
         FROM connections
         WHERE user_id = ?
           AND conn_type = ?
-          AND conn_status != ?
+          AND relay_test = 0
           AND contact_id IS NULL
           AND conn_level = 0
           AND via_contact IS NULL
           AND (via_group_link = 0 OR (via_group_link = 1 AND group_link_id IS NOT NULL))
           AND LOWER(local_alias) LIKE '%' || LOWER(?) || '%'
       |]
-    params search = (userId, ConnContact, ConnPrepared, search)
+    params search = (userId, ConnContact, search)
     getPreviews search = case pagination of
       PTLast count -> DB.query db (query <> " ORDER BY updated_at DESC LIMIT ?") (params search :. Only count)
       PTAfter ts count -> DB.query db (query <> " AND updated_at > ? ORDER BY updated_at ASC LIMIT ?") (params search :. (ts, count))
@@ -1484,10 +1507,12 @@ getCreateGroupChatScopeInfo db cxt user GroupInfo {membership} = \case
     pure $ GCSIMemberSupport {groupMember_ = Nothing}
   GCSMemberSupport (Just gmId) -> do
     m <- getGroupMemberById db cxt user gmId
-    when (isNothing $ supportChat m) $ do
-      ts <- liftIO getCurrentTime
-      liftIO $ setSupportChatTs db gmId ts
-    pure GCSIMemberSupport {groupMember_ = Just m}
+    GCSIMemberSupport . Just <$> case supportChat m of
+      Nothing -> do
+        ts <- liftIO getCurrentTime
+        liftIO $ setSupportChatTs db gmId ts
+        getGroupMemberById db cxt user gmId
+      Just _ -> pure m
 
 getGroupChatScopeInfoForItem :: DB.Connection -> StoreCxt -> User -> GroupInfo -> ChatItemId -> ExceptT StoreError IO (Maybe GroupChatScopeInfo)
 getGroupChatScopeInfoForItem db cxt user g itemId =
@@ -1531,39 +1556,23 @@ getGroupChatLast_ db user g scopeInfo_ contentFilter count search stats = do
   cis <- mapM (liftIO . safeGetGroupItem db user g ts) ciIds
   pure $ Chat cInfo (reverse cis) stats
 
+withGroupItemsCond :: Maybe GroupChatScopeInfo -> Maybe MsgContentTag -> (forall p. ToRow p => Query -> p -> IO a) -> ExceptT StoreError IO a
+withGroupItemsCond scopeInfo_ contentFilter f = case (scopeInfo_, contentFilter) of
+  (Nothing, Nothing) -> liftIO $ f " AND group_scope_tag IS NULL AND group_scope_group_member_id IS NULL " ()
+  (Nothing, Just MCLink_) -> liftIO $ f " AND has_link = 1 " ()
+  (Nothing, Just mcTag) -> liftIO $ f " AND msg_content_tag = ? " (Only mcTag)
+  (Just GCSIMemberSupport {groupMember_ = m}, Nothing) ->
+    liftIO $ f " AND group_scope_tag = ? AND group_scope_group_member_id IS NOT DISTINCT FROM ? " (GCSTMemberSupport_, groupMemberId' <$> m)
+  (Just _scope, Just _mcTag) ->
+    throwError $ SEInternalError "group scope and content filter are not supported together"
+
 data ChatItemIDsRange = CRLast | CRAfter UTCTime ChatItemId | CRBefore UTCTime ChatItemId
 
 getChatItemIDs :: DB.Connection -> User -> ChatInfo c -> Maybe MsgContentTag -> ChatItemIDsRange -> Int -> Text -> ExceptT StoreError IO [ChatItemId]
 getChatItemIDs db User {userId} cInfo contentFilter range count search = case cInfo of
-  GroupChat GroupInfo {groupId} scopeInfo_ -> case (scopeInfo_, contentFilter) of
-    (Nothing, Nothing) ->
-      liftIO $
-        idsQuery
-          (grCond <> " AND group_scope_tag IS NULL AND group_scope_group_member_id IS NULL ")
-          (userId, groupId)
-          "item_ts"
-    (Nothing, Just MCLink_) ->
-      liftIO $
-        idsQuery
-          (grCond <> " AND has_link = 1 ")
-          (userId, groupId)
-          "item_ts"
-    (Nothing, Just mcTag) ->
-      liftIO $
-        idsQuery
-          (grCond <> " AND msg_content_tag = ? ")
-          (userId, groupId, mcTag)
-          "item_ts"
-    (Just GCSIMemberSupport {groupMember_ = m}, Nothing) ->
-      liftIO $
-        idsQuery
-          (grCond <> " AND group_scope_tag = ? AND group_scope_group_member_id IS NOT DISTINCT FROM ? ")
-          (userId, groupId, GCSTMemberSupport_, groupMemberId' <$> m)
-          "item_ts"
-    (Just _scope, Just _mcTag) ->
-      throwError $ SEInternalError "group scope and content filter are not supported together"
-    where
-      grCond = " user_id = ? AND group_id = ? "
+  GroupChat GroupInfo {groupId} scopeInfo_ ->
+    withGroupItemsCond scopeInfo_ contentFilter $ \cond params ->
+      idsQuery (" user_id = ? AND group_id = ? " <> cond) ((userId, groupId) :. params) "item_ts"
   DirectChat Contact {contactId} -> liftIO $ case contentFilter of
     Nothing -> idsQuery ctCond (userId, contactId) "created_at"
     Just MCLink_ -> idsQuery (ctCond <> " AND has_link = 1 ") (userId, contactId) "created_at"
@@ -1693,12 +1702,12 @@ getGroupChatAround' db user g scopeInfo contentFilter aroundId count search stat
   beforeCIs <- liftIO $ mapM (safeGetGroupItem db user g ts) beforeIds
   afterCIs <- liftIO $ mapM (safeGetGroupItem db user g ts) afterIds
   let cis = reverse beforeCIs <> [aroundCI] <> afterCIs
-  navInfo <- liftIO $ getNavInfo cis
+  navInfo <- getNavInfo cis
   pure (Chat cInfo cis stats, Just navInfo)
   where
     getNavInfo cis_ = case cis_ of
       [] -> pure $ NavigationInfo 0 0
-      cis -> getGroupNavInfo_ db user g (last cis)
+      cis -> getGroupNavInfo_ db user g scopeInfo contentFilter (last cis)
 
 getGroupChatInitial_ :: DB.Connection -> User -> GroupInfo -> Maybe GroupChatScopeInfo -> Maybe MsgContentTag -> Int -> ExceptT StoreError IO (Chat 'CTGroup, Maybe NavigationInfo)
 getGroupChatInitial_ db user g scopeInfo_ contentFilter count = do
@@ -1756,77 +1765,29 @@ getGroupReportsCount_ db User {userId} GroupInfo {groupId} archived =
 
 queryUnreadGroupItems :: (ToField p, FromRow r) => DB.Connection -> User -> GroupInfo -> Maybe GroupChatScopeInfo -> Maybe MsgContentTag -> Query -> p -> Query -> Query -> ExceptT StoreError IO [r]
 queryUnreadGroupItems db User {userId} GroupInfo {groupId} scopeInfo_ contentFilter statusCond statusParam baseQuery orderLimit =
-  case (scopeInfo_, contentFilter) of
-    (Nothing, Nothing) ->
-      liftIO $
-        DB.query
-          db
-          (baseQuery <> " AND group_scope_tag IS NULL AND group_scope_group_member_id IS NULL AND " <> statusCond <> orderLimit)
-          (userId, groupId, statusParam)
-    (Nothing, Just mcTag) ->
-      liftIO $
-        DB.query
-          db
-          (baseQuery <> " AND msg_content_tag = ? AND " <> statusCond <> orderLimit)
-          (userId, groupId, mcTag, statusParam)
-    (Just GCSIMemberSupport {groupMember_ = m}, Nothing) ->
-      liftIO $
-        DB.query
-          db
-          (baseQuery <> " AND group_scope_tag = ? AND group_scope_group_member_id IS NOT DISTINCT FROM ? AND " <> statusCond <> orderLimit)
-          (userId, groupId, GCSTMemberSupport_, groupMemberId' <$> m, statusParam)
-    (Just _scope, Just _mcTag) ->
-      throwError $ SEInternalError "group scope and content filter are not supported together"
+  withGroupItemsCond scopeInfo_ contentFilter $ \cond params ->
+    DB.query db (baseQuery <> cond <> "AND " <> statusCond <> orderLimit) ((userId, groupId) :. params :. Only statusParam)
 
-getGroupNavInfo_ :: DB.Connection -> User -> GroupInfo -> CChatItem 'CTGroup -> IO NavigationInfo
-getGroupNavInfo_ db User {userId} GroupInfo {groupId} afterCI = do
-  afterUnread <- getAfterUnreadCount
-  afterTotal <- getAfterTotalCount
-  pure NavigationInfo {afterUnread, afterTotal}
+getGroupNavInfo_ :: DB.Connection -> User -> GroupInfo -> Maybe GroupChatScopeInfo -> Maybe MsgContentTag -> CChatItem 'CTGroup -> ExceptT StoreError IO NavigationInfo
+getGroupNavInfo_ db User {userId} GroupInfo {groupId} scopeInfo_ contentFilter afterCI =
+  withGroupItemsCond scopeInfo_ contentFilter $ \cond params -> do
+    afterUnread <- countAfter (cond <> "AND item_status = ? ") (params :. Only CISRcvNew)
+    afterTotal <- countAfter cond params
+    pure NavigationInfo {afterUnread, afterTotal}
   where
-    getAfterUnreadCount :: IO Int
-    getAfterUnreadCount =
+    countAfter :: ToRow p => Query -> p -> IO Int
+    countAfter cond params =
       fromOnly . head
         <$> DB.query
           db
-          [sql|
-            SELECT COUNT(1)
-            FROM (
-              SELECT 1
-              FROM chat_items
-              WHERE user_id = ? AND group_id = ? AND item_status = ?
-                AND item_ts > ?
-              UNION ALL
-              SELECT 1
-              FROM chat_items
-              WHERE user_id = ? AND group_id = ? AND item_status = ?
-                AND item_ts = ? AND chat_item_id > ?
-            ) ci
-          |]
-          ( (userId, groupId, CISRcvNew, chatItemTs afterCI)
-              :. (userId, groupId, CISRcvNew, chatItemTs afterCI, cChatItemId afterCI)
+          ( "SELECT COUNT(1) FROM (SELECT 1 FROM chat_items WHERE user_id = ? AND group_id = ? "
+              <> cond
+              <> " AND item_ts > ? UNION ALL SELECT 1 FROM chat_items WHERE user_id = ? AND group_id = ? "
+              <> cond
+              <> " AND item_ts = ? AND chat_item_id > ?) ci"
           )
-    getAfterTotalCount :: IO Int
-    getAfterTotalCount =
-      fromOnly . head
-        <$> DB.query
-          db
-          [sql|
-            SELECT COUNT(1)
-            FROM (
-              SELECT 1
-              FROM chat_items
-              WHERE user_id = ? AND group_id = ?
-                AND item_ts > ?
-              UNION ALL
-              SELECT 1
-              FROM chat_items
-              WHERE user_id = ? AND group_id = ?
-                AND item_ts = ? AND chat_item_id > ?
-            ) ci
-          |]
-          ( (userId, groupId, chatItemTs afterCI)
-              :. (userId, groupId, chatItemTs afterCI, cChatItemId afterCI)
+          ( ((userId, groupId) :. params :. Only (chatItemTs afterCI))
+              :. ((userId, groupId) :. params :. (chatItemTs afterCI, cChatItemId afterCI))
           )
 
 getLocalChat :: DB.Connection -> User -> Int64 -> Maybe MsgContentTag -> ChatPagination -> Maybe Text -> ExceptT StoreError IO (Chat 'CTLocal, Maybe NavigationInfo)
@@ -2176,18 +2137,18 @@ getGroupUnreadTimedItems db User {userId} groupId scope =
         |]
         (userId, groupId, GCSTMemberSupport_, groupMemberId_, CISRcvNew)
 
-updateGroupChatItemsReadList :: DB.Connection -> StoreCxt -> User -> GroupInfo -> Maybe GroupChatScopeInfo -> NonEmpty ChatItemId -> ExceptT StoreError IO ([(ChatItemId, Int)], GroupInfo)
+updateGroupChatItemsReadList :: DB.Connection -> StoreCxt -> User -> GroupInfo -> Maybe GroupChatScopeInfo -> NonEmpty ChatItemId -> ExceptT StoreError IO ([(ChatItemId, Int)], GroupInfo, Maybe GroupChatScopeInfo)
 updateGroupChatItemsReadList db cxt user@User {userId} g@GroupInfo {groupId} scopeInfo_ itemIds = do
   currentTs <- liftIO getCurrentTime
   -- Possible improvement is to differentiate retrieval queries for each scope,
   -- but we rely on UI to not pass item IDs from incorrect scope.
   readItemsData <- liftIO $ catMaybes . L.toList <$> mapM (getUpdateGroupItem currentTs) itemIds
-  g' <- case scopeInfo_ of
-    Nothing -> pure g
+  (g', scopeInfo') <- case scopeInfo_ of
+    Nothing -> pure (g, Nothing)
     Just scopeInfo@GCSIMemberSupport {groupMember_} -> do
       let decStats = countReadItems groupMember_ readItemsData
-      liftIO $ updateGroupScopeUnreadStats db cxt user g scopeInfo decStats
-  pure (timedItems readItemsData, g')
+      second Just <$> liftIO (updateGroupScopeUnreadStats db cxt user g scopeInfo decStats)
+  pure (timedItems readItemsData, g', scopeInfo')
   where
     getUpdateGroupItem :: UTCTime -> ChatItemId -> IO (Maybe (ChatItemId, Maybe Int, Maybe UTCTime, Maybe GroupMemberId, Maybe BoolInt))
     getUpdateGroupItem currentTs itemId =
@@ -2221,18 +2182,18 @@ updateGroupChatItemsReadList db cxt user@User {userId} g@GroupInfo {groupId} sco
         addTimedItem acc (itemId, Just ttl, Nothing, _, _) = (itemId, ttl) : acc
         addTimedItem acc _ = acc
 
-updateGroupScopeUnreadStats :: DB.Connection -> StoreCxt -> User -> GroupInfo -> GroupChatScopeInfo -> (Int, Int, Int) -> IO GroupInfo
+updateGroupScopeUnreadStats :: DB.Connection -> StoreCxt -> User -> GroupInfo -> GroupChatScopeInfo -> (Int, Int, Int) -> IO (GroupInfo, GroupChatScopeInfo)
 updateGroupScopeUnreadStats db cxt user g@GroupInfo {membership} scopeInfo (unread, unanswered, mentions) =
   case scopeInfo of
     GCSIMemberSupport {groupMember_} -> case groupMember_ of
       Nothing -> do
         membership' <- updateGMStats membership
-        pure g {membership = membership'}
+        pure (g {membership = membership'}, scopeInfo)
       Just member -> do
         member' <- updateGMStats member
         let didRequire = gmRequiresAttention member
             nowRequires = gmRequiresAttention member'
-        if (not nowRequires && didRequire)
+        (,GCSIMemberSupport (Just member')) <$> if (not nowRequires && didRequire)
           then decreaseGroupMembersRequireAttention db user g
           else pure g
   where

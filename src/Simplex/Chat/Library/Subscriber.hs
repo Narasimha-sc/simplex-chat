@@ -407,7 +407,7 @@ processAgentMsgRcvFile _corrId aFileId msg = do
             Nothing -> throwChatError $ CEInternalError "no target path for received XFTP file"
             Just targetPath -> do
               fsTargetPath <- lift $ toFSFilePath targetPath
-              renameFile xftpPath fsTargetPath
+              renameFile xftpPath fsTargetPath `catchAllErrors` \_ -> copyFile xftpPath fsTargetPath
               badDigest <- case ft of
                 RcvFileTransfer {fileInvitation = FileInvitation {fileDigest = Just d}, cryptoArgs} ->
                   (/= d) <$> cryptoFileDigest (CryptoFile fsTargetPath cryptoArgs)
@@ -2276,8 +2276,11 @@ processAgentMessageConn cxt user@User {userId} entity gks_ corrId agentConnId ag
               groupMsgToView cInfo ci'
           | otherwise = do
               file_ <- processFileInv gInfo' (Just m')
-              (ci, _cInfo) <- createNonLive gInfo' (Just m') scopeInfo file_
-              deletions <- markGroupCIsDeleted user gInfo' scopeInfo [CChatItem SMDRcv ci] (Just moderator) moderatedAt
+              (ci, cInfo) <- createNonLive gInfo' (Just m') scopeInfo file_
+              let (gInfoC, scopeC) = case cInfo of
+                    GroupChat g s -> (g, s)
+                    _ -> (gInfo', scopeInfo)
+              deletions <- markGroupCIsDeleted user gInfoC scopeC [CChatItem SMDRcv ci] (Just moderator) moderatedAt
               toView $ CEvtChatItemsDeleted user deletions False False
         -- m' is Maybe GroupMember
         createNonLive gInfo' m' scopeInfo file_ = do
@@ -2959,8 +2962,8 @@ processAgentMessageConn cxt user@User {userId} entity gks_ corrId agentConnId ag
         p'' = redactedMemberProfile gInfo m p'
         contentChanged = not (sameProfileContent (redactedMemberProfile gInfo m (fromLocalProfile p)) p'')
         updateBusinessChatProfile g@GroupInfo {businessChat} = case businessChat of
-          Just bc | isMainBusinessMember bc m -> do
-            g' <- withStore $ \db -> updateGroupProfileFromMember db user g p'
+          Just bc@BusinessChatInfo {chatType} | isMainBusinessMember bc m -> do
+            g' <- withStore $ \db -> updateGroupProfileFromMember db user g chatType p'
             toView $ CEvtGroupUpdated user g g' (Just m) ((\(RcvMessage {msgSigned}, _) -> msgSigned) =<< msgTs_)
           _ -> pure ()
         isMainBusinessMember BusinessChatInfo {chatType, businessId, customerId} GroupMember {memberId} = case chatType of
@@ -3768,7 +3771,7 @@ processAgentMessageConn cxt user@User {userId} entity gks_ corrId agentConnId ag
                 when withMessages $ deleteMessages gInfo deletedMember'
                 gInfo' <- case deliveryScope of
                   -- Keep member record if it's support scope - it will be required for forwarding inside that scope.
-                  Just (DJSMemberSupport _) | shouldForward -> updateMemberRecordDeleted user gInfo deletedMember GSMemRemoved
+                  Just (DJSMemberSupport _) | shouldForward -> fst <$> updateMemberRecordDeleted user gInfo deletedMember GSMemRemoved
                   _
                     | withMessages && groupFeatureMemberAllowed SGFFullDelete m gInfo ->
                         fullyDeleteMemberRecord user gInfo deletedMember
@@ -3820,13 +3823,13 @@ processAgentMessageConn cxt user@User {userId} entity gks_ corrId agentConnId ag
     xGrpLeave (GIK gInfo gks) m msg@RcvMessage {msgSigned} brokerTs = do
       deleteMemberConnection m
       -- member record is not deleted to allow creation of "member left" chat item
-      gInfo' <- updateMemberRecordDeleted user gInfo m GSMemLeft
+      (gInfo', mLeft) <- updateMemberRecordDeleted user gInfo m GSMemLeft
       gInfo'' <- updatePublicGroupData user gInfo' gks
       unless (muteEventInChannel gInfo'' m) $ do
-        (gInfo''', m', scopeInfo) <- mkGroupChatScope gInfo'' m
+        (gInfo''', m', scopeInfo) <- mkGroupChatScope gInfo'' mLeft
         (ci, cInfo) <- saveRcvChatItemNoParse user (CDGroupRcv gInfo''' scopeInfo m') msg brokerTs (CIRcvGroupEvent RGEMemberLeft)
         groupMsgToView cInfo ci
-        toView $ CEvtLeftMember user gInfo''' m' {memberStatus = GSMemLeft} msgSigned
+        toView $ CEvtLeftMember user gInfo''' m' msgSigned
       pure $ memberEventDeliveryScope m
 
     xGrpDel :: GroupInfo -> GroupMember -> RcvMessage -> UTCTime -> CM ()
@@ -4460,7 +4463,7 @@ runDeliveryJobWorker a deliveryKey Worker {doWork} = do
                         vec <- withStore (`getMemberRelationsVector` sender)
                         -- this excludes the sender
                         let introducedMemsIdxs = getRelationsIndexes MRIntroduced vec
-                        case jobScope of
+                        if null introducedMemsIdxs then pure [] else case jobScope of
                           DJSGroup {jobSpec} -> do
                             ms <- withStore' $ \db -> getGroupMembersByIndexes db cxt user gInfo introducedMemsIdxs
                             pure $ filter shouldForwardTo ms

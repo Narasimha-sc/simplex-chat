@@ -946,6 +946,9 @@ CREATE TABLE badge_purchases(
   issue_error TEXT,
   next_wake_at TEXT,
   badge_store_receipt_id INTEGER REFERENCES badge_store_receipts,
+  subscription_status TEXT,
+  unrenewed_since TEXT,
+  last_unrenewed_at TEXT,
   UNIQUE(purchase_key)
 ) STRICT;
 CREATE TABLE badge_ledger(
@@ -1015,6 +1018,7 @@ CREATE TABLE badge_store_receipts(
   retry_delay INTEGER,
   retry_count INTEGER NOT NULL DEFAULT 0,
   credit_error TEXT,
+  hold_kind TEXT NOT NULL DEFAULT 'purchase',
   UNIQUE(provider, transaction_ref)
 ) STRICT;
 CREATE INDEX contact_profiles_index ON contact_profiles(
@@ -1587,6 +1591,15 @@ CREATE INDEX idx_badge_store_receipts_user ON badge_store_receipts(user_id);
 CREATE UNIQUE INDEX idx_badge_purchases_store_receipt ON badge_purchases(
   badge_store_receipt_id
 );
+CREATE INDEX idx_group_members_user_id_member_role ON group_members(
+  user_id,
+  member_role,
+  group_id
+);
+CREATE INDEX idx_group_members_group_id_contact_id ON group_members(
+  group_id,
+  contact_id
+) WHERE contact_id IS NOT NULL;
 CREATE TRIGGER on_group_members_insert_update_summary
 AFTER INSERT ON group_members
 FOR EACH ROW

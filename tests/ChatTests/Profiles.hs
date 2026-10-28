@@ -71,6 +71,7 @@ chatProfileTests = do
     it "reject profile image that is too large" testSetProfileImageTooLarge
     it "set profile image from file" testSetProfileImageFromFile
     it "use multiword profile names" testMultiWordProfileNames
+    it "create user without keepActiveUser activates it" testCreateUserWithoutKeepActiveUser
     it "auto-accept group invitations" testAutoAcceptGroupInvitations
     it "auto-accept group invitations on a second profile" testAutoAcceptGroupInvitationsSecondProfile
     it "auto-accept group invitations on an inactive profile" testAutoAcceptGroupInvitationsInactiveProfile
@@ -107,6 +108,10 @@ chatProfileTests = do
     it "create address on specified server" testCreateAddressOnServer
     it "retry connecting via contact link" testRetryConnectingViaContactLink
     it "retry connecting via address in contact profile after address keys rotation" testRetryConnectingContactViaAddress
+    it "connections prepared for failed joins are shown in chat list" testFailedConnectViaLinksInChatList
+#if !defined(dbPostgres)
+    it "failed join to an address leaves no receive queue after deleting the connection" testFailedConnectDeletesRcvQueue
+#endif
     it "add contact link to profile" testProfileLink
     it "auto accept contact requests" testUserContactLinkAutoAccept
     it "deduplicate contact requests" testDeduplicateContactRequests
@@ -118,6 +123,8 @@ chatProfileTests = do
     describe "business address" $ do
       it "create and connect via business address" testBusinessAddress
       it "update profiles with business address" testBusinessUpdateProfiles
+      it "customer description is not sent as business welcome message" testBusinessCustomerDescription
+      it "business description is the welcome message in customer chat" testBusinessDescriptionToCustomer
   describe "contact address connection plan" $ do
     it "contact address ok to connect; known contact" testPlanAddressOkKnown
     it "own contact address" testPlanAddressOwn
@@ -204,6 +211,7 @@ shortLinkTests = do
   it "connect to prepared contact incognito (via address)" testShortLinkAddressConnectPreparedContactIncognito
   it "change prepared contact user" testShortLinkChangePreparedContactUser
   it "change prepared contact user, new user has contact with the same name" testShortLinkChangePreparedContactUserDuplicate
+  it "create user keeping active user, then change prepared contact user" testCreateUserKeepingActiveUser
   it "connect to prepared group incognito" testShortLinkConnectPreparedGroupIncognito
   it "change prepared group user" testShortLinkChangePreparedGroupUser
   it "change prepared group user, new user has group with the same name" testShortLinkChangePreparedGroupUserDuplicate
@@ -1555,6 +1563,70 @@ testRetryConnectingContactViaAddress ps =
               }
         }
 
+testFailedConnectViaLinksInChatList :: HasCallStack => TestParams -> IO ()
+testFailedConnectViaLinksInChatList ps = testChatOpts2 opts' aliceProfile bobProfile test ps
+  where
+    test alice bob = do
+      (cLink, inv, gLink) <- withSmpServer' serverCfg' $ do
+        alice ##> "/ad"
+        cLink <- getContactLink alice True
+        alice ##> "/_connect 1"
+        inv <- getInvitation alice
+        alice ##> "/g team"
+        alice <## "group #team is created"
+        alice <## "to add members use /a team <name> or /create link #team"
+        alice ##> "/create link #team"
+        gLink <- getGroupLink alice "team" GRMember True
+        pure (cLink, inv, gLink)
+      alice <## "disconnected 3 connections on server localhost"
+      forM_ [cLink, inv, gLink] $ \link -> do
+        bob ##> ("/_connect 1 " <> link)
+        bob <##. "smp agent error: BROKER"
+      bob @@@ [(":1", ""), (":2", ""), (":3", "")]
+      forM_ [1 :: Int, 2, 3] $ \i -> do
+        bob ##> ("/_delete :" <> show i)
+        bob <## ("connection :" <> show i <> " deleted")
+      bob @@@ []
+    serverCfg' =
+      (smpServerCfg ps) {transports = [(smpTestPort2 ps, transport @TLS, False)]}
+    opts' =
+      testOpts
+        { coreOptions =
+            testCoreOpts
+              { smpServers = ["smp://LcJUMfVhwD8yxjAiSaDzzGF3-kLG4Uh0Fl_ZIjrRwjI=:server_password@localhost:7003"]
+              }
+        }
+
+#if !defined(dbPostgres)
+testFailedConnectDeletesRcvQueue :: HasCallStack => TestParams -> IO ()
+testFailedConnectDeletesRcvQueue ps = testChat2 aliceProfile bobProfile test ps
+  where
+    test alice bob = do
+      cLink <- withSmpServer' altServerCfg $ do
+        alice ##> ("/_address 1 " <> smpServer2Str ps)
+        getContactLink alice True
+      alice <## "disconnected 1 connections on server localhost"
+      bob ##> ("/_connect 1 " <> cLink)
+      bob <##. "smp agent error: BROKER"
+      bob @@@ [(":1", "")]
+      rcvQueueCount bob `shouldReturn` "1"
+      bob ##> "/_delete :1"
+      bob <## "connection :1 deleted"
+      bob @@@ []
+      waitRcvQueueCount bob "0" (50 :: Int)
+    altServerCfg =
+      (smpServerCfg ps) {transports = [(smpTestPort2 ps, transport @TLS, False)]}
+    rcvQueueCount cc = do
+      cc ##> "/sql agent SELECT count(*) FROM rcv_queues"
+      cc <## "count(*)"
+      getTermLine cc
+    waitRcvQueueCount cc expected n = do
+      count <- rcvQueueCount cc
+      if count == expected || n <= 0
+        then count `shouldBe` expected
+        else threadDelay 100000 >> waitRcvQueueCount cc expected (n - 1)
+#endif
+
 testProfileLink :: HasCallStack => TestParams -> IO ()
 testProfileLink =
   testChat3 aliceProfile bobProfile cathProfile $
@@ -2151,6 +2223,71 @@ testBusinessUpdateProfiles = testChat4 businessProfile aliceProfile bobProfile c
     alice #$> ("/_get chat #1 count=1", chat, [(0, "Full deletion: on")])
     bob #$> ("/_get chat #1 count=1", chat, [(0, "Full deletion: on")])
     cath #$> ("/_get chat #1 count=1", chat, [(0, "Full deletion: on")])
+
+testBusinessCustomerDescription :: HasCallStack => TestParams -> IO ()
+testBusinessCustomerDescription = testChat3 businessProfile aliceProfile cathProfile $
+  \biz alice cath -> do
+    biz ##> "/ad"
+    cLink <- getContactLink biz True
+    biz ##> "/auto_accept on business"
+    biz <## "auto_accept on, business"
+    alice ##> ("/c " <> cLink)
+    alice <## "connection request sent!"
+    biz <## "#alice (Alice): accepting business address request..."
+    alice <## "#biz: joining the group..."
+    biz <## "#alice: alice_1 joined the group"
+    alice <## "#biz: you joined the group"
+    biz ##> "/set welcome #alice Welcome!"
+    biz <## "welcome message changed to:"
+    biz <## "Welcome!"
+    alice ##> "/_profile 1 {\"displayName\": \"alice\", \"fullName\": \"\", \"shortDescr\": \"Alice\", \"description\": \"Hi, I'm Alice\"}"
+    alice <## "user description changed to Hi, I'm Alice (your 0 contacts are notified)"
+    alice #> "#biz hello" -- profile update is sent with message
+    biz <# "#alice alice_1> hello"
+    connectUsers biz cath
+    biz ##> "/a #alice cath"
+    biz <## "invitation to join the group #alice sent to cath"
+    cath <## "#alice (Alice): biz invites you to join the group as member"
+    cath <## "use /j alice to accept"
+    cath ##> "/j alice"
+    concurrentlyN_
+      [ do
+          cath <## "#alice: you joined the group"
+          cath <### [WithTime "#alice alice_1> hello [>>]", WithTime "#alice biz> Welcome!"]
+          cath <## "#alice: member alice_1 (Alice) is connected",
+        biz <## "#alice: cath joined the group",
+        do
+          alice <## "#biz: biz_1 added cath (Catherine) to the group (connecting...)"
+          alice <## "#biz: new member cath is connected"
+      ]
+    cath #> "#alice hi"
+    concurrently_
+      (alice <# "#biz cath> hi")
+      (biz <# "#alice cath> hi")
+
+testBusinessDescriptionToCustomer :: HasCallStack => TestParams -> IO ()
+testBusinessDescriptionToCustomer = testChat2 businessProfile aliceProfile $
+  \biz alice -> do
+    biz ##> "/ad"
+    cLink <- getContactLink biz True
+    biz ##> "/auto_accept on business"
+    biz <## "auto_accept on, business"
+    alice ##> ("/c " <> cLink)
+    alice <## "connection request sent!"
+    biz <## "#alice (Alice): accepting business address request..."
+    alice <## "#biz: joining the group..."
+    biz <## "#alice: alice_1 joined the group"
+    alice <## "#biz: you joined the group"
+    biz ##> "/_profile 1 {\"displayName\": \"biz\", \"fullName\": \"\", \"shortDescr\": \"Biz Inc\", \"description\": \"Hi, we are Biz\"}"
+    biz <## "user description changed to Hi, we are Biz (your 0 contacts are notified)"
+    biz #> "#alice hello" -- profile update is sent with message
+    alice <## "biz_1 updated group #biz: (signed)"
+    alice <## "welcome message changed to:"
+    alice <## "Hi, we are Biz"
+    alice <# "#biz biz_1> hello"
+    alice ##> "/show welcome #biz"
+    alice <## "Welcome message:"
+    alice <## "Hi, we are Biz"
 
 testPlanAddressOkKnown :: HasCallStack => TestParams -> IO ()
 testPlanAddressOkKnown =
@@ -4944,6 +5081,38 @@ testShortLinkChangePreparedContactUser = testChat2 aliceProfile bobProfile test
       showActiveUser bob "bob (Bob)"
       bob @@@ []
       bob `hasContactProfiles` ["bob"]
+
+testCreateUserKeepingActiveUser :: HasCallStack => TestParams -> IO ()
+testCreateUserKeepingActiveUser = testChat2 aliceProfile bobProfile test
+  where
+    test alice bob = do
+      bob ##> "/_create user {\"profile\":{\"displayName\":\"robert\",\"fullName\":\"\"},\"pastTimestamp\":false,\"keepActiveUser\":true}"
+      showActiveUser bob "robert"
+      bob ##> "/u"
+      showActiveUser bob "bob (Bob)"
+      bob ##> "/users"
+      bob <## "bob (Bob) (active)"
+      bob <## "robert"
+
+      alice ##> "/_connect 1"
+      (shortLink, fullLink) <- getInvitations alice
+      bob ##> ("/_connect plan 1 " <> shortLink)
+      bob <## "invitation link: ok to connect"
+      contactSLinkData <- getTermLine bob
+      bob ##> ("/_prepare contact 1 " <> fullLink <> " " <> shortLink <> " " <> contactSLinkData)
+      bob <## "alice: contact is prepared"
+
+      bob ##> "/_set contact user @4 2"
+      bob <## "contact alice changed from user bob to user robert"
+
+testCreateUserWithoutKeepActiveUser :: HasCallStack => TestParams -> IO ()
+testCreateUserWithoutKeepActiveUser = testChat aliceProfile test
+  where
+    test alice = do
+      alice ##> "/_create user {\"profile\":{\"displayName\":\"alisa\",\"fullName\":\"\"},\"pastTimestamp\":false}"
+      showActiveUser alice "alisa"
+      alice ##> "/u"
+      showActiveUser alice "alisa"
 
 testShortLinkChangePreparedContactUserDuplicate :: HasCallStack => TestParams -> IO ()
 testShortLinkChangePreparedContactUserDuplicate = testChat2 aliceProfile bobProfile test
