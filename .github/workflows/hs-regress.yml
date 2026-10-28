@@ -1,0 +1,95 @@
+name: hs-regress
+run-name: "${{ github.event_name == 'workflow_dispatch' && format('hs-regress {0} {1} base={2}', inputs.db, inputs.ref, inputs.base) || 'hs-regress: registered by a push to its branch, nothing built' }}"
+# Regression check in ONE run: build and run the selected tests on `ref` with src/ reverted to `base`
+# (the PR's tests against the old code: must FAIL), then on `ref` itself (must PASS).
+# Runbook: /home/user/code/testing/tools/ci/README.md
+on:
+  push:
+    branches: [ci/hs-regress]
+    paths: [.github/workflows/hs-regress.yml]
+  workflow_dispatch:
+    inputs:
+      ref: {description: PR branch or sha (code + tests), type: string}
+      base: {description: 'sha whose src/ is "without the fix" (usually the merge base); empty = skip the base half', type: string, default: ''}
+      tests: {description: hspec -m patterns, one per line, type: string}
+      db: {description: sqlite or postgres, type: string, default: sqlite}
+permissions: {contents: read}
+jobs:
+  regress:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 240
+    env:
+      DIST: dist-${{ inputs.db }}
+    steps:
+      - uses: actions/checkout@v3
+        with: {ref: '${{ inputs.ref }}', submodules: recursive, fetch-depth: 0}
+      - id: haskell
+        uses: simplex-chat/setup-haskell-action@v2
+        with: {ghc-version: 9.6.3, cabal-version: 3.10.2.0}
+      - id: cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            ${{ steps.haskell.outputs.cabal-store }}
+            ${{ env.DIST }}
+          key: regress-${{ inputs.db }}-ghc9.6.3-${{ hashFiles('cabal.project', 'simplex-chat.cabal') }}-${{ github.run_id }}
+          restore-keys: |
+            regress-${{ inputs.db }}-ghc9.6.3-${{ hashFiles('cabal.project', 'simplex-chat.cabal') }}-
+            regress-${{ inputs.db }}-ghc9.6.3-
+      - name: Install libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgmp3-dev zlib1g-dev libnuma-dev libssl-dev libpq-dev
+          if [ "${{ inputs.db }}" = sqlite ]; then
+            printf 'ignore-project: False\npackage direct-sqlcipher\n    flags: +openssl\n' >> cabal.project.local
+          else
+            printf 'package simplexmq\n    flags: +client_postgres\npackage simplex-chat\n    flags: +client_postgres\n' >> cabal.project.local
+          fi
+      - name: Start PostgreSQL 15
+        if: inputs.db == 'postgres'
+        run: |
+          docker run -d --name pg -p 5432:5432 -e POSTGRES_HOST_AUTH_METHOD=trust postgres:15 -c max_connections=500 -c fsync=off
+          timeout 60 sh -c 'until pg_isready -h localhost; do sleep 1; done'
+      - name: Write test runner
+        run: |
+          cat > /tmp/run.sh <<'SH'
+          set -u
+          label=$1
+          cabal build --builddir=$DIST --enable-tests -j --ghc-options=-O0 test:simplex-chat-test || { echo "$label: BUILD FAILED" >> /tmp/summary; return 0; }
+          bin=$(cabal list-bin --builddir=$DIST --enable-tests test:simplex-chat-test)
+          args=(); while read -r p; do [ -n "$p" ] && args+=(-m "$p"); done <<< "$TESTS"
+          mkdir -p tests/tmp
+          "$bin" "${args[@]}" --fail-on=empty 2>&1 | tee /tmp/$label.log
+          rc=${PIPESTATUS[0]}
+          echo "$label: exit $rc; $(grep -E '^[0-9]+ examples?' /tmp/$label.log | tail -1)" >> /tmp/summary
+          grep -E '^ +[0-9]+\) ' /tmp/$label.log | sed "s/^/$label failed: /" >> /tmp/summary || true
+          SH
+      - name: Base (PR tests, src/ from base) - expected to FAIL
+        if: inputs.base != ''
+        env: {PGHOST: localhost, CI: 'true', TESTS: '${{ inputs.tests }}'}
+        run: |
+          sudo mkdir -p tests/tmp; sudo mount -t tmpfs -o size=2G tmpfs tests/tmp; sudo chown $(id -u):$(id -g) tests/tmp
+          git checkout ${{ inputs.base }} -- src/
+          echo "BASE src = ${{ inputs.base }}, tests = ${{ inputs.ref }}" >> /tmp/summary
+          bash -c 'source /tmp/run.sh base'
+          git checkout HEAD -- src/
+      - name: Fix (ref as is) - expected to PASS
+        env: {PGHOST: localhost, CI: 'true', TESTS: '${{ inputs.tests }}'}
+        run: |
+          mountpoint -q tests/tmp || { sudo mkdir -p tests/tmp; sudo mount -t tmpfs -o size=2G tmpfs tests/tmp; sudo chown $(id -u):$(id -g) tests/tmp; }
+          echo "FIX = $(git rev-parse HEAD)" >> /tmp/summary
+          bash -c 'source /tmp/run.sh fix'
+      - name: Save cache
+        if: ${{ !cancelled() }}
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ${{ steps.haskell.outputs.cabal-store }}
+            ${{ env.DIST }}
+          key: ${{ steps.cache.outputs.cache-primary-key }}
+      - name: Summary
+        if: ${{ !cancelled() }}
+        run: |
+          cat /tmp/summary | tee -a $GITHUB_STEP_SUMMARY
+          grep -q '^fix: exit 0;' /tmp/summary
