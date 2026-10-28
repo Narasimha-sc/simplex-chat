@@ -60,7 +60,7 @@ jobs:
         run: |
           mkdir -p tests/tmp; sudo mount -t tmpfs -o size=2G tmpfs tests/tmp; sudo chown $(id -u):$(id -g) tests/tmp
           args=(); while read -r p; do if [ -n "$p" ]; then args+=(-m "$p"); fi; done <<< "$TESTS"
-          bin=$(cabal list-bin --builddir=dist-postgres --enable-tests --constraint 'simplexmq +client_postgres' --constraint 'simplex-chat +client_postgres' test:simplex-chat-test)
+          bin=$(cabal list-bin --builddir=dist-postgres --enable-tests --constraint 'simplexmq +client_postgres' --constraint 'simplex-chat +client_postgres' test:simplex-chat-test | tail -n 1)
           "$bin" "${args[@]}" --fail-on=empty
       - name: Schema diff
         if: ${{ !cancelled() }}
