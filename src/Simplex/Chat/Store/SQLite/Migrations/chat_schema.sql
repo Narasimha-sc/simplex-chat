@@ -1592,6 +1592,10 @@ CREATE INDEX idx_group_members_user_id_member_role ON group_members(
   member_role,
   group_id
 );
+CREATE INDEX idx_group_members_group_id_contact_id ON group_members(
+  group_id,
+  contact_id
+) WHERE contact_id IS NOT NULL;
 CREATE TRIGGER on_group_members_insert_update_summary
 AFTER INSERT ON group_members
 FOR EACH ROW

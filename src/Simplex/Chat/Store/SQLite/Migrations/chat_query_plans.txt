@@ -190,7 +190,7 @@ SEARCH m USING INTEGER PRIMARY KEY (rowid=?)
 SEARCH g USING INTEGER PRIMARY KEY (rowid=?)
 SEARCH p USING INTEGER PRIMARY KEY (rowid=?)
 SEARCH gp USING INTEGER PRIMARY KEY (rowid=?)
-SEARCH mu USING INDEX idx_group_members_contact_id (contact_id=?)
+SEARCH mu USING INDEX idx_group_members_group_id_contact_id (group_id=? AND contact_id=?)
 SEARCH pu USING INTEGER PRIMARY KEY (rowid=?)
 SEARCH bp USING INTEGER PRIMARY KEY (rowid=?) LEFT-JOIN
 
@@ -5948,7 +5948,7 @@ Query:
 Plan:
 SEARCH g USING INTEGER PRIMARY KEY (rowid=?)
 SEARCH gp USING INTEGER PRIMARY KEY (rowid=?)
-SEARCH mu USING INDEX idx_group_members_group_id (user_id=? AND group_id=?)
+SEARCH mu USING INDEX idx_group_members_group_id_contact_id (group_id=? AND contact_id=?)
 SEARCH pu USING INTEGER PRIMARY KEY (rowid=?)
 
 Query: 
