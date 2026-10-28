@@ -57,10 +57,10 @@ jobs:
           set -u
           label=$1
           cabal build --builddir=$DIST --enable-tests -j --ghc-options=-O0 test:simplex-chat-test || { echo "$label: BUILD FAILED" >> /tmp/summary; return 0; }
-          bin=$(cabal list-bin --builddir=$DIST --enable-tests test:simplex-chat-test)
+          bin=$(cabal list-bin --builddir=$DIST --enable-tests test:simplex-chat-test 2>/dev/null | tail -1)
           args=(); while read -r p; do [ -n "$p" ] && args+=(-m "$p"); done <<< "$TESTS"
           mkdir -p tests/tmp
-          "$bin" "${args[@]}" --fail-on=empty 2>&1 | tee /tmp/$label.log
+          "$bin" "${args[@]}" --fail-on=empty 2>&1 | sed -u 's/\x1b\[[0-9;]*m//g' | tee /tmp/$label.log
           rc=${PIPESTATUS[0]}
           echo "$label: exit $rc; $(grep -E '^[0-9]+ examples?' /tmp/$label.log | tail -1)" >> /tmp/summary
           grep -E '^ +[0-9]+\) ' /tmp/$label.log | sed "s/^/$label failed: /" >> /tmp/summary || true
