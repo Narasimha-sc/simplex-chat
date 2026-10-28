@@ -1,13 +1,14 @@
-name: linux-appimage
-run-name: "${{ github.event_name == 'workflow_dispatch' && format('linux-appimage {0} {1}@{2}', inputs.nonce, inputs.repo, inputs.sha) || 'linux-appimage: registered by a push to its branch, nothing built' }}"
+name: linux-core
+run-name: "${{ github.event_name == 'workflow_dispatch' && format('linux-core {0} {1}@{2}', inputs.nonce, inputs.repo, inputs.sha) || 'linux-core: registered by a push to its branch, nothing built' }}"
 
-# Builds the release-equivalent Linux x86_64 AppImage (-O2 core, Corretto 17, Ubuntu 22.04 like build.yml's release job) of one commit.
-# Started by ~/build/linux.sh. The build steps of the commit built run as they are in that commit; this workflow only
-# supplies the runner setup, the caches and the artifact. The push trigger only makes GitHub list the workflow.
+# Builds the Linux x86_64 desktop core library (libsimplex.so and the GHC libs it needs, -O2, GHC 9.6.3, Ubuntu 22.04 like
+# build.yml's release job) of one commit and uploads it as one zstd tarball. ~/build/linux.sh builds the app around it.
+# The build steps of the commit built run as they are in that commit; this workflow only supplies the runner setup, the
+# caches and the artifact. The push trigger only makes GitHub list the workflow.
 on:
   push:
     branches: [ci/builds]
-    paths: [.github/workflows/linux-appimage.yml]
+    paths: [.github/workflows/linux-core.yml]
   workflow_dispatch:
     inputs:
       sha:
@@ -32,13 +33,13 @@ permissions:
   contents: read
 
 concurrency:
-  group: linux-appimage-${{ inputs.nonce || github.sha }}
+  group: linux-core-${{ inputs.nonce || github.sha }}
 
 jobs:
-  appimage:
+  core:
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-22.04
-    timeout-minutes: 150
+    timeout-minutes: 120
     defaults:
       run:
         working-directory: chat
@@ -85,7 +86,7 @@ jobs:
           path: |
             chat/apps/multiplatform/common/src/commonMain/cpp/desktop/libs/linux-x86_64
             chat/apps/multiplatform/build/links
-          key: linux-appimage-core-${{ hashFiles('chat/src/**', 'chat/cabal.project', 'chat/simplex-chat.cabal', 'chat/PRIVACY.md', 'chat/scripts/desktop/build-lib-linux.sh') }}
+          key: linux-core-lib-${{ hashFiles('chat/src/**', 'chat/cabal.project', 'chat/simplex-chat.cabal', 'chat/PRIVACY.md', 'chat/scripts/desktop/build-lib-linux.sh') }}
 
       - name: Setup Haskell
         id: haskell
@@ -104,10 +105,10 @@ jobs:
           path: |
             ${{ steps.haskell.outputs.cabal-store }}
             chat/dist-newstyle
-          key: linux-appimage-store-ghc9.6.3-${{ hashFiles('chat/cabal.project', 'chat/simplex-chat.cabal') }}-${{ github.run_id }}
+          key: linux-core-store-ghc9.6.3-${{ hashFiles('chat/cabal.project', 'chat/simplex-chat.cabal') }}-${{ github.run_id }}
           restore-keys: |
-            linux-appimage-store-ghc9.6.3-${{ hashFiles('chat/cabal.project', 'chat/simplex-chat.cabal') }}-
-            linux-appimage-store-ghc9.6.3-
+            linux-core-store-ghc9.6.3-${{ hashFiles('chat/cabal.project', 'chat/simplex-chat.cabal') }}-
+            linux-core-store-ghc9.6.3-
 
       - name: Install libraries
         run: |
@@ -148,18 +149,6 @@ jobs:
             chat/apps/multiplatform/build/links
           key: ${{ steps.core-cache.outputs.cache-primary-key }}
 
-      - name: Setup Java
-        uses: actions/setup-java@v5
-        with:
-          distribution: corretto
-          java-version: 17
-          cache: gradle
-
-      - name: Build AppImage
-        run: |
-          export ASSETS_DIR='../../assets'
-          scripts/desktop/make-appimage-linux.sh
-
       - name: Package
         env:
           SHA: ${{ inputs.sha }}
@@ -169,24 +158,25 @@ jobs:
           set -euo pipefail
           out="$RUNNER_TEMP/pkg"
           mkdir -p "$out"
-          shopt -s nullglob
-          files=( apps/multiplatform/release/main/*imple*.AppImage )
-          [ "${#files[@]}" = 1 ] || { echo "::error::expected one AppImage, found ${#files[@]}"; exit 1; }
-          cp "${files[0]}" "$out/SimpleX.AppImage"
+          libs=apps/multiplatform/common/src/commonMain/cpp/desktop/libs/linux-x86_64
+          [ -s "$libs/libsimplex.so" ]
+          # the libs only: VLC is fetched by ~/build, and a libcrypto copy is added when the AppImage is made
+          tar --owner=0 --group=0 --numeric-owner -C "$libs" --exclude=./vlc -cf - . | zstd -19 -T0 -q -o "$out/core.tar.zst"
           {
             echo "repo=$REPO"
             echo "sha=$SHA"
             echo "tree=$(git rev-parse 'HEAD^{tree}')"
             echo "nonce=$NONCE"
             echo "run=$GITHUB_RUN_ID"
-            echo "sha256.SimpleX.AppImage=$(sha256sum < "$out/SimpleX.AppImage" | cut -d' ' -f1)"
+            echo "sha256.libsimplex.so=$(sha256sum < "$libs/libsimplex.so" | cut -d' ' -f1)"
+            echo "sha256.core.tar.zst=$(sha256sum < "$out/core.tar.zst" | cut -d' ' -f1)"
           } > "$out/BUILD-INFO"
           cat "$out/BUILD-INFO"
           ls -la "$out"
 
       - uses: actions/upload-artifact@v6
         with:
-          name: linux-appimage-${{ inputs.nonce }}
+          name: linux-core-${{ inputs.nonce }}
           path: ${{ runner.temp }}/pkg
           compression-level: 0
           retention-days: 3
