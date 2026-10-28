@@ -26,17 +26,9 @@ actual fun font(name: String, res: String, weight: FontWeight, style: FontStyle)
 
 actual fun StringResource.localized(): String = desc().toString()
 
-internal val systemThemeDetector: OsThemeDetector? by lazy {
-  try {
-    OsThemeDetector.getDetector()
-  } catch (e: LinkageError) {
-    Log.w(TAG, "system theme detection: native library unavailable: ${e.message}")
-    null
-  }
-}
-
+private val detector: OsThemeDetector = OsThemeDetector.getDetector()
 actual fun isInNightMode() = try {
-  systemThemeDetector?.isDark ?: false
+  detector.isDark
 }
 catch (e: Exception) {
   Log.e(TAG, e.stackTraceToString())
