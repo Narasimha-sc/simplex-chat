@@ -1,0 +1,2459 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE DerivingVia #-}
+{-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE StrictData #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TypeFamilyDependencies #-}
+{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE UndecidableInstances #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# OPTIONS_GHC -fno-warn-ambiguous-fields #-}
+
+{-# HLINT ignore "Use newtype instead of data" #-}
+
+module Simplex.Chat.Types where
+
+import Control.Applicative ((<|>))
+import Control.Concurrent.STM (TVar)
+import Crypto.Number.Serialize (os2ip)
+import Crypto.Random (ChaChaDRG)
+import Data.Aeson (FromJSON (..), ToJSON (..))
+import qualified Data.Aeson as J
+import qualified Data.Aeson.Encoding as JE
+import qualified Data.Aeson.TH as JQ
+import qualified Data.Attoparsec.ByteString.Char8 as A
+import Data.Attoparsec.Combinator (lookAhead)
+import qualified Data.ByteString.Base64 as B64
+import Data.ByteString.Char8 (ByteString, pack, unpack)
+import qualified Data.ByteString.Char8 as B
+import qualified Data.ByteString.Lazy as LB
+import Data.Functor (($>))
+import Data.Int (Int64)
+import Data.Map.Strict (Map)
+import Data.Maybe (fromMaybe, isJust, isNothing)
+import Data.Text (Text)
+import qualified Data.Text as T
+import Data.Text.Encoding (encodeUtf8)
+import Data.Time.Clock (UTCTime)
+import Data.Type.Equality (testEquality, (:~:) (Refl))
+import Data.Typeable (Typeable)
+import Data.Word (Word16)
+import Simplex.Chat.Badges (BadgeInfo (..), BadgeProof (..), BadgeStatus (..), LocalBadge (..), ProofPresHeader, acceptedBadge, localBadgeInfo, localBadgeStatus, mkBadgeStatus, verifyBadge)
+import Simplex.Chat.Names (SimplexDomainClaim (..))
+import Simplex.Messaging.Crypto.BBS (BBSPublicKey)
+import Simplex.Chat.Types.Preferences
+import Simplex.Chat.Types.Shared
+import Simplex.Chat.Types.UITheme
+import Simplex.FileTransfer.Description (FileDigest)
+import Simplex.FileTransfer.Types (RcvFileId, SndFileId)
+import Simplex.Messaging.Agent.Protocol (ACorrId, ACreatedConnLink, AConnectionLink (..), AEventTag (..), AEvtTag (..), ConnId, ConnShortLink (..), ConnectionLink (..), ConnectionMode (..), ConnectionModeI, ConnectionRequestUri, ContactConnType (..), CreatedConnLink (..), InvitationId, SAEntity (..), SConnectionMode (..), SimplexDomain, SimplexNameInfo (..), UserId, sConnectionMode)
+import Simplex.Messaging.Agent.Store.DB (Binary (..), blobFieldDecoder, fromTextField_)
+import qualified Simplex.Messaging.Crypto as C
+import Simplex.Messaging.Crypto.File (CryptoFileArgs (..))
+import Simplex.Messaging.Crypto.Ratchet (PQEncryption (..), PQSupport, pattern PQEncOff)
+import Simplex.Messaging.Encoding
+import Simplex.Messaging.Encoding.String
+import Simplex.Messaging.Parsers (defaultJSON, dropPrefix, enumJSON, sumTypeJSON)
+import Simplex.Messaging.Util (decodeJSON, encodeJSON, safeDecodeUtf8)
+import Simplex.Messaging.Version
+import Simplex.Messaging.Version.Internal
+#if defined(dbPostgres)
+import Database.PostgreSQL.Simple (ResultError (..))
+import Database.PostgreSQL.Simple.FromField (FromField(..), FieldParser, returnError)
+import Database.PostgreSQL.Simple.ToField (ToField (..))
+#else
+import Database.SQLite.Simple (ResultError (..))
+import Database.SQLite.Simple.FromField (FromField (..), FieldParser, returnError)
+import Database.SQLite.Simple.ToField (ToField (..))
+#endif
+
+class IsContact a where
+  contactId' :: a -> ContactId
+  profile' :: a -> LocalProfile
+  localDisplayName' :: a -> ContactName
+  preferences' :: a -> Maybe Preferences
+
+instance IsContact User where
+  contactId' User {userContactId} = userContactId
+  {-# INLINE contactId' #-}
+  profile' User {profile} = profile
+  {-# INLINE profile' #-}
+  localDisplayName' User {localDisplayName} = localDisplayName
+  {-# INLINE localDisplayName' #-}
+  preferences' User {profile = LocalProfile {preferences}} = preferences
+  {-# INLINE preferences' #-}
+
+instance IsContact Contact where
+  contactId' Contact {contactId} = contactId
+  {-# INLINE contactId' #-}
+  profile' Contact {profile} = profile
+  {-# INLINE profile' #-}
+  localDisplayName' Contact {localDisplayName} = localDisplayName
+  {-# INLINE localDisplayName' #-}
+  preferences' Contact {profile = LocalProfile {preferences}} = preferences
+  {-# INLINE preferences' #-}
+
+newtype AgentUserId = AgentUserId UserId
+  deriving (Eq, Show)
+
+instance StrEncoding AgentUserId where
+  strEncode (AgentUserId uId) = strEncode uId
+  strDecode s = AgentUserId <$> strDecode s
+  strP = AgentUserId <$> strP
+
+instance FromJSON AgentUserId where
+  parseJSON = strParseJSON "AgentUserId"
+
+instance ToJSON AgentUserId where
+  toJSON = strToJSON
+  toEncoding = strToJEncoding
+
+deriving newtype instance FromField AgentUserId
+
+instance ToField AgentUserId where toField (AgentUserId uId) = toField uId
+
+aUserId :: User -> UserId
+aUserId User {agentUserId = AgentUserId uId} = uId
+
+data User = User
+  { userId :: UserId,
+    agentUserId :: AgentUserId,
+    userContactId :: ContactId,
+    localDisplayName :: ContactName,
+    profile :: LocalProfile,
+    fullPreferences :: FullPreferences,
+    activeUser :: Bool,
+    activeOrder :: Int64,
+    viewPwdHash :: Maybe UserPwdHash,
+    showNtfs :: Bool,
+    sendRcptsContacts :: Bool,
+    sendRcptsSmallGroups :: Bool,
+    autoAcceptMemberContacts :: Bool,
+    autoAcceptGroupInvitations :: BoolDef,
+    userMemberProfileUpdatedAt :: Maybe UTCTime,
+    userChatRelay :: BoolDef,
+    clientService :: BoolDef,
+    uiThemes :: Maybe UIThemeEntityOverrides
+  }
+  deriving (Show)
+
+data NewUser = NewUser
+  { profile :: Maybe Profile,
+    pastTimestamp :: Bool,
+    userChatRelay :: BoolDef,
+    clientService :: BoolDef
+  }
+  deriving (Show)
+
+newtype B64UrlByteString = B64UrlByteString ByteString
+  deriving (Eq, Show)
+  deriving newtype (FromField, Encoding)
+
+instance ToField B64UrlByteString where toField (B64UrlByteString m) = toField $ Binary m
+
+instance StrEncoding B64UrlByteString where
+  strEncode (B64UrlByteString m) = strEncode m
+  strP = B64UrlByteString <$> strP
+
+instance FromJSON B64UrlByteString where
+  parseJSON = strParseJSON "B64UrlByteString"
+
+instance ToJSON B64UrlByteString where
+  toJSON = strToJSON
+  toEncoding = strToJEncoding
+
+data UserPwdHash = UserPwdHash {hash :: B64UrlByteString, salt :: B64UrlByteString}
+  deriving (Eq, Show)
+
+data UserInfo = UserInfo
+  { user :: User,
+    unreadCount :: Int
+  }
+  deriving (Show)
+
+type ContactId = Int64
+
+type ProfileId = Int64
+
+type ChatTagId = Int64
+
+data Contact = Contact
+  { contactId :: ContactId,
+    localDisplayName :: ContactName,
+    profile :: LocalProfile,
+    activeConn :: Maybe Connection,
+    contactUsed :: Bool,
+    contactStatus :: ContactStatus,
+    chatSettings :: ChatSettings,
+    userPreferences :: Preferences,
+    mergedPreferences :: ContactUserPreferences,
+    createdAt :: UTCTime,
+    updatedAt :: UTCTime,
+    chatTs :: Maybe UTCTime,
+    preparedContact :: Maybe PreparedContact,
+    contactRequestId :: Maybe Int64,
+    contactRequest :: Maybe UserContactRequestRef,
+    -- contactGroupMemberId + contactGrpInvSent are used in conjunction for making connection request
+    -- to a group member via direct message feature
+    contactGroupMemberId :: Maybe GroupMemberId,
+    contactGrpInvSent :: Bool,
+    -- groupDirectInv is used for accepting connection request made via direct message feature by a group member
+    -- when auto-accept is disabled - this is the opposite side of contactGroupMemberId + contactGrpInvSent
+    -- (there is no hidden meaning in naming inconsistency)
+    groupDirectInv :: Maybe GroupDirectInvitation,
+    chatTags :: [ChatTagId],
+    chatItemTTL :: Maybe Int64,
+    uiThemes :: Maybe UIThemeEntityOverrides,
+    chatLayout :: Maybe ChatLayout,
+    chatDeleted :: Bool,
+    customData :: Maybe CustomData
+  }
+  deriving (Eq, Show)
+
+contactRequestId' :: Contact -> Maybe Int64
+contactRequestId' Contact {contactRequestId} = contactRequestId
+
+data PreparedContact = PreparedContact
+  { connLinkToConnect :: ACreatedConnLink,
+    uiConnLinkType :: ConnectionMode,
+    welcomeSharedMsgId :: Maybe SharedMsgId,
+    requestSharedMsgId :: Maybe SharedMsgId
+  }
+  deriving (Eq, Show)
+
+data UserContactRequestRef = UserContactRequestRef
+  { contactRequestId :: Int64,
+    rejectionSupported :: Bool
+  }
+  deriving (Eq, Show)
+
+data GroupDirectInvitation = GroupDirectInvitation
+  { groupDirectInvLink :: ConnReqInvitation,
+    fromGroupId_ :: Maybe GroupId,
+    fromGroupMemberId_ :: Maybe GroupMemberId,
+    fromGroupMemberConnId_ :: Maybe Int64,
+    groupDirectInvStartedConnection :: Bool
+  }
+  deriving (Eq, Show)
+
+newtype SharedMsgId = SharedMsgId ByteString
+  deriving (Eq, Show)
+  deriving newtype (FromField)
+
+instance ToField SharedMsgId where toField (SharedMsgId m) = toField $ Binary m
+
+instance StrEncoding SharedMsgId where
+  strEncode (SharedMsgId m) = strEncode m
+  strDecode s = SharedMsgId <$> strDecode s
+  strP = SharedMsgId <$> strP
+
+instance FromJSON SharedMsgId where
+  parseJSON = strParseJSON "SharedMsgId"
+
+instance ToJSON SharedMsgId where
+  toJSON = strToJSON
+  toEncoding = strToJEncoding
+
+newtype CustomData = CustomData J.Object
+  deriving (Eq, Show)
+
+instance ToJSON CustomData where
+  toJSON (CustomData v) = toJSON v
+  toEncoding (CustomData v) = toEncoding v
+
+instance FromJSON CustomData where
+  parseJSON = J.withObject "CustomData" (pure . CustomData)
+
+instance ToField CustomData where toField (CustomData v) = toField . Binary . LB.toStrict $ J.encode v
+
+instance FromField CustomData where fromField = blobFieldDecoder J.eitherDecodeStrict
+
+contactConn :: Contact -> Maybe Connection
+contactConn Contact {activeConn} = activeConn
+
+contactConnId :: Contact -> Maybe ConnId
+contactConnId c = aConnId <$> contactConn c
+
+type IncognitoEnabled = Bool
+
+contactConnIncognito :: Contact -> IncognitoEnabled
+contactConnIncognito = maybe False connIncognito . contactConn
+
+contactDirect :: Contact -> Bool
+contactDirect Contact {activeConn} = maybe True connDirect activeConn
+
+connDirect :: Connection -> Bool
+connDirect Connection {connLevel, viaGroupLink} = connLevel == 0 && not viaGroupLink
+
+directOrUsed :: Contact -> Bool
+directOrUsed ct@Contact {contactUsed} =
+  contactDirect ct || contactUsed
+
+anyDirectOrUsed :: Contact -> Bool
+anyDirectOrUsed Contact {contactUsed, activeConn} = ((\Connection {connLevel} -> connLevel) <$> activeConn) == Just 0 || contactUsed
+
+contactReady :: Contact -> Bool
+contactReady Contact {activeConn} = maybe False connReady activeConn
+
+contactActive :: Contact -> Bool
+contactActive Contact {contactStatus} = contactStatus == CSActive
+
+contactDeleted :: Contact -> Bool
+contactDeleted Contact {contactStatus} = contactStatus == CSDeleted || contactStatus == CSDeletedByUser
+
+contactUpdatableFromMember :: Contact -> Bool
+contactUpdatableFromMember ct
+  | not (contactActive ct) = True
+  | otherwise = case contactConn ct of
+      Nothing -> True
+      Just conn -> not (connReady conn) || (authErrCounter conn >= 1)
+
+contactSecurityCode :: Contact -> Maybe SecurityCode
+contactSecurityCode Contact {activeConn} = connectionCode =<< activeConn
+
+contactPQEnabled :: Contact -> PQEncryption
+contactPQEnabled Contact {activeConn} = maybe PQEncOff connPQEnabled activeConn
+
+data ContactStatus
+  = CSActive
+  | CSDeleted
+  | CSDeletedByUser
+  | CSRejected
+  deriving (Eq, Show, Ord)
+
+instance FromField ContactStatus where fromField = fromTextField_ textDecode
+
+instance ToField ContactStatus where toField = toField . textEncode
+
+instance FromJSON ContactStatus where
+  parseJSON = textParseJSON "ContactStatus"
+
+instance ToJSON ContactStatus where
+  toJSON = J.String . textEncode
+  toEncoding = JE.text . textEncode
+
+instance TextEncoding ContactStatus where
+  textDecode = \case
+    "active" -> Just CSActive
+    "deleted" -> Just CSDeleted
+    "deletedByUser" -> Just CSDeletedByUser
+    "rejected" -> Just CSRejected
+    _ -> Nothing
+  textEncode = \case
+    CSActive -> "active"
+    CSDeleted -> "deleted"
+    CSDeletedByUser -> "deletedByUser"
+    CSRejected -> "rejected"
+
+data ContactRef = ContactRef
+  { contactId :: ContactId,
+    connId :: Int64,
+    agentConnId :: AgentConnId,
+    localDisplayName :: ContactName
+  }
+  deriving (Eq, Show)
+
+data ContactOrMember = COMContact Contact | COMGroupMember GroupMember
+  deriving (Show)
+
+contactOrMemberIds :: ContactOrMember -> (Maybe ContactId, Maybe GroupMemberId)
+contactOrMemberIds = \case
+  COMContact Contact {contactId} -> (Just contactId, Nothing)
+  COMGroupMember GroupMember {groupMemberId} -> (Nothing, Just groupMemberId)
+
+contactOrMemberIncognito :: ContactOrMember -> IncognitoEnabled
+contactOrMemberIncognito = \case
+  COMContact ct -> contactConnIncognito ct
+  COMGroupMember m -> memberIncognito m
+
+data UserContact = UserContact
+  { userContactLinkId :: Int64,
+    connReqContact :: ConnReqContact,
+    groupId :: Maybe GroupId
+  }
+  deriving (Eq, Show)
+
+data UserContactRequest = UserContactRequest
+  { contactRequestId :: Int64,
+    agentInvitationId :: AgentInvId,
+    contactId_ :: Maybe ContactId,
+    businessGroupId_ :: Maybe GroupId,
+    userContactLinkId_ :: Maybe Int64,
+    cReqChatVRange :: VersionRangeChat,
+    localDisplayName :: ContactName,
+    profileId :: Int64,
+    profile :: LocalProfile,
+    createdAt :: UTCTime,
+    updatedAt :: UTCTime,
+    xContactId :: Maybe XContactId,
+    pqSupport :: PQSupport,
+    welcomeSharedMsgId :: Maybe SharedMsgId,
+    requestSharedMsgId :: Maybe SharedMsgId,
+    rejectionSupported :: Bool
+  }
+  deriving (Eq, Show)
+
+newtype XContactId = XContactId ByteString
+  deriving (Eq, Show)
+  deriving newtype (FromField)
+
+instance ToField XContactId where toField (XContactId m) = toField $ Binary m
+
+instance StrEncoding XContactId where
+  strEncode (XContactId m) = strEncode m
+  strDecode s = XContactId <$> strDecode s
+  strP = XContactId <$> strP
+
+instance FromJSON XContactId where
+  parseJSON = strParseJSON "XContactId"
+
+instance ToJSON XContactId where
+  toJSON = strToJSON
+  toEncoding = strToJEncoding
+
+newtype ConnReqUriHash = ConnReqUriHash {unConnReqUriHash :: ByteString}
+  deriving (Eq, Show)
+  deriving newtype (FromField)
+
+instance ToField ConnReqUriHash where toField (ConnReqUriHash m) = toField $ Binary m
+
+instance StrEncoding ConnReqUriHash where
+  strEncode (ConnReqUriHash m) = strEncode m
+  strDecode s = ConnReqUriHash <$> strDecode s
+  strP = ConnReqUriHash <$> strP
+
+instance FromJSON ConnReqUriHash where
+  parseJSON = strParseJSON "ConnReqUriHash"
+
+instance ToJSON ConnReqUriHash where
+  toJSON = strToJSON
+  toEncoding = strToJEncoding
+
+data RequestEntity
+  = REContact Contact
+  | REBusinessChat GroupInfoKeys GroupMember
+
+type RepeatRequest = Bool
+
+data RequestStage
+  = RSAcceptedRequest
+      { acceptedRequest :: Maybe UserContactRequest, -- Request is optional to support deleted legacy requests
+        requestEntity :: RequestEntity
+      }
+  | RSCurrentRequest
+      { previousRequest :: Maybe UserContactRequest,
+        currentRequest :: UserContactRequest,
+        requestEntity_ :: Maybe RequestEntity -- Entity is optional to support legacy requests without entity
+      }
+
+type UserName = Text
+
+type ContactName = Text
+
+type MemberName = Text
+
+type GroupName = Text
+
+optionalFullName :: ContactName -> Text -> Maybe Text -> Text
+optionalFullName displayName fullName shortDescr
+  | T.null fullName || displayName == fullName = maybe "" (\sd -> " (" <> sd <> ")") shortDescr
+  | otherwise = " (" <> fullName <> ")"
+
+data Group = Group {groupInfo :: GroupInfo, members :: [GroupMember]}
+  deriving (Eq, Show)
+
+type GroupId = Int64
+
+data GroupRootKey
+  = GRKPrivate {rootPrivKey :: C.PrivateKeyEd25519}
+  | GRKPublic {rootPubKey :: C.PublicKeyEd25519}
+  deriving (Eq, Show)
+
+groupRootPubKey :: GroupRootKey -> C.PublicKeyEd25519
+groupRootPubKey (GRKPrivate pk) = C.publicKey pk
+groupRootPubKey (GRKPublic pk) = pk
+
+data GroupKeys
+  = GKGroup
+      { memberPrivKey :: C.PrivateKeyEd25519
+      }
+  | GKPublicGroup
+      { groupRootKey :: GroupRootKey,
+        memberPrivKey :: C.PrivateKeyEd25519
+      }
+  | GKRelayRequest
+      { memberPrivKey :: C.PrivateKeyEd25519
+      }
+  | GKPreparedPublicGroup
+      { memberPrivKey :: C.PrivateKeyEd25519
+      }
+  deriving (Eq, Show)
+
+isPublicGroup :: GroupKeys -> Bool
+isPublicGroup = \case
+  GKGroup {} -> False
+  GKPublicGroup {} -> True
+  GKRelayRequest {} -> True
+  GKPreparedPublicGroup {} -> True
+
+data GroupInfoKeys = GIK GroupInfo GroupKeys
+
+data GroupInfo = GroupInfo
+  { groupId :: GroupId,
+    useRelays :: BoolDef,
+    relayOwnStatus :: Maybe RelayStatus, -- status of the relay itself related to the group
+    localDisplayName :: GroupName,
+    groupProfile :: GroupProfile,
+    localAlias :: Text,
+    businessChat :: Maybe BusinessChatInfo,
+    fullGroupPreferences :: FullGroupPreferences,
+    membership :: GroupMember,
+    chatSettings :: ChatSettings,
+    createdAt :: UTCTime,
+    updatedAt :: UTCTime,
+    chatTs :: Maybe UTCTime,
+    userMemberProfileSentAt :: Maybe UTCTime,
+    preparedGroup :: Maybe PreparedGroup,
+    chatTags :: [ChatTagId],
+    chatItemTTL :: Maybe Int64,
+    uiThemes :: Maybe UIThemeEntityOverrides,
+    customData :: Maybe CustomData,
+    groupSummary :: GroupSummary,
+    rosterVersion :: Maybe VersionRoster,
+    membersRequireAttention :: Int,
+    viaGroupLinkUri :: Maybe ConnReqContact,
+    groupDomainVerified :: Maybe Bool
+  }
+  deriving (Eq, Show)
+
+useRelays' :: GroupInfo -> Bool
+useRelays' GroupInfo {useRelays} = isTrue useRelays
+
+publicGroup' :: GroupInfo -> Maybe PublicGroupProfile
+publicGroup' g@GroupInfo {groupProfile = GroupProfile {publicGroup}} = if useRelays' g then publicGroup else Nothing
+
+relayServesGroup :: GroupInfo -> Bool
+relayServesGroup GroupInfo {relayOwnStatus} = case relayOwnStatus of
+  Just RSInactive -> False
+  Just RSRejected -> False
+  _ -> True
+
+publicGroupEditor :: GroupInfo -> GroupMember -> Bool
+publicGroupEditor gInfo mem = useRelays' gInfo && memberRole' mem >= GRModerator
+
+groupId' :: GroupInfo -> GroupId
+groupId' GroupInfo {groupId} = groupId
+
+data BusinessChatType
+  = BCBusiness -- used on the customer side
+  | BCCustomer -- used on the business side
+  deriving (Eq, Show)
+
+instance TextEncoding BusinessChatType where
+  textEncode = \case
+    BCBusiness -> "business"
+    BCCustomer -> "customer"
+  textDecode = \case
+    "business" -> Just BCBusiness
+    "customer" -> Just BCCustomer
+    _ -> Nothing
+
+instance FromField BusinessChatType where fromField = fromTextField_ textDecode
+
+instance ToField BusinessChatType where toField = toField . textEncode
+
+class HasShortLink l where
+  connShortLink' :: l c -> Maybe (ConnShortLink c)
+
+instance HasShortLink CreatedConnLink where
+  connShortLink' (CCLink _ sl) = sl
+
+setShortLinkType :: ContactConnType -> CreatedLinkContact -> CreatedLinkContact
+setShortLinkType ct (CCLink cReq sl) = CCLink cReq (setShortLinkType_ ct <$> sl)
+
+setShortLinkType_ :: ContactConnType -> ShortLinkContact -> ShortLinkContact
+setShortLinkType_ ct (CSLContact sch _ srv k) = CSLContact sch ct srv k
+
+data PreparedGroup = PreparedGroup
+  { connLinkToConnect :: CreatedLinkContact,
+    connLinkPreparedConnection :: Bool,
+    connLinkStartedConnection :: Bool,
+    welcomeSharedMsgId :: Maybe SharedMsgId, -- it is stored only for business chats, and only if welcome message is specified
+    requestSharedMsgId :: Maybe SharedMsgId
+  }
+  deriving (Eq, Show)
+
+groupName' :: GroupInfo -> GroupName
+groupName' GroupInfo {localDisplayName = g} = g
+
+data GroupSummary = GroupSummary
+  { currentMembers :: Int64,
+    publicMemberCount :: Maybe Int64
+  }
+  deriving (Eq, Show)
+
+data GroupLink = GroupLink
+  { userContactLinkId :: Int64,
+    connLinkContact :: CreatedLinkContact,
+    shortLinkDataSet :: Bool,
+    shortLinkLargeDataSet :: BoolDef,
+    groupLinkId :: GroupLinkId,
+    acceptMemberRole :: GroupMemberRole
+  }
+  deriving (Show)
+
+data ContactOrGroup = CGContact Contact | CGGroup GroupInfo [GroupMember]
+
+data PreparedChatEntity = PCEContact Contact | PCEGroup {groupInfo :: GroupInfoKeys, hostMember :: GroupMember}
+
+contactAndGroupIds :: ContactOrGroup -> (Maybe ContactId, Maybe GroupId)
+contactAndGroupIds = \case
+  CGContact Contact {contactId} -> (Just contactId, Nothing)
+  CGGroup GroupInfo {groupId} _ -> (Nothing, Just groupId)
+
+-- TODO when more settings are added we should create another type to allow partial setting updates (with all Maybe properties)
+data ChatSettings = ChatSettings
+  { enableNtfs :: MsgFilter,
+    sendRcpts :: Maybe Bool,
+    favorite :: Bool
+  }
+  deriving (Eq, Show)
+
+defaultChatSettings :: ChatSettings
+defaultChatSettings =
+  ChatSettings
+    { enableNtfs = MFAll,
+      sendRcpts = Nothing,
+      favorite = False
+    }
+
+chatHasNtfs :: ChatSettings -> Bool
+chatHasNtfs ChatSettings {enableNtfs} = enableNtfs /= MFNone
+
+data MsgFilter = MFNone | MFAll | MFMentions
+  deriving (Eq, Show)
+
+msgFilterInt :: MsgFilter -> Int
+msgFilterInt = \case
+  MFNone -> 0
+  MFAll -> 1
+  MFMentions -> 2
+
+msgFilterIntP :: Int64 -> Maybe MsgFilter
+msgFilterIntP = \case
+  0 -> Just MFNone
+  1 -> Just MFAll
+  2 -> Just MFMentions
+  _ -> Just MFAll
+
+fromIntField_ :: Typeable a => (Int64 -> Maybe a) -> FieldParser a
+#if defined(dbPostgres)
+fromIntField_ fromInt f val = fromField f val >>= parseInt
+#else
+fromIntField_ fromInt f = fromField f >>= parseInt
+#endif
+  where
+    parseInt i = case fromInt i of
+      Just x -> pure x
+      _ -> returnError ConversionFailed f $ "invalid integer: " <> show i
+
+featureAllowed :: SChatFeature f -> (PrefEnabled -> Bool) -> Contact -> Bool
+featureAllowed feature forWhom Contact {mergedPreferences} =
+  let ContactUserPreference {enabled} = getContactUserPreference feature mergedPreferences
+   in forWhom enabled
+
+groupFeatureAllowed :: GroupFeatureNoRoleI f => SGroupFeature f -> GroupInfo -> Bool
+groupFeatureAllowed feature gInfo = groupFeatureAllowed' feature $ fullGroupPreferences gInfo
+
+groupFeatureMemberAllowed :: GroupFeatureRoleI f => SGroupFeature f -> GroupMember -> GroupInfo -> Bool
+groupFeatureMemberAllowed feature GroupMember {memberRole} =
+  groupFeatureMemberAllowed' feature memberRole . fullGroupPreferences
+
+groupFeatureUserAllowed :: GroupFeatureRoleI f => SGroupFeature f -> GroupInfo -> Bool
+groupFeatureUserAllowed feature GroupInfo {membership = GroupMember {memberRole}, fullGroupPreferences} =
+  groupFeatureMemberAllowed' feature memberRole fullGroupPreferences
+
+mergeUserChatPrefs :: User -> Contact -> FullPreferences
+mergeUserChatPrefs user ct = mergeUserChatPrefs' user (contactConnIncognito ct) (userPreferences ct)
+
+mergeUserChatPrefs' :: User -> Bool -> Preferences -> FullPreferences
+mergeUserChatPrefs' user connectedIncognito userPreferences =
+  let userPrefs = if connectedIncognito then Nothing else preferences' user
+   in mergePreferences (Just userPreferences) userPrefs False
+
+updateMergedPreferences :: User -> Contact -> Contact
+updateMergedPreferences user ct =
+  let mergedPreferences = contactUserPreferences user (userPreferences ct) (preferences' ct) (contactConnIncognito ct)
+   in ct {mergedPreferences}
+
+contactUserPreferences :: User -> Preferences -> Maybe Preferences -> Bool -> ContactUserPreferences
+contactUserPreferences user userPreferences contactPreferences connectedIncognito =
+  ContactUserPreferences
+    { timedMessages = pref SCFTimedMessages,
+      fullDelete = pref SCFFullDelete,
+      reactions = pref SCFReactions,
+      voice = pref SCFVoice,
+      files = pref SCFFiles,
+      calls = pref SCFCalls,
+      sessions = pref SCFSessions,
+      commands = contactPreferences >>= commands_
+    }
+  where
+    pref :: FeatureI f => SChatFeature f -> ContactUserPreference (FeaturePreference f)
+    pref f =
+      ContactUserPreference
+        { enabled = prefEnabled (asymmetric f) userPref ctPref,
+          -- incognito contact cannot have default user preference used
+          userPreference = if connectedIncognito then CUPContact ctUserPref else maybe (CUPUser userPref) CUPContact ctUserPref_,
+          contactPreference = ctPref
+        }
+      where
+        asymmetric SCFTimedMessages = False
+        asymmetric _ = True
+        ctUserPref = getPreference f userPreferences
+        ctUserPref_ = chatPrefSel f userPreferences
+        userPref = getPreference f ctUserPrefs
+        ctPref = getPreference f contactPreferences
+    ctUserPrefs = mergeUserChatPrefs' user connectedIncognito userPreferences
+
+data Profile = Profile
+  { displayName :: ContactName,
+    fullName :: Text,
+    shortDescr :: Maybe Text, -- short description limited to 160 characters
+    description :: Maybe Text, -- long description (businesses/bots); redacted per group policy in member profiles
+    image :: Maybe ImageData,
+    contactLink :: Maybe ConnLinkContact,
+    preferences :: Maybe Preferences,
+    peerType :: Maybe ChatPeerType,
+    badge :: Maybe BadgeProof,
+    contactDomain :: Maybe SimplexDomainClaim
+    -- fields that should not be read into this data type to prevent sending them as part of profile to contacts:
+    -- - contact_profile_id
+    -- - incognito
+    -- - local_alias
+  }
+  deriving (Eq, Show)
+
+data ChatPeerType = CPTHuman | CPTBot | CPTBusiness | CPTAgent | CPTUnknown Text
+  deriving (Eq, Show)
+
+instance FromJSON ChatPeerType where
+  parseJSON = textParseJSON "ChatPeerType"
+
+instance ToJSON ChatPeerType where
+  toJSON = J.String . textEncode
+  toEncoding = JE.text . textEncode
+
+instance FromField ChatPeerType where fromField = fromTextField_ textDecode
+
+instance ToField ChatPeerType where toField = toField . textEncode
+
+instance TextEncoding ChatPeerType where
+  textDecode s = Just $ case s of
+    "human" -> CPTHuman
+    "bot" -> CPTBot
+    "business" -> CPTBusiness
+    "agent" -> CPTAgent
+    tag -> CPTUnknown tag
+  textEncode = \case
+    CPTHuman -> "human"
+    CPTBot -> "bot"
+    CPTBusiness -> "business"
+    CPTAgent -> "agent"
+    CPTUnknown tag -> tag
+
+profileFromName :: ContactName -> Profile
+profileFromName displayName =
+  Profile {displayName, fullName = "", shortDescr = Nothing, description = Nothing, image = Nothing, contactLink = Nothing, preferences = Nothing, peerType = Nothing, badge = Nothing, contactDomain = Nothing}
+
+-- check if profiles match ignoring preferences
+profilesMatch :: LocalProfile -> LocalProfile -> Bool
+profilesMatch
+  LocalProfile {displayName = n1, fullName = fn1, image = i1, shortDescr = d1, description = desc1}
+  LocalProfile {displayName = n2, fullName = fn2, image = i2, shortDescr = d2, description = desc2} =
+    n1 == n2 && fn1 == fn2 && i1 == i2 && d1 == d2 && desc1 == desc2
+
+-- equal for profile-update detection: badge proofs are re-generated for every presentation,
+-- so compare badges by disclosed info (not proof bytes) - a re-presentation of the same badge is a no-op
+sameProfileContent :: Profile -> Profile -> Bool
+sameProfileContent p@Profile {badge = b} p'@Profile {badge = b'} =
+  clearProofs p == clearProofs p' && (proofInfo <$> b) == (proofInfo <$> b')
+  where
+    clearProofs pr@Profile {contactDomain} = pr {badge = Nothing, contactDomain = (\d -> d {proof = Nothing} :: SimplexDomainClaim) <$> contactDomain}
+    proofInfo :: BadgeProof -> BadgeInfo
+    proofInfo (BadgeProof _ _ _ info) = info
+
+data IncognitoProfile = NewIncognito Profile | ExistingIncognito LocalProfile
+
+fromIncognitoProfile :: IncognitoProfile -> Profile
+fromIncognitoProfile = \case
+  NewIncognito p -> p
+  ExistingIncognito lp -> fromLocalProfile lp
+
+userProfileDirect :: User -> Maybe Profile -> Maybe Contact -> Bool -> Profile
+userProfileDirect user@User {profile = p} incognitoProfile ct canFallbackToUserTTL =
+  let p' = fromMaybe (fromLocalProfile p) incognitoProfile
+      fullPrefs = mergePreferences (userPreferences <$> ct) userPrefs canFallbackToUserTTL
+   in (p' :: Profile) {preferences = Just $ toChatPrefs fullPrefs}
+  where
+    userPrefs
+      | isNothing incognitoProfile = preferences' user
+      | otherwise = -- supplement user level TTL to incognito (default) preferences so that it can serve as fallback
+          let FullPreferences {timedMessages = TimedMessagesPreference {allow}} = defaultChatPrefs
+              userLevelTTL = preferences' user >>= chatPrefSel SCFTimedMessages >>= (\TimedMessagesPreference {ttl} -> ttl)
+           in Just $ toChatPrefs (defaultChatPrefs :: FullPreferences) {timedMessages = TimedMessagesPreference {allow, ttl = userLevelTTL}}
+
+type LocalAlias = Text
+
+data LocalProfile = LocalProfile
+  { profileId :: ProfileId,
+    displayName :: ContactName,
+    fullName :: Text,
+    shortDescr :: Maybe Text,
+    description :: Maybe Text,
+    image :: Maybe ImageData,
+    contactLink :: Maybe ConnLinkContact,
+    preferences :: Maybe Preferences,
+    peerType :: Maybe ChatPeerType,
+    localBadge :: Maybe LocalBadge,
+    localAlias :: LocalAlias,
+    contactDomain :: Maybe SimplexDomainClaim,
+    contactDomainVerified :: Maybe Bool
+  }
+  deriving (Eq, Show)
+
+localProfileId :: LocalProfile -> ProfileId
+localProfileId LocalProfile {profileId} = profileId
+
+toLocalProfile :: ProfileId -> Profile -> LocalAlias -> UTCTime -> Maybe Bool -> Maybe Bool -> LocalProfile
+toLocalProfile profileId Profile {displayName, fullName, shortDescr, description, image, contactLink, preferences, peerType, badge, contactDomain} localAlias now badgeVerified contactDomainVerified =
+  LocalProfile {profileId, displayName, fullName, shortDescr, description, image, contactLink, preferences, peerType, localBadge, localAlias, contactDomain, contactDomainVerified}
+  where
+    localBadge = (\b@(BadgeProof _ _ _ info) -> PeerBadge b (mkBadgeStatus now badgeVerified info)) <$> badge
+
+fromLocalProfile :: LocalProfile -> Profile
+fromLocalProfile LocalProfile {displayName, fullName, shortDescr, description, image, contactLink, preferences, peerType, localBadge, contactDomain} =
+  -- the name proof is re-signed on each send
+  Profile {displayName, fullName, shortDescr, description, image, contactLink, preferences, peerType, badge = localBadge >>= wireBadge, contactDomain = (\d -> d {proof = Nothing} :: SimplexDomainClaim) <$> contactDomain}
+  where
+    wireBadge :: LocalBadge -> Maybe BadgeProof
+    wireBadge = \case
+      PeerBadge b _ -> Just b -- stored peer proof sent as is
+      OwnBadge _ _ -> Nothing -- the own credential is not sent, proof is generated on send
+      ShownBadge _ _ -> Nothing -- a display-only badge is not sent
+
+profileBadgeVerified :: Maybe ProofPresHeader -> Map Int BBSPublicKey -> Maybe LocalProfile -> Profile -> IO (Profile, Maybe Bool)
+profileBadgeVerified expected keys lp_ p@Profile {badge = rcvBadge} =
+  (,) p {badge = newBadge} <$> case (storedBadge, newBadge) of
+    (_, Nothing) -> pure (Just False)
+    -- an unchanged badge that verified before stays verified; failed or unknown-key badges
+    -- are re-verified, so an unknown key heals once an app update adds it
+    (Just lb, Just (BadgeProof _ _ _ newInfo))
+      | localBadgeInfo lb == newInfo && localBadgeStatus lb `notElem` [BSFailed, BSUnknownKey] -> pure (Just True)
+    (_, Just newB) -> verifyBadge keys newB
+  where
+    storedBadge = (\LocalProfile {localBadge} -> localBadge) =<< lp_
+    newBadge = acceptedBadge expected ((\Profile {badge} -> badge) . fromLocalProfile =<< lp_) rcvBadge
+
+-- a failed or unknown-key badge is re-verified on the next profile update even when its disclosed content
+-- is unchanged, so it heals once an app update adds the issuer key
+badgeNeedsReverify :: LocalProfile -> Bool
+badgeNeedsReverify LocalProfile {localBadge} = maybe False ((`elem` [BSFailed, BSUnknownKey]) . localBadgeStatus) localBadge
+
+data GroupType
+  = GTChannel
+  | GTGroup
+  | GTUnknown Text
+  deriving (Eq, Show)
+
+instance TextEncoding GroupType where
+  textEncode = \case
+    GTChannel -> "channel"
+    GTGroup -> "group"
+    GTUnknown tag -> tag
+  textDecode s = Just $ case s of
+    "channel" -> GTChannel
+    "group" -> GTGroup
+    tag -> GTUnknown tag
+
+instance FromField GroupType where fromField = fromTextField_ textDecode
+
+instance ToField GroupType where toField = toField . textEncode
+
+data PublicGroupAccess = PublicGroupAccess
+  { groupWebPage :: Maybe Text,
+    groupDomainClaim :: Maybe SimplexDomainClaim,
+    domainWebPage :: Bool,
+    allowEmbedding :: Bool
+  }
+  deriving (Eq, Show)
+
+data PublicGroupProfile = PublicGroupProfile
+  { groupType :: GroupType,
+    groupLink :: ShortLinkContact,
+    publicGroupId :: B64UrlByteString, -- group identity = sha256(genesis root key), immutable
+    publicGroupAccess :: Maybe PublicGroupAccess
+  }
+  deriving (Eq, Show)
+
+data GroupProfile = GroupProfile
+  { displayName :: GroupName,
+    fullName :: Text,
+    shortDescr :: Maybe Text, -- short description limited to 160 characters
+    description :: Maybe Text, -- this has been repurposed as welcome message
+    image :: Maybe ImageData,
+    publicGroup :: Maybe PublicGroupProfile,
+    groupPreferences :: Maybe GroupPreferences,
+    memberAdmission :: Maybe GroupMemberAdmission,
+    chatLayout :: Maybe ChatLayout
+  }
+  deriving (Eq, Show)
+
+data GroupMemberAdmission = GroupMemberAdmission
+  { -- names :: Maybe MemberCriteria,
+    -- captcha :: Maybe MemberCriteria,
+    review :: Maybe MemberCriteria
+  }
+  deriving (Eq, Show)
+
+data MemberCriteria = MCAll
+  deriving (Eq, Show)
+
+emptyGroupMemberAdmission :: GroupMemberAdmission
+emptyGroupMemberAdmission = GroupMemberAdmission Nothing
+
+newtype ImageData = ImageData Text
+  deriving (Eq, Show)
+
+instance FromJSON ImageData where
+  parseJSON = fmap ImageData . J.parseJSON
+
+instance ToJSON ImageData where
+  toJSON (ImageData t) = J.toJSON $ safeImageData t
+  toEncoding (ImageData t) = J.toEncoding $ safeImageData t
+
+safeImageData :: Text -> Text
+safeImageData t
+  | "data:" `T.isPrefixOf` t = t
+  | otherwise = ""
+
+instance ToField ImageData where toField (ImageData t) = toField t
+
+deriving newtype instance FromField ImageData
+
+data CReqClientData = CRDataGroup {groupLinkId :: GroupLinkId}
+
+newtype GroupLinkId = GroupLinkId {unGroupLinkId :: ByteString} -- used to identify invitation via group link
+  deriving (Eq, Show)
+  deriving newtype (FromField)
+
+instance ToField GroupLinkId where toField (GroupLinkId g) = toField $ Binary g
+
+instance StrEncoding GroupLinkId where
+  strEncode (GroupLinkId g) = strEncode g
+  strDecode s = GroupLinkId <$> strDecode s
+  strP = GroupLinkId <$> strP
+
+instance FromJSON GroupLinkId where
+  parseJSON = strParseJSON "GroupLinkId"
+
+instance ToJSON GroupLinkId where
+  toJSON = strToJSON
+  toEncoding = strToJEncoding
+
+data GroupInvitation = GroupInvitation
+  { fromMember :: MemberIdRole,
+    fromMemberKey :: Maybe MemberKey,
+    invitedMember :: MemberIdRole,
+    connRequest :: ConnReqInvitation,
+    groupProfile :: GroupProfile,
+    business :: Maybe BusinessChatInfo,
+    groupLinkId :: Maybe GroupLinkId,
+    groupSize :: Maybe Int
+  }
+  deriving (Eq, Show)
+
+data GroupLinkInvitation = GroupLinkInvitation
+  { fromMember :: MemberIdRole,
+    fromMemberName :: ContactName,
+    fromMemberKey :: Maybe MemberKey,
+    invitedMember :: MemberIdRole,
+    groupProfile :: GroupProfile,
+    accepted :: Maybe GroupAcceptance,
+    business :: Maybe BusinessChatInfo,
+    groupSize :: Maybe Int
+  }
+  deriving (Eq, Show)
+
+data GroupLinkRejection = GroupLinkRejection
+  { fromMember :: MemberIdRole,
+    invitedMember :: MemberIdRole,
+    groupProfile :: GroupProfile,
+    rejectionReason :: GroupRejectionReason
+  }
+  deriving (Eq, Show)
+
+-- sent by owner to relay when adding it to group
+data GroupRelayInvitation = GroupRelayInvitation
+  { fromMember :: MemberIdRole,
+    fromMemberProfile :: Profile,
+    relayMemberId :: MemberId,
+    groupLink :: ShortLinkContact,
+    publicGroupId :: Maybe B64UrlByteString,
+    fromMemberKey :: Maybe MemberKey
+  }
+  deriving (Eq, Show)
+
+data GroupRejectionReason
+  = GRRLongName
+  | GRRBlockedName
+  | GRRUnknown {text :: Text}
+  deriving (Eq, Show)
+
+instance FromField GroupRejectionReason where fromField = blobFieldDecoder strDecode
+
+instance ToField GroupRejectionReason where toField = toField . strEncode
+
+instance StrEncoding GroupRejectionReason where
+  strEncode = \case
+    GRRLongName -> "long_name"
+    GRRBlockedName -> "blocked_name"
+    GRRUnknown text -> encodeUtf8 text
+  strP =
+    "long_name" $> GRRLongName
+    <|> "blocked_name" $> GRRBlockedName
+    <|> GRRUnknown . safeDecodeUtf8 <$> A.takeByteString
+
+instance FromJSON GroupRejectionReason where
+  parseJSON = strParseJSON "GroupRejectionReason"
+
+instance ToJSON GroupRejectionReason where
+  toJSON = strToJSON
+  toEncoding = strToJEncoding
+
+data ContactRejectionReason
+  = CRRUserRejected
+  | CRRUnknown {text :: Text}
+  deriving (Eq, Show)
+
+instance StrEncoding ContactRejectionReason where
+  strEncode = \case
+    CRRUserRejected -> "user_rejected"
+    CRRUnknown text -> encodeUtf8 text
+  strP =
+    "user_rejected" $> CRRUserRejected
+    <|> CRRUnknown . safeDecodeUtf8 <$> A.takeByteString
+
+instance FromJSON ContactRejectionReason where
+  parseJSON = strParseJSON "ContactRejectionReason"
+
+instance ToJSON ContactRejectionReason where
+  toJSON = strToJSON
+  toEncoding = strToJEncoding
+
+data RelayRejectionReason
+  = RRRRejoinRejected
+  | RRRUnknown {text :: Text}
+  deriving (Eq, Show)
+
+instance StrEncoding RelayRejectionReason where
+  strEncode = \case
+    RRRRejoinRejected -> "rejoin_rejected"
+    RRRUnknown text -> encodeUtf8 text
+  strP =
+    "rejoin_rejected" $> RRRRejoinRejected
+    <|> RRRUnknown . safeDecodeUtf8 <$> A.takeByteString
+
+instance FromJSON RelayRejectionReason where
+  parseJSON = strParseJSON "RelayRejectionReason"
+
+instance ToJSON RelayRejectionReason where
+  toJSON = strToJSON
+  toEncoding = strToJEncoding
+
+data MemberIdRole = MemberIdRole
+  { memberId :: MemberId,
+    memberRole :: GroupMemberRole
+  }
+  deriving (Eq, Show)
+
+data IntroInvitation = IntroInvitation
+  { groupConnReq :: ConnReqInvitation
+  }
+  deriving (Eq, Show)
+
+newtype MemberKey = MemberKey C.PublicKeyEd25519
+  deriving (Eq, Show)
+  deriving newtype (StrEncoding)
+
+-- Binary encoding for the roster blob; delegates to the Ed25519 key.
+instance Encoding MemberKey where
+  smpEncode (MemberKey k) = smpEncode k
+  smpP = MemberKey <$> smpP
+
+instance FromJSON MemberKey where
+  parseJSON = strParseJSON "MemberKey"
+
+instance ToJSON MemberKey where
+  toJSON = strToJSON
+  toEncoding = strToJEncoding
+
+data MemberInfo = MemberInfo
+  { memberId :: MemberId,
+    memberRole :: GroupMemberRole,
+    v :: Maybe ChatVersionRange,
+    profile :: Profile,
+    memberKey :: Maybe MemberKey
+  }
+  deriving (Eq, Show)
+
+data BusinessChatInfo = BusinessChatInfo
+  { chatType :: BusinessChatType,
+    businessId :: MemberId,
+    customerId :: MemberId,
+    -- TODO [names] sent in protocol in GroupInvitation
+    businessDomain :: Maybe SimplexDomainClaim
+  }
+  deriving (Eq, Show)
+
+data MemberRestrictionStatus
+  = MRSBlocked
+  | MRSUnrestricted
+  | MRSUnknown Text
+  deriving (Eq, Show)
+
+instance FromField MemberRestrictionStatus where fromField = fromTextField_ textDecode
+
+instance ToField MemberRestrictionStatus where toField = toField . textEncode
+
+instance TextEncoding MemberRestrictionStatus where
+  textEncode = \case
+    MRSBlocked -> "blocked"
+    MRSUnrestricted -> "unrestricted"
+    MRSUnknown tag -> tag
+  textDecode s = Just $ case s of
+    "blocked" -> MRSBlocked
+    "unrestricted" -> MRSUnrestricted
+    tag -> MRSUnknown tag
+
+instance FromJSON MemberRestrictionStatus where
+  parseJSON = textParseJSON "MemberRestrictionStatus"
+
+instance ToJSON MemberRestrictionStatus where
+  toJSON = textToJSON
+  toEncoding = textToEncoding
+
+mrsBlocked :: MemberRestrictionStatus -> Bool
+mrsBlocked = \case
+  MRSBlocked -> True
+  _ -> False
+
+data MemberRestrictions = MemberRestrictions
+  { restriction :: MemberRestrictionStatus
+  }
+  deriving (Eq, Show)
+
+memberRestrictions :: GroupMember -> Maybe MemberRestrictions
+memberRestrictions m
+  | blockedByAdmin m = Just MemberRestrictions {restriction = MRSBlocked}
+  | otherwise = Nothing
+
+data ReceivedGroupInvitation = ReceivedGroupInvitation
+  { fromMember :: GroupMember,
+    connRequest :: ConnReqInvitation,
+    groupInfo :: GroupInfo,
+    groupKeys :: GroupKeys
+  }
+  deriving (Eq, Show)
+
+type GroupMemberId = Int64
+
+-- memberProfile's profileId is COALESCE(member_profile_id, contact_profile_id), member_profile_id is non null
+-- if incognito profile was saved for member (used for hosts and invitees in incognito groups)
+data GroupMember = GroupMember
+  { groupMemberId :: GroupMemberId,
+    groupId :: GroupId,
+    indexInGroup :: Int64,
+    memberId :: MemberId,
+    memberRole :: GroupMemberRole,
+    memberCategory :: GroupMemberCategory,
+    memberStatus :: GroupMemberStatus,
+    memberSettings :: GroupMemberSettings,
+    blockedByAdmin :: Bool,
+    invitedBy :: InvitedBy,
+    invitedByGroupMemberId :: Maybe GroupMemberId,
+    localDisplayName :: ContactName,
+    -- for membership, memberProfile can be either user's profile or incognito profile, based on memberIncognito test.
+    -- for other members it's whatever profile the local user can see (there is no info about whether it's main or incognito profile for remote users).
+    memberProfile :: LocalProfile,
+    -- this is the ID of the associated contact (it will be used to send direct messages to the member)
+    memberContactId :: Maybe ContactId,
+    -- for membership it would always point to user's contact
+    -- it is used to test for incognito status by comparing with ID in memberProfile
+    memberContactProfileId :: ProfileId,
+    activeConn :: Maybe Connection,
+    -- member chat protocol version range; if member has active connection, its version range is preferred;
+    -- for membership current supportedChatVRange is set, it's not updated on protocol version increase in database,
+    -- but it's correctly set on read (see toGroupInfo)
+    memberChatVRange :: VersionRangeChat,
+    createdAt :: UTCTime,
+    updatedAt :: UTCTime,
+    supportChat :: Maybe GroupSupportChat,
+    memberPubKey :: Maybe C.PublicKeyEd25519,
+    relayLink :: Maybe ShortLinkContact,
+    -- out-of-band verified security code for connectionless (channel) members;
+    -- regular members carry it in activeConn instead (see memberSecurityCode)
+    memberVerifiedCode :: Maybe SecurityCode,
+    memberBadgeProof :: NoJSON BadgeProof
+  }
+  deriving (Eq, Show)
+
+data RelayRequestData = RelayRequestData
+  { relayInvId :: InvitationId,
+    reqGroupLink :: ShortLinkContact,
+    reqPublicGroupId :: Maybe B64UrlByteString,
+    reqChatVRange :: VersionRangeChat,
+    reqDelay :: Int64,
+    reqRetries :: Int,
+    reqCreatedAt :: UTCTime,
+    reqExecuteAt :: UTCTime
+  }
+  deriving (Eq, Show)
+
+data GroupSupportChat = GroupSupportChat
+  { chatTs :: UTCTime,
+    unread :: Int64,
+    memberAttention :: Int64,
+    mentions :: Int64,
+    lastMsgFromMemberTs :: Maybe UTCTime
+  }
+  deriving (Eq, Show)
+
+gmRequiresAttention :: GroupMember -> Bool
+gmRequiresAttention m@GroupMember {supportChat} =
+  memberPending m || maybe False supportChatAttention supportChat
+  where
+    supportChatAttention GroupSupportChat {memberAttention, mentions} =
+      memberAttention > 0 || mentions > 0
+
+data GroupMemberRef = GroupMemberRef {groupMemberId :: Int64, profile :: Profile}
+  deriving (Eq, Show)
+
+groupMemberRef :: GroupMember -> GroupMemberRef
+groupMemberRef GroupMember {groupMemberId, memberProfile = p} =
+  GroupMemberRef {groupMemberId, profile = fromLocalProfile p}
+
+isRelay :: GroupMember -> Bool
+isRelay m = memberRole' m == GRRelay
+
+memberRole' :: GroupMember -> GroupMemberRole
+memberRole' GroupMember {memberRole} = memberRole
+
+memberConn :: GroupMember -> Maybe Connection
+memberConn GroupMember {activeConn} = activeConn
+
+memberConnId :: GroupMember -> Maybe ConnId
+memberConnId GroupMember {activeConn} = aConnId <$> activeConn
+
+sameMemberId :: MemberId -> GroupMember -> Bool
+sameMemberId memId GroupMember {memberId} = memId == memberId
+
+memberChatVRange' :: GroupMember -> VersionRangeChat
+memberChatVRange' GroupMember {activeConn, memberChatVRange} = case activeConn of
+  Just Connection {peerChatVRange} -> peerChatVRange
+  Nothing -> memberChatVRange
+
+supportsVersion :: GroupMember -> VersionChat -> Bool
+supportsVersion m v = maxVersion (memberChatVRange' m) >= v
+
+groupMemberId' :: GroupMember -> GroupMemberId
+groupMemberId' GroupMember {groupMemberId} = groupMemberId
+
+memberId' :: GroupMember -> MemberId
+memberId' GroupMember {memberId} = memberId
+
+memberIncognito :: GroupMember -> IncognitoEnabled
+memberIncognito GroupMember {memberProfile, memberContactProfileId} = localProfileId memberProfile /= memberContactProfileId
+
+incognitoMembership :: GroupInfo -> IncognitoEnabled
+incognitoMembership GroupInfo {membership} = memberIncognito membership
+
+-- returns profile when membership is incognito, otherwise Nothing
+incognitoMembershipProfile :: GroupInfo -> Maybe LocalProfile
+incognitoMembershipProfile GroupInfo {membership = m@GroupMember {memberProfile}}
+  | memberIncognito m = Just memberProfile
+  | otherwise = Nothing
+
+memberSecurityCode :: GroupMember -> Maybe SecurityCode
+memberSecurityCode GroupMember {activeConn, memberVerifiedCode} = memberVerifiedCode <|> (connectionCode =<< activeConn)
+
+memberBlocked :: GroupMember -> Bool
+memberBlocked m = blockedByAdmin m || not (showMessages $ memberSettings m)
+
+data NewGroupMember = NewGroupMember
+  { memInfo :: MemberInfo,
+    memCategory :: GroupMemberCategory,
+    memStatus :: GroupMemberStatus,
+    memRestriction :: Maybe MemberRestrictionStatus,
+    memInvitedBy :: InvitedBy,
+    memInvitedByGroupMemberId :: Maybe GroupMemberId,
+    localDisplayName :: ContactName,
+    memProfileId :: Int64,
+    memContactId :: Maybe Int64
+  }
+
+newtype MemberId = MemberId {unMemberId :: ByteString}
+  deriving (Eq, Ord, Show)
+  deriving newtype (Encoding, FromField)
+
+instance ToField MemberId where toField (MemberId m) = toField $ Binary m
+
+instance StrEncoding MemberId where
+  strEncode (MemberId m) = strEncode m
+  strDecode s = MemberId <$> strDecode s
+  strP = MemberId <$> strP
+
+instance FromJSON MemberId where
+  parseJSON = strParseJSON "MemberId"
+
+instance ToJSON MemberId where
+  toJSON = strToJSON
+  toEncoding = strToJEncoding
+
+nameFromMemberId :: MemberId -> ContactName
+nameFromMemberId = nameFromBS . unMemberId
+
+nameFromBS :: ByteString -> ContactName
+nameFromBS = T.take 7 . safeDecodeUtf8 . B64.encode
+
+data InvitedBy = IBContact {byContactId :: Int64} | IBUser | IBUnknown
+  deriving (Eq, Show)
+
+toInvitedBy :: Int64 -> Maybe Int64 -> InvitedBy
+toInvitedBy userCtId (Just ctId)
+  | userCtId == ctId = IBUser
+  | otherwise = IBContact ctId
+toInvitedBy _ Nothing = IBUnknown
+
+fromInvitedBy :: Int64 -> InvitedBy -> Maybe Int64
+fromInvitedBy userCtId = \case
+  IBUnknown -> Nothing
+  IBContact ctId -> Just ctId
+  IBUser -> Just userCtId
+
+data GroupMemberSettings = GroupMemberSettings
+  { showMessages :: Bool
+  }
+  deriving (Eq, Show)
+
+defaultMemberSettings :: GroupMemberSettings
+defaultMemberSettings = GroupMemberSettings {showMessages = True}
+
+newtype Probe = Probe {unProbe :: ByteString}
+  deriving (Eq, Show)
+
+instance StrEncoding Probe where
+  strEncode (Probe p) = strEncode p
+  strDecode s = Probe <$> strDecode s
+  strP = Probe <$> strP
+
+instance FromJSON Probe where
+  parseJSON = strParseJSON "Probe"
+
+instance ToJSON Probe where
+  toJSON = strToJSON
+  toEncoding = strToJEncoding
+
+newtype ProbeHash = ProbeHash {unProbeHash :: ByteString}
+  deriving (Eq, Show)
+
+instance StrEncoding ProbeHash where
+  strEncode (ProbeHash p) = strEncode p
+  strDecode s = ProbeHash <$> strDecode s
+  strP = ProbeHash <$> strP
+
+instance FromJSON ProbeHash where
+  parseJSON = strParseJSON "ProbeHash"
+
+instance ToJSON ProbeHash where
+  toJSON = strToJSON
+  toEncoding = strToJEncoding
+
+data GroupMemberCategory
+  = GCUserMember
+  | GCInviteeMember -- member invited by the user
+  | GCHostMember -- member who invited the user
+  | GCPreMember -- member who joined before the user and was introduced to the user (user receives x.grp.mem.intro about such members)
+  | GCPostMember -- member who joined after the user to whom the user was introduced (user receives x.grp.mem.new announcing these members and then x.grp.mem.fwd with invitation from these members)
+  deriving (Eq, Show)
+
+instance FromField GroupMemberCategory where fromField = fromTextField_ textDecode
+
+instance ToField GroupMemberCategory where toField = toField . textEncode
+
+instance FromJSON GroupMemberCategory where
+  parseJSON = textParseJSON "GroupMemberCategory"
+
+instance ToJSON GroupMemberCategory where
+  toJSON = J.String . textEncode
+  toEncoding = JE.text . textEncode
+
+instance TextEncoding GroupMemberCategory where
+  textDecode = \case
+    "user" -> Just GCUserMember
+    "invitee" -> Just GCInviteeMember
+    "host" -> Just GCHostMember
+    "pre" -> Just GCPreMember
+    "post" -> Just GCPostMember
+    _ -> Nothing
+  textEncode = \case
+    GCUserMember -> "user"
+    GCInviteeMember -> "invitee"
+    GCHostMember -> "host"
+    GCPreMember -> "pre"
+    GCPostMember -> "post"
+
+data GroupMemberStatus
+  = GSMemRejected -- joining member who was rejected by the host, or host that rejected the join
+  | GSMemRemoved -- member who was removed from the group
+  | GSMemLeft -- member who left the group
+  | GSMemGroupDeleted -- user member of the deleted group
+  | GSMemUnknown -- unknown member, whose message was forwarded by an admin (likely member wasn't introduced due to not being a current member, but message was included in history)
+  | GSMemInvited -- member is sent to or received invitation to join the group
+  | GSMemPendingApproval -- member is connected to host but pending host approval before connecting to other members ("knocking")
+  | GSMemPendingReview -- member is introduced to admins but pending admin review before connecting to other members ("knocking")
+  | GSMemIntroduced -- user received x.grp.mem.intro for this member (only with GCPreMember)
+  | GSMemIntroInvited -- member is sent to or received from intro invitation
+  | GSMemAccepted -- member accepted invitation (only User and Invitee)
+  | GSMemAnnounced -- host announced (x.grp.mem.new) a member (Invitee and PostMember) to the group - at this point this member can send messages and invite other members (if they have sufficient permissions)
+  | GSMemConnected -- member created the group connection with the inviting member
+  | GSMemComplete -- host confirmed (x.grp.mem.all) that a member (User, Invitee and PostMember) created group connections with all previous members
+  | GSMemCreator -- user member that created the group (only GCUserMember)
+  deriving (Eq, Show, Ord)
+
+instance FromField GroupMemberStatus where fromField = fromTextField_ textDecode
+
+instance ToField GroupMemberStatus where toField = toField . textEncode
+
+instance FromJSON GroupMemberStatus where
+  parseJSON = textParseJSON "GroupMemberStatus"
+
+instance ToJSON GroupMemberStatus where
+  toJSON = J.String . textEncode
+  toEncoding = JE.text . textEncode
+
+acceptanceToStatus :: Maybe GroupMemberAdmission -> GroupAcceptance -> GroupMemberStatus
+acceptanceToStatus memberAdmission groupAcceptance
+  | groupAcceptance == GAPendingApproval = GSMemPendingApproval
+  | groupAcceptance == GAPendingReview = GSMemPendingReview
+  | (memberAdmission >>= review) == Just MCAll = GSMemPendingReview
+  | otherwise = GSMemAccepted
+
+memberActive :: GroupMember -> Bool
+memberActive m = case memberStatus m of
+  GSMemRejected -> False
+  GSMemRemoved -> False
+  GSMemLeft -> False
+  GSMemGroupDeleted -> False
+  GSMemUnknown -> False
+  GSMemInvited -> False
+  GSMemPendingApproval -> True
+  GSMemPendingReview -> True
+  GSMemIntroduced -> False
+  GSMemIntroInvited -> False
+  GSMemAccepted -> False
+  GSMemAnnounced -> False
+  GSMemConnected -> True
+  GSMemComplete -> True
+  GSMemCreator -> True
+
+memberCurrent :: GroupMember -> Bool
+memberCurrent = memberCurrent' . memberStatus
+
+memberPending :: GroupMember -> Bool
+memberPending m = case memberStatus m of
+  GSMemPendingApproval -> True
+  GSMemPendingReview -> True
+  _ -> False
+
+memberCurrentOrPending :: GroupMember -> Bool
+memberCurrentOrPending m = memberCurrent m || memberPending m
+
+-- *** Please note:
+-- *** update getGroupSummary and SQL function used in update triggers if this is changed
+-- ***
+memberCurrent' :: GroupMemberStatus -> Bool
+memberCurrent' = \case
+  GSMemRejected -> False
+  GSMemRemoved -> False
+  GSMemLeft -> False
+  GSMemGroupDeleted -> False
+  GSMemUnknown -> False
+  GSMemInvited -> False
+  GSMemPendingApproval -> False
+  GSMemPendingReview -> False
+  GSMemIntroduced -> True
+  GSMemIntroInvited -> True
+  GSMemAccepted -> True
+  GSMemAnnounced -> True
+  GSMemConnected -> True
+  GSMemComplete -> True
+  GSMemCreator -> True
+
+memberRemoved :: GroupMember -> Bool
+memberRemoved m = case memberStatus m of
+  GSMemRejected -> True
+  GSMemRemoved -> True
+  GSMemLeft -> True
+  GSMemGroupDeleted -> True
+  GSMemUnknown -> False
+  GSMemInvited -> False
+  GSMemPendingApproval -> False
+  GSMemPendingReview -> False
+  GSMemIntroduced -> False
+  GSMemIntroInvited -> False
+  GSMemAccepted -> False
+  GSMemAnnounced -> False
+  GSMemConnected -> False
+  GSMemComplete -> False
+  GSMemCreator -> False
+
+instance TextEncoding GroupMemberStatus where
+  textDecode = \case
+    "rejected" -> Just GSMemRejected
+    "removed" -> Just GSMemRemoved
+    "left" -> Just GSMemLeft
+    "deleted" -> Just GSMemGroupDeleted
+    "unknown" -> Just GSMemUnknown
+    "invited" -> Just GSMemInvited
+    "pending_approval" -> Just GSMemPendingApproval
+    "pending_review" -> Just GSMemPendingReview
+    "introduced" -> Just GSMemIntroduced
+    "intro-inv" -> Just GSMemIntroInvited
+    "accepted" -> Just GSMemAccepted
+    "announced" -> Just GSMemAnnounced
+    "connected" -> Just GSMemConnected
+    "complete" -> Just GSMemComplete
+    "creator" -> Just GSMemCreator
+    _ -> Nothing
+  textEncode = \case
+    GSMemRejected -> "rejected"
+    GSMemRemoved -> "removed"
+    GSMemLeft -> "left"
+    GSMemGroupDeleted -> "deleted"
+    GSMemUnknown -> "unknown"
+    GSMemInvited -> "invited"
+    GSMemPendingApproval -> "pending_approval"
+    GSMemPendingReview -> "pending_review"
+    GSMemIntroduced -> "introduced"
+    GSMemIntroInvited -> "intro-inv"
+    GSMemAccepted -> "accepted"
+    GSMemAnnounced -> "announced"
+    GSMemConnected -> "connected"
+    GSMemComplete -> "complete"
+    GSMemCreator -> "creator"
+
+data SndFileTransfer = SndFileTransfer
+  { fileId :: FileTransferId,
+    fileName :: String,
+    filePath :: String,
+    fileSize :: Integer,
+    chunkSize :: Integer,
+    recipientDisplayName :: ContactName,
+    connId :: Int64,
+    agentConnId :: AgentConnId,
+    groupMemberId :: Maybe Int64,
+    fileStatus :: FileStatus,
+    fileDescrId :: Maybe Int64,
+    fileInline :: Maybe InlineFileMode
+  }
+  deriving (Eq, Show)
+
+type FileTransferId = Int64
+
+data FileInvitation = FileInvitation
+  { fileName :: String,
+    fileSize :: Integer,
+    fileDigest :: Maybe FileDigest,
+    fileConnReq :: Maybe ConnReqInvitation,
+    fileInline :: Maybe InlineFileMode,
+    fileDescr :: Maybe FileDescr,
+    fileBadge :: Maybe BadgeProof
+  }
+  deriving (Eq, Show)
+
+data FileDescr = FileDescr {fileDescrText :: Text, fileDescrPartNo :: Int, fileDescrComplete :: Bool}
+  deriving (Eq, Show)
+
+xftpFileInvitation :: FilePath -> Integer -> FileDescr -> FileInvitation
+xftpFileInvitation fileName fileSize fileDescr =
+  FileInvitation
+    { fileName,
+      fileSize,
+      fileDigest = Nothing,
+      fileConnReq = Nothing,
+      fileInline = Nothing,
+      fileDescr = Just fileDescr,
+      fileBadge = Nothing
+    }
+
+data InlineFileMode
+  = IFMOffer -- file will be sent inline once accepted
+  | IFMSent -- file is sent inline without acceptance
+  deriving (Eq, Show)
+
+instance TextEncoding InlineFileMode where
+  textEncode = \case
+    IFMOffer -> "offer"
+    IFMSent -> "sent"
+  textDecode = \case
+    "offer" -> Just IFMOffer
+    "sent" -> Just IFMSent
+    _ -> Nothing
+
+instance FromField InlineFileMode where fromField = fromTextField_ textDecode
+
+instance ToField InlineFileMode where toField = toField . textEncode
+
+instance FromJSON InlineFileMode where
+  parseJSON = textParseJSON "InlineFileMode"
+
+instance ToJSON InlineFileMode where
+  toJSON = J.String . textEncode
+  toEncoding = JE.text . textEncode
+
+-- Discriminates ordinary chat files from the roster blob file, so the receive
+-- completion / cancel paths branch on the type rather than on chat_item_id (note
+-- folders and redirects also lack a chat item).
+data FileType = FTNormal | FTRoster
+  deriving (Eq, Show)
+
+instance TextEncoding FileType where
+  textEncode = \case
+    FTNormal -> "normal"
+    FTRoster -> "roster"
+  textDecode = \case
+    "normal" -> Just FTNormal
+    "roster" -> Just FTRoster
+    _ -> Nothing
+
+instance FromField FileType where fromField = fromTextField_ textDecode
+
+instance ToField FileType where toField = toField . textEncode
+
+instance FromJSON FileType where
+  parseJSON = textParseJSON "FileType"
+
+instance ToJSON FileType where
+  toJSON = J.String . textEncode
+  toEncoding = JE.text . textEncode
+
+data FileProhibited = FileProhibited {maxSize :: Integer, badgeStatus :: Maybe BadgeStatus}
+  deriving (Eq, Show)
+
+data RcvFileTransfer = RcvFileTransfer
+  { fileId :: FileTransferId,
+    xftpRcvFile :: Maybe XFTPRcvFile,
+    fileInvitation :: FileInvitation,
+    fileProhibited :: Maybe FileProhibited,
+    fileStatus :: RcvFileStatus,
+    fileType :: FileType,
+    rcvFileInline :: Maybe InlineFileMode,
+    senderDisplayName :: ContactName,
+    chunkSize :: Integer,
+    cancelled :: Bool,
+    grpMemberId :: Maybe Int64,
+    -- XFTP files are encrypted as they are received, they are never stored unecrypted
+    -- SMP files are encrypted after all chunks are received
+    cryptoArgs :: Maybe CryptoFileArgs
+  }
+  deriving (Eq, Show)
+
+data XFTPRcvFile = XFTPRcvFile
+  { rcvFileDescription :: RcvFileDescr,
+    agentRcvFileId :: Maybe AgentRcvFileId,
+    agentRcvFileDeleted :: Bool,
+    userApprovedRelays :: Bool
+  }
+  deriving (Eq, Show)
+
+type RcvFileDescrText = Text
+
+data RcvFileDescr = RcvFileDescr
+  { fileDescrId :: Int64,
+    fileDescrText :: RcvFileDescrText,
+    fileDescrPartNo :: Int,
+    fileDescrComplete :: Bool
+  }
+  deriving (Eq, Show)
+
+data RcvFileStatus
+  = RFSNew
+  | RFSAccepted {filePath :: FilePath}
+  | RFSConnected {filePath :: FilePath}
+  | RFSComplete {filePath :: FilePath}
+  | RFSCancelled {filePath_ :: Maybe FilePath}
+  deriving (Eq, Show)
+
+rcvFileComplete :: RcvFileStatus -> Bool
+rcvFileComplete = \case
+  RFSComplete _ -> True
+  _ -> False
+
+rcvFileCompleteOrCancelled :: RcvFileTransfer -> Bool
+rcvFileCompleteOrCancelled RcvFileTransfer {fileStatus, cancelled} = rcvFileComplete fileStatus || cancelled
+
+liveRcvFileTransferPath :: RcvFileTransfer -> Maybe FilePath
+liveRcvFileTransferPath RcvFileTransfer {fileStatus} = case fileStatus of
+  RFSAccepted filePath -> Just filePath
+  RFSConnected filePath -> Just filePath
+  _ -> Nothing
+
+newtype AgentConnId = AgentConnId ConnId
+  deriving (Eq, Ord, Show)
+  deriving newtype (FromField)
+
+instance ToField AgentConnId where toField (AgentConnId m) = toField $ Binary m
+
+instance StrEncoding AgentConnId where
+  strEncode (AgentConnId connId) = strEncode connId
+  strDecode s = AgentConnId <$> strDecode s
+  strP = AgentConnId <$> (strP <|> pure B.empty)
+
+instance FromJSON AgentConnId where
+  parseJSON = strParseJSON "AgentConnId"
+
+instance ToJSON AgentConnId where
+  toJSON = strToJSON
+  toEncoding = strToJEncoding
+
+newtype AgentSndFileId = AgentSndFileId SndFileId
+  deriving (Eq, Show)
+  deriving newtype (FromField)
+
+instance ToField AgentSndFileId where toField (AgentSndFileId m) = toField $ Binary m
+
+instance StrEncoding AgentSndFileId where
+  strEncode (AgentSndFileId connId) = strEncode connId
+  strDecode s = AgentSndFileId <$> strDecode s
+  strP = AgentSndFileId <$> strP
+
+instance FromJSON AgentSndFileId where
+  parseJSON = strParseJSON "AgentSndFileId"
+
+instance ToJSON AgentSndFileId where
+  toJSON = strToJSON
+  toEncoding = strToJEncoding
+
+newtype AgentRcvFileId = AgentRcvFileId RcvFileId
+  deriving (Eq, Show)
+  deriving newtype (FromField)
+
+instance ToField AgentRcvFileId where toField (AgentRcvFileId m) = toField $ Binary m
+
+instance StrEncoding AgentRcvFileId where
+  strEncode (AgentRcvFileId connId) = strEncode connId
+  strDecode s = AgentRcvFileId <$> strDecode s
+  strP = AgentRcvFileId <$> strP
+
+instance FromJSON AgentRcvFileId where
+  parseJSON = strParseJSON "AgentRcvFileId"
+
+instance ToJSON AgentRcvFileId where
+  toJSON = strToJSON
+  toEncoding = strToJEncoding
+
+newtype AgentInvId = AgentInvId InvitationId
+  deriving (Eq, Show)
+
+instance StrEncoding AgentInvId where
+  strEncode (AgentInvId connId) = strEncode connId
+  strDecode s = AgentInvId <$> strDecode s
+  strP = AgentInvId <$> strP
+
+instance FromJSON AgentInvId where
+  parseJSON = strParseJSON "AgentInvId"
+
+instance ToJSON AgentInvId where
+  toJSON = strToJSON
+  toEncoding = strToJEncoding
+
+deriving newtype instance FromField AgentInvId
+
+instance ToField AgentInvId where toField (AgentInvId m) = toField m
+
+data FileTransfer
+  = FTSnd
+      { fileTransferMeta :: FileTransferMeta,
+        sndFileTransfers :: [SndFileTransfer]
+      }
+  | FTRcv {rcvFileTransfer :: RcvFileTransfer}
+  deriving (Show)
+
+data FileTransferMeta = FileTransferMeta
+  { fileId :: FileTransferId,
+    xftpSndFile :: Maybe XFTPSndFile,
+    xftpRedirectFor :: Maybe FileTransferId,
+    fileName :: String,
+    filePath :: String,
+    fileSize :: Integer,
+    fileInline :: Maybe InlineFileMode,
+    chunkSize :: Integer,
+    cancelled :: Bool
+  }
+  deriving (Eq, Show)
+
+data LocalFileMeta = LocalFileMeta
+  { fileId :: FileTransferId,
+    fileName :: String,
+    filePath :: String,
+    fileSize :: Integer,
+    fileCryptoArgs :: Maybe CryptoFileArgs
+  }
+  deriving (Eq, Show)
+
+data XFTPSndFile = XFTPSndFile
+  { agentSndFileId :: AgentSndFileId,
+    privateSndFileDescr :: Maybe Text,
+    agentSndFileDeleted :: Bool,
+    cryptoArgs :: Maybe CryptoFileArgs
+  }
+  deriving (Eq, Show)
+
+fileTransferCancelled :: FileTransfer -> Bool
+fileTransferCancelled (FTSnd FileTransferMeta {cancelled} _) = cancelled
+fileTransferCancelled (FTRcv RcvFileTransfer {cancelled}) = cancelled
+
+-- For XFTP file transfers FSConnected means "uploaded to XFTP relays"
+data FileStatus = FSNew | FSAccepted | FSConnected | FSComplete | FSCancelled deriving (Eq, Ord, Show)
+
+instance FromField FileStatus where fromField = fromTextField_ textDecode
+
+instance ToField FileStatus where toField = toField . textEncode
+
+instance FromJSON FileStatus where
+  parseJSON = textParseJSON "FileStatus"
+
+instance ToJSON FileStatus where
+  toJSON = J.String . textEncode
+  toEncoding = JE.text . textEncode
+
+instance TextEncoding FileStatus where
+  textDecode = \case
+    "new" -> Just FSNew
+    "accepted" -> Just FSAccepted
+    "connected" -> Just FSConnected
+    "complete" -> Just FSComplete
+    "cancelled" -> Just FSCancelled
+    _ -> Nothing
+  textEncode = \case
+    FSNew -> "new"
+    FSAccepted -> "accepted"
+    FSConnected -> "connected"
+    FSComplete -> "complete"
+    FSCancelled -> "cancelled"
+
+data RcvChunkStatus = RcvChunkOk | RcvChunkFinal | RcvChunkDuplicate | RcvChunkError
+  deriving (Eq, Show)
+
+type ConnReqInvitation = ConnectionRequestUri 'CMInvitation
+
+type ConnReqContact = ConnectionRequestUri 'CMContact
+
+data ConnectTarget (m :: ConnectionMode) where
+  CTFullContact :: ConnectionRequestUri 'CMContact -> ConnectTarget 'CMContact
+  CTShortContact :: ContactNameOrLink -> ConnectTarget 'CMContact
+  CTDomain :: SimplexDomain -> ConnectTarget 'CMContact
+  CTInv :: ConnectionLink 'CMInvitation -> ConnectTarget 'CMInvitation
+
+data ContactNameOrLink = CTName SimplexNameInfo | CTLink (ConnShortLink 'CMContact)
+  deriving (Eq, Show)
+
+deriving instance Eq (ConnectTarget m)
+
+deriving instance Show (ConnectTarget m)
+
+data AConnectTarget = forall m. ConnectionModeI m => ACTarget (SConnectionMode m) (ConnectTarget m)
+  deriving (ToJSON, FromJSON) via (StrJSON "AConnectTarget" AConnectTarget)
+
+instance Eq AConnectTarget where
+  ACTarget m t == ACTarget m' t' = case testEquality m m' of
+    Just Refl -> t == t'
+    _ -> False
+
+deriving instance Show AConnectTarget
+
+instance StrEncoding AConnectTarget where
+  strEncode (ACTarget _ t) = case t of
+    CTFullContact cr -> strEncode cr
+    CTShortContact (CTName n) -> strEncode n
+    CTShortContact (CTLink sl) -> strEncode sl
+    CTDomain d -> strEncode d
+    CTInv l -> strEncode l
+  strP =
+    (ACTarget SCMContact . CTShortContact . CTName <$> (lookAhead nameStart *> strP))
+      <|> (aConnectTarget <$> strP)
+      <|> (ACTarget SCMContact . CTDomain <$> strP)
+    where
+      nameStart = "@" <|> "#" <|> "simplex:/name"
+
+instance ConnectionModeI m => StrEncoding (ConnectTarget m) where
+  strEncode t = strEncode $ ACTarget sConnectionMode t
+  strP = connectTargetP
+
+connectTargetP :: forall m. ConnectionModeI m => A.Parser (ConnectTarget m)
+connectTargetP = do
+  ACTarget m t <- strP
+  case testEquality m (sConnectionMode :: SConnectionMode m) of
+    Just Refl -> pure t
+    Nothing -> fail "bad connect target mode"
+
+aConnectTarget :: AConnectionLink -> AConnectTarget
+aConnectTarget (ACL SCMInvitation cl) = ACTarget SCMInvitation (CTInv cl)
+aConnectTarget (ACL SCMContact cl) = ACTarget SCMContact $ case cl of
+  CLFull cr -> CTFullContact cr
+  CLShort sl -> CTShortContact (CTLink sl)
+
+type CreatedLinkInvitation = CreatedConnLink 'CMInvitation
+
+type CreatedLinkContact = CreatedConnLink 'CMContact
+
+type ConnLinkContact = ConnectionLink 'CMContact
+
+type ShortLinkInvitation = ConnShortLink 'CMInvitation
+
+type ShortLinkContact = ConnShortLink 'CMContact
+
+data Connection = Connection
+  { connId :: Int64,
+    agentConnId :: AgentConnId,
+    connChatVersion :: VersionChat,
+    peerChatVRange :: VersionRangeChat,
+    connLevel :: Int,
+    viaContact :: Maybe Int64, -- group member contact ID, if not direct connection
+    viaUserContactLink :: Maybe Int64, -- user contact link ID, if connected via "user address"
+    viaGroupLink :: Bool, -- whether contact connected via group link
+    groupLinkId :: Maybe GroupLinkId,
+    xContactId :: Maybe XContactId,
+    customUserProfileId :: Maybe Int64,
+    connType :: ConnType,
+    connStatus :: ConnStatus,
+    contactConnInitiated :: Bool,
+    localAlias :: Text,
+    entityId :: Maybe Int64, -- contact, group member, file ID or user contact ID
+    connectionCode :: Maybe SecurityCode,
+    pqSupport :: PQSupport,
+    pqEncryption :: PQEncryption,
+    pqSndEnabled :: Maybe PQEncryption,
+    pqRcvEnabled :: Maybe PQEncryption,
+    authErrCounter :: Int,
+    quotaErrCounter :: Int, -- if exceeds limit messages to group members are created as pending; sending to contacts is unaffected by this
+    createdAt :: UTCTime
+  }
+  deriving (Eq, Show)
+
+dbConnId :: Connection -> Int64
+dbConnId Connection {connId} = connId
+
+connReady :: Connection -> Bool
+connReady Connection {connStatus} = connStatus == ConnReady || connStatus == ConnSndReady
+
+authErrDisableCount :: Int
+authErrDisableCount = 10
+
+connDisabled :: Connection -> Bool
+connDisabled Connection {authErrCounter} = authErrCounter >= authErrDisableCount
+
+quotaErrInactiveCount :: Int
+quotaErrInactiveCount = 5
+
+quotaErrSetOnMERR :: Int
+quotaErrSetOnMERR = 999
+
+connInactive :: Connection -> Bool
+connInactive Connection {quotaErrCounter} = quotaErrCounter >= quotaErrInactiveCount
+
+data SecurityCode = SecurityCode {securityCode :: Text, verifiedAt :: UTCTime}
+  deriving (Eq, Show)
+
+verificationCode :: ByteString -> Text
+verificationCode = T.pack . unwords . chunks 5 . show . os2ip
+  where
+    chunks _ [] = []
+    chunks n xs = let (h, t) = splitAt n xs in h : chunks n t
+
+sameVerificationCode :: Text -> Text -> Bool
+sameVerificationCode c1 c2 = noSpaces c1 == noSpaces c2
+  where
+    noSpaces = T.filter (/= ' ')
+
+-- keys are ordered so both members derive the same code regardless of who computes it
+channelMemberCode :: C.PublicKeyEd25519 -> C.PublicKeyEd25519 -> Text
+channelMemberCode k1 k2 =
+  let (lo, hi) = if b1 <= b2 then (b1, b2) else (b2, b1)
+   in verificationCode $ C.sha256Hash (lo <> hi)
+  where
+    b1 = C.pubKeyBytes k1
+    b2 = C.pubKeyBytes k2
+
+aConnId :: Connection -> ConnId
+aConnId Connection {agentConnId = AgentConnId cId} = cId
+
+connIncognito :: Connection -> Bool
+connIncognito Connection {customUserProfileId} = isJust customUserProfileId
+
+connPQEnabled :: Connection -> PQEncryption
+connPQEnabled Connection {pqSndEnabled = Just (PQEncryption s), pqRcvEnabled = Just (PQEncryption r)} = PQEncryption $ s && r
+connPQEnabled _ = PQEncOff
+
+data PendingContactConnection = PendingContactConnection
+  { pccConnId :: Int64,
+    pccAgentConnId :: AgentConnId,
+    pccConnStatus :: ConnStatus,
+    viaContactUri :: Bool, -- whether connection was created via contact request to a contact link
+    viaUserContactLink :: Maybe Int64,
+    groupLinkId :: Maybe GroupLinkId,
+    customUserProfileId :: Maybe Int64,
+    connLinkInv :: Maybe CreatedLinkInvitation,
+    localAlias :: Text,
+    createdAt :: UTCTime,
+    updatedAt :: UTCTime
+  }
+  deriving (Eq, Show)
+
+mkPendingContactConnection :: Connection -> Maybe CreatedLinkInvitation -> PendingContactConnection
+mkPendingContactConnection Connection {connId, agentConnId, connStatus, xContactId, viaUserContactLink, groupLinkId, customUserProfileId, localAlias, createdAt} connLinkInv =
+  PendingContactConnection
+  { pccConnId = connId,
+    pccAgentConnId = agentConnId,
+    pccConnStatus = connStatus,
+    viaContactUri = isJust xContactId,
+    viaUserContactLink,
+    groupLinkId,
+    customUserProfileId,
+    connLinkInv,
+    localAlias,
+    createdAt,
+    updatedAt = createdAt
+  }
+
+aConnId' :: PendingContactConnection -> ConnId
+aConnId' PendingContactConnection {pccAgentConnId = AgentConnId cId} = cId
+
+data ConnStatus
+  = -- | connection is created by initiating party with agent NEW command (createConnection)
+    ConnNew
+  | -- | connection is prepared, to avoid changing keys on invitation links when retrying.
+    ConnPrepared
+  | -- | connection is joined by joining party with agent JOIN command (joinConnection)
+    ConnJoined
+  | -- | initiating party received CONF notification (to be renamed to REQ)
+    ConnRequested
+  | -- | initiating party accepted connection with agent LET command (to be renamed to ACPT) (allowConnection)
+    ConnAccepted
+  | -- | connection can be sent messages to (after joining party received INFO notification, or after securing snd queue on join)
+    ConnSndReady
+  | -- | connection is ready for both parties to send and receive messages
+    ConnReady
+  | -- | connection deleted
+    ConnDeleted
+  | -- | connection had a permanent error during handshake
+    ConnFailed {connError :: Text}
+  deriving (Eq, Show, Read)
+
+instance FromField ConnStatus where fromField = fromTextField_ textDecode
+
+instance ToField ConnStatus where toField = toField . textEncode
+
+instance TextEncoding ConnStatus where
+  textDecode = \case
+    "new" -> Just ConnNew
+    "prepared" -> Just ConnPrepared
+    "joined" -> Just ConnJoined
+    "requested" -> Just ConnRequested
+    "accepted" -> Just ConnAccepted
+    "snd-ready" -> Just ConnSndReady
+    "ready" -> Just ConnReady
+    "deleted" -> Just ConnDeleted
+    s | Just err <- T.stripPrefix "failed " s -> Just (ConnFailed err)
+    _ -> Nothing
+  textEncode = \case
+    ConnNew -> "new"
+    ConnPrepared -> "prepared"
+    ConnJoined -> "joined"
+    ConnRequested -> "requested"
+    ConnAccepted -> "accepted"
+    ConnSndReady -> "snd-ready"
+    ConnReady -> "ready"
+    ConnDeleted -> "deleted"
+    ConnFailed err -> "failed " <> err
+
+isConnFailed :: ConnStatus -> Bool
+isConnFailed = \case
+  ConnFailed {} -> True
+  _ -> False
+
+data ConnType = ConnContact | ConnMember | ConnUserContact
+  deriving (Eq, Show)
+
+instance FromField ConnType where fromField = fromTextField_ textDecode
+
+instance ToField ConnType where toField = toField . textEncode
+
+instance FromJSON ConnType where
+  parseJSON = textParseJSON "ConnType"
+
+instance ToJSON ConnType where
+  toJSON = J.String . textEncode
+  toEncoding = JE.text . textEncode
+
+instance TextEncoding ConnType where
+  textDecode = \case
+    "contact" -> Just ConnContact
+    "member" -> Just ConnMember
+    "user_contact" -> Just ConnUserContact
+    _ -> Nothing
+  textEncode = \case
+    ConnContact -> "contact"
+    ConnMember -> "member"
+    ConnUserContact -> "user_contact"
+
+type CommandId = Int64
+
+aCorrId :: CommandId -> ACorrId
+aCorrId = pack . show
+
+commandId :: ACorrId -> String
+commandId = unpack
+
+data CommandStatus
+  = CSCreated
+  | CSCompleted -- unused - was replaced with deleteCommand
+  | CSError -- internal command error, e.g. not matching connection id or unexpected response, not related to agent message ERR
+  deriving (Show)
+
+instance FromField CommandStatus where fromField = fromTextField_ textDecode
+
+instance ToField CommandStatus where toField = toField . textEncode
+
+instance TextEncoding CommandStatus where
+  textDecode = \case
+    "created" -> Just CSCreated
+    "completed" -> Just CSCompleted
+    "error" -> Just CSError
+    _ -> Nothing
+  textEncode = \case
+    CSCreated -> "created"
+    CSCompleted -> "completed"
+    CSError -> "error"
+
+data CommandFunction
+  = CFCreateConnGrpMemInv
+  | CFCreateConnGrpInv -- deprecated
+  | CFCreateConnFileInvDirect -- deprecated
+  | CFCreateConnFileInvGroup -- deprecated
+  | CFJoinConn
+  | CFAllowConn
+  | CFAcceptContact
+  | CFAckMessage -- not used
+  | CFDeleteConn -- not used
+  | CFSetShortLink
+  | CFGetRelayDataJoin
+  | CFGetRelayDataAccept
+  deriving (Eq, Show)
+
+instance FromField CommandFunction where fromField = fromTextField_ textDecode
+
+instance ToField CommandFunction where toField = toField . textEncode
+
+instance TextEncoding CommandFunction where
+  textDecode = \case
+    "create_conn" -> Just CFCreateConnGrpMemInv
+    "create_conn_grp_inv" -> Just CFCreateConnGrpInv
+    "create_conn_file_inv_direct" -> Just CFCreateConnFileInvDirect
+    "create_conn_file_inv_group" -> Just CFCreateConnFileInvGroup
+    "join_conn" -> Just CFJoinConn
+    "allow_conn" -> Just CFAllowConn
+    "accept_contact" -> Just CFAcceptContact
+    "ack_message" -> Just CFAckMessage
+    "delete_conn" -> Just CFDeleteConn
+    "set_short_link" -> Just CFSetShortLink
+    "get_relay_data_join" -> Just CFGetRelayDataJoin
+    "get_relay_data_accept" -> Just CFGetRelayDataAccept
+    _ -> Nothing
+  textEncode = \case
+    CFCreateConnGrpMemInv -> "create_conn"
+    CFCreateConnGrpInv -> "create_conn_grp_inv"
+    CFCreateConnFileInvDirect -> "create_conn_file_inv_direct"
+    CFCreateConnFileInvGroup -> "create_conn_file_inv_group"
+    CFJoinConn -> "join_conn"
+    CFAllowConn -> "allow_conn"
+    CFAcceptContact -> "accept_contact"
+    CFAckMessage -> "ack_message"
+    CFDeleteConn -> "delete_conn"
+    CFSetShortLink -> "set_short_link"
+    CFGetRelayDataJoin -> "get_relay_data_join"
+    CFGetRelayDataAccept -> "get_relay_data_accept"
+
+commandExpectedResponse :: CommandFunction -> AEvtTag
+commandExpectedResponse = \case
+  CFCreateConnGrpMemInv -> t INV_
+  CFCreateConnGrpInv -> t INV_
+  CFCreateConnFileInvDirect -> t INV_
+  CFCreateConnFileInvGroup -> t INV_
+  CFJoinConn -> t JOINED_
+  CFAllowConn -> t OK_
+  CFAcceptContact -> t JOINED_
+  CFAckMessage -> t OK_
+  CFDeleteConn -> t OK_
+  CFSetShortLink -> t LINK_
+  CFGetRelayDataJoin -> t LDATA_
+  CFGetRelayDataAccept -> t LDATA_
+  where
+    t = AEvtTag SAEConn
+
+data CommandData = CommandData
+  { cmdId :: CommandId,
+    cmdConnId :: Maybe Int64,
+    cmdFunction :: CommandFunction,
+    cmdStatus :: CommandStatus
+  }
+  deriving (Show)
+
+data ChatTag = ChatTag
+  { chatTagId :: Int64,
+    chatTagText :: Text,
+    chatTagEmoji :: Maybe Text
+  }
+  deriving (Show)
+
+-- ad-hoc type for data required for XGrpMemIntro continuation
+data XGrpMemIntroCont = XGrpMemIntroCont
+  { groupId :: GroupId,
+    groupMemberId :: GroupMemberId,
+    memberId :: MemberId,
+    groupConnReq :: ConnReqInvitation
+  }
+  deriving (Show)
+
+-- | Entity for local chats
+data NoteFolder = NoteFolder
+  { noteFolderId :: NoteFolderId,
+    userId :: UserId,
+    createdAt :: UTCTime,
+    updatedAt :: UTCTime,
+    chatTs :: UTCTime,
+    favorite :: Bool,
+    unread :: Bool
+  }
+  deriving (Eq, Show)
+
+type NoteFolderId = Int64
+
+data ChatVersion
+
+instance VersionScope ChatVersion
+
+type VersionChat = Version ChatVersion
+
+type VersionRangeChat = VersionRange ChatVersion
+
+-- | Store-wide context passed to store functions in place of the bare `vr`
+-- parameter. Built from config by storeCxt; more fields are added here over time.
+data StoreCxt = StoreCxt {vr :: VersionRangeChat, badgeKeys :: Map Int BBSPublicKey, drg :: TVar ChaChaDRG}
+
+pattern VersionChat :: Word16 -> VersionChat
+pattern VersionChat v = Version v
+
+-- A monotonic per-change counter, not a negotiated protocol version: Int64 rather than the Word16 of
+-- Version, so a long-lived high-churn channel cannot wrap and be permanently rejected by relays (v >= cur).
+newtype VersionRoster = VersionRoster Int64
+  deriving (Eq, Ord, Show)
+  deriving newtype (FromJSON, ToJSON, FromField, ToField)
+
+-- this newtype exists to have a concise JSON encoding of version ranges in chat protocol messages in the form of "1-2" or just "1"
+newtype ChatVersionRange = ChatVersionRange {fromChatVRange :: VersionRangeChat} deriving (Eq, Show)
+
+-- TODO v6.0 review
+peerConnChatVersion :: VersionRangeChat -> VersionRangeChat -> VersionChat
+peerConnChatVersion _local@(VersionRange lmin lmax) _peer@(VersionRange rmin rmax)
+  | lmin <= rmax && rmin <= lmax = min lmax rmax -- compatible
+  | rmin > lmax = rmin
+  | otherwise = rmax
+
+initialChatVersion :: VersionChat
+initialChatVersion = VersionChat 9
+
+chatInitialVRange :: VersionRangeChat
+chatInitialVRange = versionToRange initialChatVersion
+
+instance FromJSON ChatVersionRange where
+  parseJSON v = ChatVersionRange <$> strParseJSON "ChatVersionRange" v
+
+instance ToJSON ChatVersionRange where
+  toJSON (ChatVersionRange vr) = strToJSON vr
+  toEncoding (ChatVersionRange vr) = strToJEncoding vr
+
+-- This type is needed for backward compatibility of new remote controller with old remote host.
+-- See CONTRIBUTING.md
+newtype BoolDef = BoolDef {isTrue :: Bool}
+  deriving newtype (Eq, Show, ToJSON)
+
+instance FromJSON BoolDef where
+  parseJSON v = BoolDef <$> parseJSON v
+  omittedField = Just (BoolDef False)
+
+$(JQ.deriveJSON defaultJSON ''UserContact)
+
+$(JQ.deriveJSON defaultJSON ''Profile)
+
+$(JQ.deriveJSON defaultJSON ''LocalProfile)
+
+$(JQ.deriveJSON defaultJSON ''UserContactRequest)
+
+$(JQ.deriveJSON (enumJSON $ dropPrefix "MC") {J.tagSingleConstructors = True} ''MemberCriteria)
+
+$(JQ.deriveJSON defaultJSON ''GroupMemberAdmission)
+
+instance ToField GroupMemberAdmission where
+  toField = toField . encodeJSON
+
+instance FromField GroupMemberAdmission where
+  fromField = fromTextField_ decodeJSON
+
+instance FromJSON GroupType where
+  parseJSON = textParseJSON "GroupType"
+
+instance ToJSON GroupType where
+  toJSON = textToJSON
+  toEncoding = textToEncoding
+
+$(JQ.deriveJSON defaultJSON ''PublicGroupAccess)
+
+$(JQ.deriveJSON defaultJSON ''PublicGroupProfile)
+
+$(JQ.deriveJSON defaultJSON ''GroupProfile)
+
+$(JQ.deriveJSON (sumTypeJSON $ dropPrefix "IB") ''InvitedBy)
+
+$(JQ.deriveJSON defaultJSON ''GroupMemberSettings)
+
+$(JQ.deriveJSON defaultJSON ''SecurityCode)
+
+$(JQ.deriveJSON (sumTypeJSON $ dropPrefix "Conn") ''ConnStatus)
+
+$(JQ.deriveJSON defaultJSON ''Connection)
+
+$(JQ.deriveJSON defaultJSON ''PendingContactConnection)
+
+$(JQ.deriveJSON defaultJSON ''GroupSupportChat)
+
+$(JQ.deriveJSON defaultJSON ''GroupMember)
+
+$(JQ.deriveJSON (enumJSON $ dropPrefix "MF") ''MsgFilter)
+
+$(JQ.deriveJSON defaultJSON ''ChatSettings)
+
+$(JQ.deriveJSON (enumJSON $ dropPrefix "BC") ''BusinessChatType)
+
+$(JQ.deriveJSON defaultJSON ''BusinessChatInfo)
+
+$(JQ.deriveJSON defaultJSON ''PreparedGroup)
+
+$(JQ.deriveToJSON defaultJSON ''GroupSummary)
+
+instance FromJSON GroupSummary where
+  parseJSON = $(JQ.mkParseJSON defaultJSON ''GroupSummary)
+  omittedField = Just GroupSummary {currentMembers = 0, publicMemberCount = Nothing}
+
+$(JQ.deriveJSON defaultJSON ''GroupInfo)
+
+$(JQ.deriveJSON defaultJSON ''Group)
+
+$(JQ.deriveJSON defaultJSON ''GroupLink)
+
+instance FromField MsgFilter where fromField = fromIntField_ msgFilterIntP
+
+instance ToField MsgFilter where toField = toField . msgFilterInt
+
+$(JQ.deriveJSON defaultJSON ''CReqClientData)
+
+$(JQ.deriveJSON defaultJSON ''MemberIdRole)
+
+$(JQ.deriveJSON defaultJSON ''MemberInfo)
+
+$(JQ.deriveJSON defaultJSON ''GroupInvitation)
+
+$(JQ.deriveJSON defaultJSON ''GroupLinkInvitation)
+
+$(JQ.deriveJSON defaultJSON ''GroupLinkRejection)
+
+$(JQ.deriveJSON defaultJSON ''GroupRelayInvitation)
+
+$(JQ.deriveJSON defaultJSON ''IntroInvitation)
+
+$(JQ.deriveJSON defaultJSON ''MemberRestrictions)
+
+$(JQ.deriveJSON defaultJSON ''GroupMemberRef)
+
+$(JQ.deriveJSON defaultJSON ''FileDescr)
+
+$(JQ.deriveJSON defaultJSON ''FileProhibited)
+
+$(JQ.deriveJSON defaultJSON ''FileInvitation)
+
+$(JQ.deriveJSON defaultJSON ''SndFileTransfer)
+
+$(JQ.deriveJSON defaultJSON ''RcvFileDescr)
+
+$(JQ.deriveJSON defaultJSON ''XFTPRcvFile)
+
+$(JQ.deriveJSON (sumTypeJSON $ dropPrefix "RFS") ''RcvFileStatus)
+
+$(JQ.deriveJSON defaultJSON ''RcvFileTransfer)
+
+$(JQ.deriveJSON defaultJSON ''XFTPSndFile)
+
+$(JQ.deriveJSON defaultJSON ''FileTransferMeta)
+
+$(JQ.deriveJSON defaultJSON ''PreparedContact)
+
+$(JQ.deriveJSON defaultJSON ''UserContactRequestRef)
+
+$(JQ.deriveJSON defaultJSON ''GroupDirectInvitation)
+
+$(JQ.deriveJSON defaultJSON ''LocalFileMeta)
+
+$(JQ.deriveJSON (sumTypeJSON $ dropPrefix "FT") ''FileTransfer)
+
+$(JQ.deriveJSON defaultJSON ''UserPwdHash)
+
+$(JQ.deriveJSON defaultJSON ''User)
+
+$(JQ.deriveJSON defaultJSON ''NewUser)
+
+$(JQ.deriveJSON defaultJSON ''UserInfo)
+
+$(JQ.deriveJSON defaultJSON ''Contact)
+
+$(JQ.deriveJSON defaultJSON ''ContactRef)
+
+$(JQ.deriveJSON defaultJSON ''NoteFolder)
+
+$(JQ.deriveJSON defaultJSON ''ChatTag)

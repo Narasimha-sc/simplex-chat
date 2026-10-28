@@ -1,0 +1,570 @@
+{-# LANGUAGE ApplicativeDo #-}
+{-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+
+module Simplex.Chat.Options
+  ( ChatOpts (..),
+    CoreChatOpts (..),
+    CreateBotOpts (..),
+    ChatCmdLog (..),
+    chatOptsP,
+    coreChatOptsP,
+    getChatOpts,
+    protocolServersP,
+    defaultHostMode,
+    printDbOpts,
+  )
+where
+
+import Control.Logger.Simple (LogLevel (..))
+import qualified Data.Attoparsec.ByteString.Char8 as A
+import qualified Data.ByteString.Char8 as B
+import Data.Maybe (fromMaybe, isJust, isNothing)
+import Data.Text (Text)
+import qualified Data.Text as T
+import Data.Text.Encoding (encodeUtf8)
+import Numeric.Natural (Natural)
+import Options.Applicative
+import Simplex.Chat.Controller (ChatLogLevel (..), SimpleNetCfg (..), WebPreviewConfig (..), updateStr, versionNumber, versionString)
+import Simplex.FileTransfer.Description (mb)
+import Simplex.Messaging.Client (HostMode (..), SMPWebPortServers (..), SocksMode (..), textToHostMode)
+import Simplex.Messaging.Encoding.String
+import Simplex.Messaging.Parsers (parseAll)
+import Simplex.Messaging.Protocol (ProtoServerWithAuth, ProtocolTypeI, SMPServerWithAuth, XFTPServerWithAuth)
+import Simplex.Messaging.Transport.Client (SocksProxyWithAuth (..), SocksAuth (..), defaultSocksProxyWithAuth)
+import Simplex.Chat.Options.DB
+
+data ChatOpts = ChatOpts
+  { coreOptions :: CoreChatOpts,
+    chatCmd :: String,
+    chatCmdDelay :: Int,
+    chatCmdLog :: ChatCmdLog,
+    chatServerPort :: Maybe String,
+    optFilesFolder :: Maybe FilePath,
+    optTempDirectory :: Maybe FilePath,
+    showReactions :: Bool,
+    showFullLinks :: Bool,
+    allowInstantFiles :: Bool,
+    autoAcceptFileSize :: Integer,
+    muteNotifications :: Bool,
+    markRead :: Bool,
+    createBot :: Maybe CreateBotOpts,
+    userDisplayName :: Maybe Text,
+    userImageFile :: Maybe FilePath
+  }
+
+data CoreChatOpts = CoreChatOpts
+  { dbOptions :: ChatDbOpts,
+    smpServers :: [SMPServerWithAuth],
+    xftpServers :: [XFTPServerWithAuth],
+    simpleNetCfg :: SimpleNetCfg,
+    logLevel :: ChatLogLevel,
+    logConnections :: Bool,
+    logServerHosts :: Bool,
+    logAgent :: Maybe LogLevel,
+    logFile :: Maybe FilePath,
+    tbqSize :: Natural,
+    maxChats :: Int,
+    deviceName :: Maybe Text,
+    chatRelay :: Bool,
+    webPreviewConfig :: Maybe WebPreviewConfig,
+    chatRelayServer :: Maybe SMPServerWithAuth,
+    headless :: Bool,
+    highlyAvailable :: Bool,
+    yesToUpMigrations :: Bool,
+    migrationBackupPath :: Maybe FilePath,
+    maintenance :: Bool    
+  }
+
+data CreateBotOpts = CreateBotOpts
+  { botDisplayName :: Text,
+    allowFiles :: Bool,
+    clientService :: Bool
+  }
+
+data ChatCmdLog = CCLAll | CCLMessages | CCLNone
+  deriving (Eq)
+
+agentLogLevel :: ChatLogLevel -> LogLevel
+agentLogLevel = \case
+  CLLDebug -> LogDebug
+  CLLInfo -> LogInfo
+  CLLWarning -> LogWarn
+  CLLError -> LogError
+  CLLImportant -> LogInfo
+
+coreChatOptsP :: FilePath -> FilePath -> Parser CoreChatOpts
+coreChatOptsP appDir defaultDbName = do
+  dbOptions <- chatDbOptsP appDir defaultDbName
+  smpServers <-
+    option
+      parseProtocolServers
+      ( long "server"
+          <> short 's'
+          <> metavar "SERVER"
+          <> help
+            ( ("Space-separated list of SMP server(s) to use (each server can have more than one hostname)." <> "\n")
+                <> ("If you pass multiple servers, surround the entire list in quotes." <> "\n")
+                <> "Examples: smp1.example.com, \"smp1.example.com smp2.example.com smp3.example.com\""
+            )
+          <> value []
+      )
+  xftpServers <-
+    option
+      parseProtocolServers
+      ( long "xftp-server"
+          <> metavar "SERVER"
+          <> help
+            ( ("Space-separated list of XFTP server(s) to use (each server can have more than one hostname)." <> "\n")
+                <> ("If you pass multiple servers, surround the entire list in quotes." <> "\n")
+                <> "Examples: xftp1.example.com, \"xftp1.example.com xftp2.example.com xftp3.example.com\""
+            )
+          <> value []
+      )
+  socksProxy <-
+    flag' (Just defaultSocksProxyWithAuth) (short 'x' <> help "Use local SOCKS5 proxy at :9050")
+      <|> option
+        strParse
+        ( long "socks-proxy"
+            <> metavar "SOCKS5"
+            <> help "Use SOCKS5 proxy at `ipv4:port` or `:port`"
+            <> value Nothing
+        )
+  socksMode <-
+    option
+      strParse
+      ( long "socks-mode"
+          <> metavar "SOCKS_MODE"
+          <> help "Use SOCKS5 proxy: always (default), onion (with onion-only relays)"
+          <> value SMAlways
+      )
+  hostMode_ <-
+    optional $
+      option
+        parseHostMode
+        ( long "host-mode"
+            <> metavar "HOST_MODE"
+            <> help "Preferred server host type: onion (when SOCKS proxy with isolate-by-auth is used), public"
+        )
+  requiredHostMode <-
+    switch
+      ( long "required-host-mode"
+          <> help "Refuse connection if preferred server host type is not available"
+      )
+  smpProxyMode_ <-
+    optional $
+      option
+        strParse
+        ( long "smp-proxy"
+            <> metavar "SMP_PROXY_MODE"
+            <> help "Use private message routing: always, unknown (default), unprotected, never"
+        )
+  smpProxyFallback_ <-
+    optional $
+      option
+        strParse
+        ( long "smp-proxy-fallback"
+            <> metavar "SMP_PROXY_FALLBACK_MODE"
+            <> help "Allow downgrade and connect directly: no, [when IP address is] protected (default), yes"
+        )
+  smpWebPortServers <-
+    flag' SWPAll
+      ( long "smp-web-port"
+          <> help "Use port 443 with SMP servers when not specified"
+      )
+      <|> option
+        strParse
+          ( long "smp-web-port-servers"
+              <> help "Use port 443 with SMP servers when not specified: all, preset (default), off"
+              <> value SWPPreset
+          )
+  t <-
+    option
+      auto
+      ( long "tcp-timeout"
+          <> metavar "TIMEOUT"
+          <> help "TCP timeout, seconds (default: 7/15 without/with SOCKS5 proxy)"
+          <> value 0
+      )
+  logLevel <-
+    option
+      parseLogLevel
+      ( long "log-level"
+          <> short 'l'
+          <> metavar "LEVEL"
+          <> help "Log level: debug, info, warn, error, important (default)"
+          <> value CLLImportant
+      )
+  logTLSErrors <-
+    switch
+      ( long "log-tls-errors"
+          <> help "Log TLS errors"
+      )
+  logConnections <-
+    switch
+      ( long "connections"
+          <> short 'c'
+          <> help "Log connections subscription errors on start (also with `-l info`)"
+      )
+  logServerHosts <-
+    switch
+      ( long "log-hosts"
+          <> help "Log connections to servers (also with `-l info`)"
+      )
+  logAgent <-
+    switch
+      ( long "log-agent"
+          <> help "Enable logs from SMP agent (also with `-l debug`)"
+      )
+  logFile <-
+    optional $
+      strOption
+        ( long "log-file"
+            <> help "Log to specified file / device"
+        )
+  tbqSize <-
+    option
+      auto
+      ( long "queue-size"
+          <> short 'q'
+          <> metavar "SIZE"
+          <> help "Internal queue size"
+          <> value 1024
+          <> showDefault
+      )
+  maxChats <-
+    option
+      auto
+      ( long "max-chats"
+          <> metavar "COUNT"
+          <> help "Max number of chats loaded by chat list API"
+          <> value 5000
+          <> showDefault
+      )
+  deviceName <-
+    optional $
+      strOption
+        ( long "device-name"
+            <> metavar "DEVICE"
+            <> help "Device name to use in connections with remote hosts and controller"
+        )
+  chatRelay <-
+    switch
+      ( long "relay"
+          <> help "Run as a chat relay client"
+      )
+  webPreviewConfig <- do
+    webDomain_ <-
+      optional $
+        strOption
+          ( long "relay-web-domain"
+              <> metavar "DOMAIN"
+              <> help "Domain for channel web previews (relay only)"
+          )
+    webJsonDir_ <-
+      optional $
+        strOption
+          ( long "relay-web-dir"
+              <> metavar "DIR"
+              <> help "Directory for channel web preview JSON files (relay only)"
+          )
+    webCorsFile <-
+      optional $
+        strOption
+          ( long "relay-web-cors-file"
+              <> metavar "FILE"
+              <> help "Path to generated Caddy CORS config file (relay only)"
+          )
+    webUpdateInterval <-
+      option auto
+        ( long "relay-web-interval"
+            <> metavar "SECONDS"
+            <> help "Interval between web preview regeneration in seconds (relay only)"
+            <> value 300
+        )
+    webPreviewItemCount <-
+      option auto
+        ( long "relay-web-item-count"
+            <> metavar "COUNT"
+            <> help "Number of recent messages in channel web preview (relay only)"
+            <> value 50
+        )
+    pure $ case (webDomain_, webJsonDir_) of
+      (Just webDomain, Just webJsonDir) -> Just WebPreviewConfig {webDomain, webJsonDir, webCorsFile, webUpdateInterval, webPreviewItemCount}
+      (Nothing, Nothing) -> Nothing
+      _ -> errorWithoutStackTrace "--relay-web-domain and --relay-web-dir must both be provided"
+  chatRelayServer <-
+    optional $
+      option
+        strParse
+        ( long "relay-address-server"
+            <> metavar "SERVER"
+            <> help "SMP server to use for chat relay address link (requires --relay)"
+        )
+  headless <-
+    switch
+      ( long "headless"
+          <> help "Run chat relay without interactive prompts, e.g. as a service (requires --relay; on first run also --user-display-name to create the profile)"
+      )
+  highlyAvailable <-
+    switch
+      ( long "ha"
+          <> help "Run as a highly available client (this may increase traffic in groups)"
+      )
+  yesToUpMigrations <-
+    switch
+      ( long "yes-migrate"
+          <> short 'y'
+          <> help "Automatically confirm \"up\" database migrations"
+      )
+  migrationBackupPath <- migrationBackupPathP
+  maintenance <-
+    switch
+      ( long "maintenance"
+          <> short 'm'
+          <> help "Run in maintenance mode (/_start to start chat)"
+      )
+  pure
+    CoreChatOpts
+      { dbOptions,
+        smpServers,
+        xftpServers,
+        simpleNetCfg =
+          SimpleNetCfg
+            { socksProxy,
+              socksMode,
+              hostMode = fromMaybe (defaultHostMode socksProxy) hostMode_,
+              requiredHostMode,
+              smpProxyMode_,
+              smpProxyFallback_,
+              smpWebPortServers,
+              tcpTimeout_ = Just $ useTcpTimeout socksProxy t,
+              logTLSErrors
+            },
+        logLevel,
+        logConnections = logConnections || logLevel <= CLLInfo,
+        logServerHosts = logServerHosts || logLevel <= CLLInfo,
+        logAgent = if logAgent || logLevel == CLLDebug then Just $ agentLogLevel logLevel else Nothing,
+        logFile,
+        tbqSize,
+        maxChats,
+        deviceName,
+        chatRelay,
+        webPreviewConfig,
+        chatRelayServer = case chatRelayServer of
+          Just _ | not chatRelay -> errorWithoutStackTrace "--relay-address-server option requires --relay option"
+          _ -> chatRelayServer,
+        headless = case headless of
+          True | not chatRelay -> errorWithoutStackTrace "--headless option requires --relay option"
+          _ -> headless,
+        highlyAvailable,
+        yesToUpMigrations,
+        migrationBackupPath,
+        maintenance
+      }
+  where
+    useTcpTimeout p t = 1000000 * if t > 0 then t else maybe 7 (const 15) p
+
+defaultHostMode :: Maybe SocksProxyWithAuth -> HostMode
+defaultHostMode = \case
+  Just (SocksProxyWithAuth SocksIsolateByAuth _) -> HMOnionViaSocks;
+  _ -> HMPublic
+
+chatOptsP :: FilePath -> FilePath -> Parser ChatOpts
+chatOptsP appDir defaultDbName = do
+  coreOptions <- coreChatOptsP appDir defaultDbName
+  chatCmd <-
+    strOption
+      ( long "execute"
+          <> short 'e'
+          <> metavar "COMMAND"
+          <> help "Execute chat command (received messages won't be logged) and exit"
+          <> value ""
+      )
+  chatCmdDelay <-
+    option
+      auto
+      ( long "time"
+          <> short 't'
+          <> metavar "TIME"
+          <> help "Time to wait after sending chat command before exiting, seconds"
+          <> value 3
+          <> showDefault
+      )
+  chatCmdLog <-
+    option
+      parseChatCmdLog
+      ( long "execute-log"
+          <> metavar "EXEC_LOG"
+          <> help "Log during command execution: all, messages, none (default)"
+          <> value CCLNone
+      )
+  chatServerPort <-
+    option
+      parseServerPort
+      ( long "chat-server-port"
+          <> short 'p'
+          <> metavar "PORT"
+          <> help "Run chat server on specified port"
+          <> value Nothing
+      )
+  optFilesFolder <-
+    optional $
+      strOption
+        ( long "files-folder"
+            <> metavar "FOLDER"
+            <> help "Folder to use for sent and received files"
+        )
+  optTempDirectory <-
+    optional $
+      strOption
+        ( long "temp-folder"
+            <> metavar "FOLDER"
+            <> help "Folder for temporary encrypted files (default: system temp directory)"
+        )
+  showReactions <-
+    switch
+      ( long "reactions"
+          <> help "Show message reactions"
+      )
+  showFullLinks <-
+    switch
+      ( long "show-full-links"
+          <> help "Show full connection links and addresses"
+      )
+  allowInstantFiles <-
+    switch
+      ( long "allow-instant-files"
+          <> short 'f'
+          <> help "Send and receive instant files without acceptance"
+      )
+  autoAcceptFileSize <-
+    flag' (mb 1) (short 'a' <> help "Automatically accept files up to 1MB")
+      <|> option
+        auto
+        ( long "auto-accept-files"
+            <> metavar "FILE_SIZE"
+            <> help "Automatically accept files up to specified size"
+            <> value 0
+        )
+  muteNotifications <-
+    switch
+      ( long "mute"
+          <> help "Mute notifications"
+      )
+  markRead <-
+    switch
+      ( long "mark-read"
+          <> short 'r'
+          <> help "Mark shown messages as read"
+      )
+  createBotDisplayName <-
+    optional $
+      strOption
+        ( long "create-bot-display-name"
+            <> metavar "BOT_NAME"
+            <> help "Create new bot user on the first start with the passed display name"
+        )
+  createBotAllowFiles <-
+    switch
+      ( long "create-bot-allow-files"
+          <> help "Flag for created bot to allow files (only allowed together with --create-bot option)"
+      )
+  createBotClientService <-
+    switch
+      ( long "create-bot-client-service"
+          <> help "Flag for created bot to use client service certificate"
+      )
+  userDisplayName <-
+    optional $
+      strOption
+        ( long "user-display-name"
+            <> metavar "NAME"
+            <> help "Use existing active user with this display name, or create one on the first start (incompatible with --create-bot-display-name)"
+        )
+  userImageFile <-
+    optional $
+      strOption
+        ( long "user-image-file"
+            <> metavar "FILE"
+            <> help "Set user profile image from .png/.jpg/.jpeg file when the profile is created (requires --user-display-name); ignored if the user already exists (use \"/set profile image file <path>\" to change it)"
+        )
+  pure
+    ChatOpts
+      { coreOptions,
+        chatCmd,
+        chatCmdDelay,
+        chatCmdLog,
+        chatServerPort,
+        optFilesFolder,
+        optTempDirectory,
+        showReactions,
+        showFullLinks,
+        allowInstantFiles,
+        autoAcceptFileSize,
+        muteNotifications,
+        markRead,
+        createBot = case createBotDisplayName of
+          Just botDisplayName
+            | isJust userDisplayName -> error "--user-display-name and --create-bot-display-name are mutually exclusive"
+            | otherwise -> Just CreateBotOpts {botDisplayName, allowFiles = createBotAllowFiles, clientService = createBotClientService}
+          Nothing
+            | createBotAllowFiles -> error "--create-bot-allow-files option requires --create-bot-name option"
+            | createBotClientService -> error "--create-bot-client-service option requires --create-bot-name option"
+            | otherwise -> Nothing,
+        userDisplayName,
+        userImageFile = case userImageFile of
+          Just _ | isNothing userDisplayName -> error "--user-image-file option requires --user-display-name option"
+          _ -> userImageFile
+      }
+
+parseProtocolServers :: ProtocolTypeI p => ReadM [ProtoServerWithAuth p]
+parseProtocolServers = eitherReader $ parseAll protocolServersP . B.pack
+
+strParse :: StrEncoding a => ReadM a
+strParse = eitherReader $ parseAll strP . encodeUtf8 . T.pack
+
+parseHostMode :: ReadM HostMode
+parseHostMode = eitherReader $ textToHostMode . T.pack
+
+parseServerPort :: ReadM (Maybe String)
+parseServerPort = eitherReader $ parseAll serverPortP . B.pack
+
+serverPortP :: A.Parser (Maybe String)
+serverPortP = Just . B.unpack <$> A.takeWhile A.isDigit
+
+protocolServersP :: ProtocolTypeI p => A.Parser [ProtoServerWithAuth p]
+protocolServersP = strP `A.sepBy1` A.char ' '
+
+parseLogLevel :: ReadM ChatLogLevel
+parseLogLevel = eitherReader $ \case
+  "debug" -> Right CLLDebug
+  "info" -> Right CLLInfo
+  "warn" -> Right CLLWarning
+  "error" -> Right CLLError
+  "important" -> Right CLLImportant
+  _ -> Left "Invalid log level"
+
+parseChatCmdLog :: ReadM ChatCmdLog
+parseChatCmdLog = eitherReader $ \case
+  "all" -> Right CCLAll
+  "messages" -> Right CCLMessages
+  "none" -> Right CCLNone
+  _ -> Left "Invalid chat command log level"
+
+getChatOpts :: FilePath -> FilePath -> IO ChatOpts
+getChatOpts appDir defaultDbName =
+  execParser $
+    info
+      (helper <*> versionOption <*> chatOptsP appDir defaultDbName)
+      (header versionStr <> fullDesc <> progDesc "Start chat with DB_FILE file and use SERVER as SMP server")
+  where
+    versionStr = versionString versionNumber
+    versionOption = infoOption versionAndUpdate (long "version" <> short 'v' <> help "Show version")
+    versionAndUpdate = versionStr <> "\n" <> updateStr
+
+printDbOpts :: CoreChatOpts -> IO ()
+printDbOpts opts = putStrLn $ "db: " <> dbString (dbOptions opts)

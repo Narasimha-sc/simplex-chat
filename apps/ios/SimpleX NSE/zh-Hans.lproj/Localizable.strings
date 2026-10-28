@@ -1,0 +1,15 @@
+/* notification body */
+"%d new events" = "%d条新事件";
+
+/* notification body */
+"From %d chat(s)" = "来自 %d 条聊天";
+
+/* notification body */
+"From: %@" = "来自： %@";
+
+/* notification */
+"New events" = "新事件";
+
+/* notification */
+"New messages" = "新消息";
+

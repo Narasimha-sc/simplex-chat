@@ -1,0 +1,149 @@
+package chat.simplex.common.views.helpers
+
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.border
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.*
+import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.*
+import androidx.compose.ui.graphics.*
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.unit.*
+import chat.simplex.common.model.*
+import chat.simplex.common.ui.theme.*
+import chat.simplex.common.model.FormattedText
+import chat.simplex.common.platform.*
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.serialization.Serializable
+import java.lang.Exception
+
+@Composable
+fun TextEditor(
+  value: MutableState<String>,
+  modifier: Modifier,
+  placeholder: String? = null,
+  contentPadding: PaddingValues = PaddingValues(horizontal = DEFAULT_PADDING),
+  shape: Shape = RoundedCornerShape(14.dp),
+  isValid: (String) -> Boolean = { true },
+  focusRequester: FocusRequester? = null,
+  enabled: Boolean = true,
+  maxLines: Int = 5
+) {
+  var valid by rememberSaveable { mutableStateOf(true) }
+  var focused by rememberSaveable { mutableStateOf(false) }
+  val strokeColor by remember {
+    derivedStateOf {
+      if (valid) {
+        if (focused) {
+          CurrentColors.value.colors.secondary.copy(alpha = 0.6f)
+        } else {
+          CurrentColors.value.colors.secondary.copy(alpha = 0.3f)
+        }
+      } else Color.Red
+    }
+  }
+  Box(
+    Modifier
+      .fillMaxWidth()
+      .padding(contentPadding)
+      .heightIn(min = 52.dp)
+      .border(border = BorderStroke(1.dp, strokeColor), shape = shape),
+    contentAlignment = Alignment.Center,
+  ) {
+    val textFieldModifier = modifier
+      .fillMaxWidth()
+      .onFocusChanged { focused = it.isFocused }
+      .padding(10.dp)
+
+    BasicTextField(
+      value = value.value,
+      onValueChange = { value.value = it },
+      modifier = if (focusRequester == null) textFieldModifier else textFieldModifier.focusRequester(focusRequester),
+      enabled = enabled,
+      textStyle = MaterialTheme.typography.body1.copy(color = MaterialTheme.colors.onBackground, lineHeight = 22.sp),
+      keyboardOptions = KeyboardOptions(
+        capitalization = KeyboardCapitalization.None,
+        autoCorrect = false
+      ),
+      singleLine = false,
+      maxLines = maxLines,
+      cursorBrush = SolidColor(MaterialTheme.colors.secondary),
+      decorationBox = @Composable { innerTextField ->
+        TextFieldDefaults.TextFieldDecorationBox(
+          value = value.value,
+          innerTextField = innerTextField,
+          placeholder = if (placeholder != null) {{ Text(placeholder, style = MaterialTheme.typography.body1.copy(color = MaterialTheme.colors.secondary, lineHeight = 22.sp)) }} else null,
+          contentPadding = PaddingValues(),
+          label = null,
+          visualTransformation = VisualTransformation.None,
+          leadingIcon = null,
+          trailingIcon = null,
+          singleLine = false,
+          enabled = enabled,
+          isError = false,
+          interactionSource = remember { MutableInteractionSource() },
+          colors = TextFieldDefaults.textFieldColors(backgroundColor = Color.Unspecified)
+        )
+      }
+    )
+  }
+  LaunchedEffect(Unit) {
+    snapshotFlow { value.value }
+      .distinctUntilChanged()
+      .collect {
+        valid = isValid(it)
+      }
+  }
+}
+
+@Composable
+fun PlainTextEditor(
+  value: MutableState<String>,
+  placeholder: String? = null,
+  singleLine: Boolean = true,
+  contentPadding: PaddingValues = PaddingValues(horizontal = DEFAULT_PADDING, vertical = 12.dp),
+  focusRequester: FocusRequester? = null
+) {
+  BasicTextField(
+    value = value.value,
+    onValueChange = { value.value = it },
+    modifier = Modifier.fillMaxWidth()
+      .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
+      .padding(contentPadding),
+    textStyle = MaterialTheme.typography.body1.copy(color = MaterialTheme.colors.onBackground),
+    singleLine = singleLine,
+    cursorBrush = SolidColor(MaterialTheme.colors.secondary),
+    decorationBox = { innerTextField ->
+      if (value.value.isEmpty() && placeholder != null) {
+        Text(placeholder, style = MaterialTheme.typography.body1.copy(color = MaterialTheme.colors.secondary))
+      }
+      innerTextField()
+    }
+  )
+}
+
+@Serializable
+data class ParsedFormattedText(
+  val formattedText: List<FormattedText>? = null,
+  val markdownBlocks: List<MarkdownBlock>? = null
+)
+
+fun parseToMarkdown(text: String): List<FormattedText>? = parseToMarkdownText(text)?.formattedText
+
+fun parseToMarkdownText(text: String): ParsedFormattedText? {
+  val formatted = chatParseMarkdown(text)
+  return try {
+    json.decodeFromString(ParsedFormattedText.serializer(), formatted)
+  } catch (e: Exception) {
+    Log.e(TAG, "Failed to parse into markdown: " + e.stackTraceToString())
+    null
+  }
+}

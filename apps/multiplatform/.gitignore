@@ -1,0 +1,23 @@
+*.iml
+.gradle
+.kotlin
+/local.properties
+/.idea
+!/.idea/codeStyles/*
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+common/src/commonMain/cpp/android/libs/
+common/src/commonMain/cpp/desktop/libs/
+android/build
+android/release
+common/build
+desktop/build
+external/nanohttpd/build
+release
+
+# Generated SimpleX assets
+common/src/commonMain/resources/assets/simplex/

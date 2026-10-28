@@ -1,0 +1,1474 @@
+{-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE PostfixOperators #-}
+{-# OPTIONS_GHC -fno-warn-ambiguous-fields #-}
+
+module ChatTests.Files where
+
+import ChatClient
+import ChatTests.DBUtils
+import ChatTests.Profiles (addTestBadge, futureDate, issueTestBadge, issueTestBadgeType, testBadgeKeys)
+import ChatTests.Utils
+import Control.Concurrent (threadDelay)
+import Control.Concurrent.Async (concurrently_)
+import Control.Logger.Simple
+import Control.Monad.Except (runExceptT)
+import Control.Monad.Reader (runReaderT)
+import qualified Data.Aeson as J
+import qualified Data.ByteString.Char8 as B
+import qualified Data.ByteString.Lazy.Char8 as LB
+import Network.HTTP.Types.URI (urlEncode)
+import Data.Time.Clock (addUTCTime, getCurrentTime, nominalDay)
+import Simplex.Chat.Badges (BadgeProof, BadgeStatus (..), BadgeType (..), FileSizeLimits (..), ProofPresHeader (..), badgeProof, defaultFileSizeLimits)
+import Simplex.Chat.Controller (ChatConfig (..))
+import Simplex.Chat.Library.Internal (badgeProofStatus, roundedFDCount)
+import Simplex.Chat.Mobile.File
+import Simplex.Chat.Options (ChatOpts (..))
+import Simplex.FileTransfer.Server.Env (XFTPServerConfig (..), XFTPStoreConfig (..))
+import Simplex.Messaging.Crypto.BBS (BBSPublicKey, bbsKeyGen)
+import Simplex.Messaging.Crypto.File (CryptoFile (..), CryptoFileArgs (..))
+import Simplex.Messaging.Encoding.String
+import System.Directory (copyFile, createDirectoryIfMissing, doesFileExist, getFileSize)
+import System.FilePath ((</>))
+import Test.Hspec hiding (it)
+
+chatFileTests :: SpecWith TestParams
+chatFileTests = do
+  describe "messages with files" $ do
+    it "send and receive message with file" runTestMessageWithFile
+    it "send and receive image" testSendImage
+    it "sender marking chat item deleted cancels file" testSenderMarkItemDeleted
+    it "files folder: send and receive image" testFilesFoldersSendImage
+    it "files folder: sender deleted file" testFilesFoldersImageSndDelete -- TODO add test deleting during upload
+    it "files folder: recipient deleted file" testFilesFoldersImageRcvDelete -- TODO add test deleting during download
+    it "send and receive image with text and quote" testSendImageWithTextAndQuote
+    it "send and receive image to group" testGroupSendImage
+    it "send and receive image with text and quote to group" testGroupSendImageWithTextAndQuote
+  describe "batch send messages with files" $ do
+    it "with files folder: send multiple files to contact" testSendMultiFilesDirect
+    it "with files folder: send multiple files to group" testSendMultiFilesGroup
+  describe "file transfer over XFTP" $ do
+    it "round file description count" $ const testXFTPRoundFDCount
+    it "send and receive file" testXFTPFileTransfer
+    it "send and receive locally encrypted files" testXFTPFileTransferEncrypted
+    it "send and receive file, accepting after upload" testXFTPAcceptAfterUpload
+    it "send and receive file in group" testXFTPGroupFileTransfer
+    it "delete uploaded file" testXFTPDeleteUploadedFile
+    it "delete uploaded file in group" testXFTPDeleteUploadedFileGroup
+    it "with relative paths: send and receive file" testXFTPWithRelativePaths
+    xit' "continue receiving file after restart" testXFTPContinueRcv
+    it "receive file marked to receive on chat start" testXFTPMarkToReceive
+    it "error receiving file" testXFTPRcvError
+    it "cancel receiving file, repeat receive" testXFTPCancelRcvRepeat
+    it "should accept file automatically with CLI option" testAutoAcceptFile
+    it "should prohibit file transfers in groups based on preference" testProhibitFiles
+  describe "file transfer over XFTP without chat items" $ do
+    it "send and receive small standalone file" testXFTPStandaloneSmall
+    it "send and receive small standalone file with extra information" testXFTPStandaloneSmallInfo
+    it "send and receive large standalone file" testXFTPStandaloneLarge
+    it "send and receive large standalone file with extra information" testXFTPStandaloneLargeInfo
+    it "send and receive large standalone file using relative paths" testXFTPStandaloneRelativePaths
+    xit "removes sent file from server" testXFTPStandaloneCancelSnd -- no error shown in tests
+    it "removes received temporary files" testXFTPStandaloneCancelRcv
+  describe "send larger files with badges" $ do
+    it "send and receive file with badge proof" testXFTPFileBadgeProof
+    it "send and receive file with badge proof in group" testXFTPGroupFileBadgeProof
+    it "file above the limit without badge proof is not accepted" testXFTPFileNoBadgeProof
+    it "file above the limit the badge allows is not accepted" testXFTPFileBadgeAboveLimit
+    it "sending file above the limit the badge allows fails" testXFTPSndFileBadgeLimit
+    it "sending file with a badge expired past the send grace fails" testXFTPSndFileBadgeGrace
+    it "file proof is rejected under another binding, size or expired badge" testFileBadgeProofStatus
+
+runTestMessageWithFile :: HasCallStack => TestParams -> IO ()
+runTestMessageWithFile = testChat2 aliceProfile bobProfile $ \alice bob -> withXFTPServer alice $ do
+  connectUsers alice bob
+  let testJpg = tmpFile bob "test.jpg"
+
+  alice ##> "/_send @2 json [{\"filePath\": \"./tests/fixtures/test.jpg\", \"msgContent\": {\"type\": \"file\", \"text\": \"hi, sending a file\"}}]"
+  alice <# "@bob hi, sending a file"
+  alice <# "/f @bob ./tests/fixtures/test.jpg"
+  alice <## "use /fc 1 to cancel sending"
+  bob <# "alice> hi, sending a file"
+  bob <# "alice> sends file test.jpg (136.5 KiB / 139737 bytes)"
+  bob <## "use /fr 1 [<dir>/ | <path>] to receive it"
+  alice <## "completed uploading file 1 (test.jpg) for bob"
+
+  bob ##> ("/fr 1 " <> tmpDir bob)
+  bob
+    <### [ ConsoleString $ "saving file 1 from alice to " <> testJpg,
+           "started receiving file 1 (test.jpg) from alice"
+         ]
+  bob <## "completed receiving file 1 (test.jpg) from alice"
+  bob #> "@alice received"
+  alice <# "bob> received"
+
+  src <- B.readFile "./tests/fixtures/test.jpg"
+  dest <- B.readFile testJpg
+  dest `shouldBe` src
+
+  alice #$> ("/_get chat @2 count=100", chatF, chatFeaturesF <> [((1, "hi, sending a file"), Just "./tests/fixtures/test.jpg"), ((0, "received"), Nothing)])
+  alice ##> "/_get content types @2"
+  alice <## "Chat content types: file, text"
+  alice #$> ("/_get chat @2 content=file count=100", chatF, [((1, "hi, sending a file"), Just "./tests/fixtures/test.jpg")])
+
+  bob #$> ("/_get chat @2 count=100", chatF, chatFeaturesF <> [((0, "hi, sending a file"), Just testJpg), ((1, "received"), Nothing)])
+  bob ##> "/_get content types @2"
+  bob <## "Chat content types: file, text"
+  bob #$> ("/_get chat @2 content=file count=100", chatF, [((0, "hi, sending a file"), Just testJpg)])
+
+  -- Test file with link in text - should appear in both file and link filters
+  alice ##> "/_send @2 json [{\"filePath\": \"./tests/fixtures/test.pdf\", \"msgContent\": {\"type\": \"file\", \"text\": \"check https://example.com for docs\"}}]"
+  alice <# "@bob check https://example.com for docs"
+  alice <# "/f @bob ./tests/fixtures/test.pdf"
+  alice <## "use /fc 2 to cancel sending"
+  bob <# "alice> check https://example.com for docs"
+  bob <# "alice> sends file test.pdf (266.0 KiB / 272376 bytes)"
+  bob <## "use /fr 2 [<dir>/ | <path>] to receive it"
+  alice <## "completed uploading file 2 (test.pdf) for bob"
+
+  alice ##> "/_get content types @2"
+  alice <## "Chat content types: file, text"
+  alice #$> ("/_get chat @2 content=file count=100", chatF, [((1, "hi, sending a file"), Just "./tests/fixtures/test.jpg"), ((1, "check https://example.com for docs"), Just "./tests/fixtures/test.pdf")])
+  alice #$> ("/_get chat @2 content=link count=100", chatF, [((1, "check https://example.com for docs"), Just "./tests/fixtures/test.pdf")])
+
+  bob ##> "/_get content types @2"
+  bob <## "Chat content types: file, text"
+  bob #$> ("/_get chat @2 content=file count=100", chatF, [((0, "hi, sending a file"), Just testJpg), ((0, "check https://example.com for docs"), Nothing)])
+  bob #$> ("/_get chat @2 content=link count=100", chatF, [((0, "check https://example.com for docs"), Nothing)])
+
+testSendImage :: HasCallStack => TestParams -> IO ()
+testSendImage =
+  testChat2 aliceProfile bobProfile $
+    \alice bob -> withXFTPServer alice $ do
+      connectUsers alice bob
+      let testJpg = tmpFile bob "test.jpg"
+      alice ##> "/_send @2 json [{\"filePath\": \"./tests/fixtures/test.jpg\", \"msgContent\": {\"text\":\"\",\"type\":\"image\",\"image\":\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAIAQMAAAD+wSzIAAAABlBMVEX///+/v7+jQ3Y5AAAADklEQVQI12P4AIX8EAgALgAD/aNpbtEAAAAASUVORK5CYII=\"}}]"
+      alice <# "/f @bob ./tests/fixtures/test.jpg"
+      alice <## "use /fc 1 to cancel sending"
+      bob <# "alice> sends file test.jpg (136.5 KiB / 139737 bytes)"
+      bob <## "use /fr 1 [<dir>/ | <path>] to receive it"
+      alice <## "completed uploading file 1 (test.jpg) for bob"
+
+      bob ##> ("/fr 1 " <> tmpDir bob)
+      bob
+        <### [ ConsoleString $ "saving file 1 from alice to " <> testJpg,
+               "started receiving file 1 (test.jpg) from alice"
+             ]
+      bob <## "completed receiving file 1 (test.jpg) from alice"
+
+      src <- B.readFile "./tests/fixtures/test.jpg"
+      dest <- B.readFile testJpg
+      dest `shouldBe` src
+      alice #$> ("/_get chat @2 count=100", chatF, chatFeaturesF <> [((1, ""), Just "./tests/fixtures/test.jpg")])
+      bob #$> ("/_get chat @2 count=100", chatF, chatFeaturesF <> [((0, ""), Just testJpg)])
+      -- deleting contact without files folder set should not remove file
+      bob ##> "/d alice"
+      bob <## "alice: contact is deleted"
+      alice <## "bob (Bob) deleted contact with you"
+      fileExists <- doesFileExist testJpg
+      fileExists `shouldBe` True
+
+testSenderMarkItemDeleted :: HasCallStack => TestParams -> IO ()
+testSenderMarkItemDeleted =
+  testChat2 aliceProfile bobProfile $
+    \alice bob -> withXFTPServer alice $ do
+      connectUsers alice bob
+      alice ##> "/_send @2 json [{\"filePath\": \"./tests/fixtures/test_1MB.pdf\", \"msgContent\": {\"type\": \"text\", \"text\": \"hi, sending a file\"}}]"
+      alice <# "@bob hi, sending a file"
+      alice <# "/f @bob ./tests/fixtures/test_1MB.pdf"
+      alice <## "use /fc 1 to cancel sending"
+      bob <# "alice> hi, sending a file"
+      bob <# "alice> sends file test_1MB.pdf (1017.7 KiB / 1042157 bytes)"
+      bob <## "use /fr 1 [<dir>/ | <path>] to receive it"
+      alice <## "completed uploading file 1 (test_1MB.pdf) for bob"
+
+      alice #$> ("/_delete item @2 " <> itemId 1 <> " broadcast", id, "message marked deleted")
+      bob <# "alice> [marked deleted] hi, sending a file"
+
+      bob ##> ("/fr 1 " <> tmpDir bob)
+      bob <## "file cancelled: test_1MB.pdf"
+
+      bob ##> "/fs 1"
+      bob <## "receiving file 1 (test_1MB.pdf) cancelled"
+
+testFilesFoldersSendImage :: HasCallStack => TestParams -> IO ()
+testFilesFoldersSendImage =
+  testChat2 aliceProfile bobProfile $
+    \alice bob -> withXFTPServer alice $ do
+      connectUsers alice bob
+      let bobFiles = tmpFile bob "app_files"
+      alice #$> ("/_files_folder ./tests/fixtures", id, "ok")
+      bob #$> ("/_files_folder " <> bobFiles, id, "ok")
+      alice ##> "/_send @2 json [{\"filePath\": \"test.jpg\", \"msgContent\": {\"text\":\"\",\"type\":\"image\",\"image\":\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAIAQMAAAD+wSzIAAAABlBMVEX///+/v7+jQ3Y5AAAADklEQVQI12P4AIX8EAgALgAD/aNpbtEAAAAASUVORK5CYII=\"}}]"
+      alice <# "/f @bob test.jpg"
+      alice <## "use /fc 1 to cancel sending"
+      bob <# "alice> sends file test.jpg (136.5 KiB / 139737 bytes)"
+      bob <## "use /fr 1 [<dir>/ | <path>] to receive it"
+      alice <## "completed uploading file 1 (test.jpg) for bob"
+
+      bob ##> "/fr 1"
+      bob
+        <### [ "saving file 1 from alice to test.jpg",
+               "started receiving file 1 (test.jpg) from alice"
+             ]
+      bob <## "completed receiving file 1 (test.jpg) from alice"
+
+      src <- B.readFile "./tests/fixtures/test.jpg"
+      dest <- B.readFile (bobFiles </> "test.jpg")
+      dest `shouldBe` src
+      alice #$> ("/_get chat @2 count=100", chatF, chatFeaturesF <> [((1, ""), Just "test.jpg")])
+      bob #$> ("/_get chat @2 count=100", chatF, chatFeaturesF <> [((0, ""), Just "test.jpg")])
+      -- deleting contact with files folder set should remove file
+      checkActionDeletesFile (bobFiles </> "test.jpg") $ do
+        bob ##> "/d alice"
+        bob <## "alice: contact is deleted"
+        alice <## "bob (Bob) deleted contact with you"
+
+testFilesFoldersImageSndDelete :: HasCallStack => TestParams -> IO ()
+testFilesFoldersImageSndDelete =
+  testChat2 aliceProfile bobProfile $
+    \alice bob -> withXFTPServer alice $ do
+      connectUsers alice bob
+      let aliceFiles = tmpFile alice "alice_app_files"
+          bobFiles = tmpFile bob "bob_app_files"
+      alice #$> ("/_files_folder " <> aliceFiles, id, "ok")
+      copyFile "./tests/fixtures/test_1MB.pdf" (aliceFiles </> "test_1MB.pdf")
+      bob #$> ("/_files_folder " <> bobFiles, id, "ok")
+      alice ##> "/_send @2 json [{\"filePath\": \"test_1MB.pdf\", \"msgContent\": {\"text\":\"\",\"type\":\"image\",\"image\":\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAIAQMAAAD+wSzIAAAABlBMVEX///+/v7+jQ3Y5AAAADklEQVQI12P4AIX8EAgALgAD/aNpbtEAAAAASUVORK5CYII=\"}}]"
+      alice <# "/f @bob test_1MB.pdf"
+      alice <## "use /fc 1 to cancel sending"
+      bob <# "alice> sends file test_1MB.pdf (1017.7 KiB / 1042157 bytes)"
+      bob <## "use /fr 1 [<dir>/ | <path>] to receive it"
+      alice <## "completed uploading file 1 (test_1MB.pdf) for bob"
+
+      bob ##> "/fr 1"
+      bob
+        <### [ "saving file 1 from alice to test_1MB.pdf",
+               "started receiving file 1 (test_1MB.pdf) from alice"
+             ]
+      bob <## "completed receiving file 1 (test_1MB.pdf) from alice"
+
+      -- deleting contact should remove file
+      checkActionDeletesFile (aliceFiles </> "test_1MB.pdf") $ do
+        alice ##> "/d bob"
+        alice <## "bob: contact is deleted"
+        bob <## "alice (Alice) deleted contact with you"
+        bob ##> "/fs 1"
+        bob <##. "receiving file 1 (test_1MB.pdf) complete"
+      checkActionDeletesFile (bobFiles </> "test_1MB.pdf") $ do
+        bob ##> "/d alice"
+        bob <## "alice: contact is deleted"
+
+testFilesFoldersImageRcvDelete :: HasCallStack => TestParams -> IO ()
+testFilesFoldersImageRcvDelete =
+  testChat2 aliceProfile bobProfile $
+    \alice bob -> withXFTPServer alice $ do
+      connectUsers alice bob
+      let bobFiles = tmpFile bob "app_files"
+      alice #$> ("/_files_folder ./tests/fixtures", id, "ok")
+      bob #$> ("/_files_folder " <> bobFiles, id, "ok")
+      alice ##> "/_send @2 json [{\"filePath\": \"test.jpg\", \"msgContent\": {\"text\":\"\",\"type\":\"image\",\"image\":\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAIAQMAAAD+wSzIAAAABlBMVEX///+/v7+jQ3Y5AAAADklEQVQI12P4AIX8EAgALgAD/aNpbtEAAAAASUVORK5CYII=\"}}]"
+      alice <# "/f @bob test.jpg"
+      alice <## "use /fc 1 to cancel sending"
+      bob <# "alice> sends file test.jpg (136.5 KiB / 139737 bytes)"
+      bob <## "use /fr 1 [<dir>/ | <path>] to receive it"
+      alice <## "completed uploading file 1 (test.jpg) for bob"
+
+      bob ##> "/fr 1"
+      bob
+        <### [ "saving file 1 from alice to test.jpg",
+               "started receiving file 1 (test.jpg) from alice"
+             ]
+      bob <## "completed receiving file 1 (test.jpg) from alice"
+
+      -- deleting contact should remove file
+      checkActionDeletesFile (bobFiles </> "test.jpg") $ do
+        bob ##> "/d alice"
+        bob <## "alice: contact is deleted"
+        alice <## "bob (Bob) deleted contact with you"
+
+testSendImageWithTextAndQuote :: HasCallStack => TestParams -> IO ()
+testSendImageWithTextAndQuote =
+  testChat2 aliceProfile bobProfile $
+    \alice bob -> withXFTPServer alice $ do
+      connectUsers alice bob
+      bob #> "@alice hi alice"
+      alice <# "bob> hi alice"
+      alice ##> ("/_send @2 json [{\"filePath\": \"./tests/fixtures/test.jpg\", \"quotedItemId\": " <> itemId 1 <> ", \"msgContent\": {\"text\":\"hey bob\",\"type\":\"image\",\"image\":\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAIAQMAAAD+wSzIAAAABlBMVEX///+/v7+jQ3Y5AAAADklEQVQI12P4AIX8EAgALgAD/aNpbtEAAAAASUVORK5CYII=\"}}]")
+      alice <# "@bob > hi alice"
+      alice <## "      hey bob"
+      alice <# "/f @bob ./tests/fixtures/test.jpg"
+      alice <## "use /fc 1 to cancel sending"
+      bob <# "alice> > hi alice"
+      bob <## "      hey bob"
+      bob <# "alice> sends file test.jpg (136.5 KiB / 139737 bytes)"
+      bob <## "use /fr 1 [<dir>/ | <path>] to receive it"
+      alice <## "completed uploading file 1 (test.jpg) for bob"
+
+      bob ##> ("/fr 1 " <> tmpDir bob)
+      bob
+        <### [ ConsoleString $ "saving file 1 from alice to " <> tmpFile bob "test.jpg",
+               "started receiving file 1 (test.jpg) from alice"
+             ]
+      bob <## "completed receiving file 1 (test.jpg) from alice"
+
+      src <- B.readFile "./tests/fixtures/test.jpg"
+      B.readFile (tmpFile bob "test.jpg") `shouldReturn` src
+      alice #$> ("/_get chat @2 count=100", chat'', chatFeatures'' <> [((0, "hi alice"), Nothing, Nothing), ((1, "hey bob"), Just (0, "hi alice"), Just "./tests/fixtures/test.jpg")])
+      alice @@@ [("@bob", "hey bob")]
+      bob #$> ("/_get chat @2 count=100", chat'', chatFeatures'' <> [((1, "hi alice"), Nothing, Nothing), ((0, "hey bob"), Just (1, "hi alice"), Just $ tmpFile bob "test.jpg")])
+      bob @@@ [("@alice", "hey bob")]
+
+      -- quoting (file + text) with file uses quoted text
+      bob ##> ("/_send @2 json [{\"filePath\": \"./tests/fixtures/test.pdf\", \"quotedItemId\": " <> itemId 2 <> ", \"msgContent\": {\"text\":\"\",\"type\":\"file\"}}]")
+      bob <# "@alice > hey bob"
+      bob <## "      test.pdf"
+      bob <# "/f @alice ./tests/fixtures/test.pdf"
+      bob <## "use /fc 2 to cancel sending"
+      alice <# "bob> > hey bob"
+      alice <## "      test.pdf"
+      alice <# "bob> sends file test.pdf (266.0 KiB / 272376 bytes)"
+      alice <## "use /fr 2 [<dir>/ | <path>] to receive it"
+      bob <## "completed uploading file 2 (test.pdf) for alice"
+
+      alice ##> ("/fr 2 " <> tmpDir alice)
+      alice
+        <### [ ConsoleString $ "saving file 2 from bob to " <> tmpFile alice "test.pdf",
+               "started receiving file 2 (test.pdf) from bob"
+             ]
+      alice <## "completed receiving file 2 (test.pdf) from bob"
+
+      txtSrc <- B.readFile "./tests/fixtures/test.pdf"
+      B.readFile (tmpFile alice "test.pdf") `shouldReturn` txtSrc
+
+      -- quoting (file without text) with file uses file name
+      alice ##> ("/_send @2 json [{\"filePath\": \"./tests/fixtures/test.jpg\", \"quotedItemId\": " <> itemId 3 <> ", \"msgContent\": {\"text\":\"\",\"type\":\"image\",\"image\":\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAIAQMAAAD+wSzIAAAABlBMVEX///+/v7+jQ3Y5AAAADklEQVQI12P4AIX8EAgALgAD/aNpbtEAAAAASUVORK5CYII=\"}}]")
+      alice <# "@bob > test.pdf"
+      alice <## "      test.jpg"
+      alice <# "/f @bob ./tests/fixtures/test.jpg"
+      alice <## "use /fc 3 to cancel sending"
+      bob <# "alice> > test.pdf"
+      bob <## "      test.jpg"
+      bob <# "alice> sends file test.jpg (136.5 KiB / 139737 bytes)"
+      bob <## "use /fr 3 [<dir>/ | <path>] to receive it"
+      alice <## "completed uploading file 3 (test.jpg) for bob"
+
+      bob ##> ("/fr 3 " <> tmpDir bob)
+      bob
+        <### [ ConsoleString $ "saving file 3 from alice to " <> tmpFile bob "test_1.jpg",
+               "started receiving file 3 (test.jpg) from alice"
+             ]
+      bob <## "completed receiving file 3 (test.jpg) from alice"
+
+      B.readFile (tmpFile bob "test_1.jpg") `shouldReturn` src
+
+testGroupSendImage :: HasCallStack => TestParams -> IO ()
+testGroupSendImage =
+  testChat3 aliceProfile bobProfile cathProfile $
+    \alice bob cath -> withXFTPServer alice $ do
+      createGroup3 "team" alice bob cath
+      let bobJpg = tmpFile bob "test.jpg"
+          cathJpg = tmpFile cath "test_1.jpg"
+      threadDelay 1000000
+      alice ##> "/_send #1 json [{\"filePath\": \"./tests/fixtures/test.jpg\", \"msgContent\": {\"text\":\"\",\"type\":\"image\",\"image\":\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAIAQMAAAD+wSzIAAAABlBMVEX///+/v7+jQ3Y5AAAADklEQVQI12P4AIX8EAgALgAD/aNpbtEAAAAASUVORK5CYII=\"}}]"
+      alice <# "/f #team ./tests/fixtures/test.jpg"
+      alice <## "use /fc 1 to cancel sending"
+      concurrentlyN_
+        [ do
+            bob <# "#team alice> sends file test.jpg (136.5 KiB / 139737 bytes)"
+            bob <## "use /fr 1 [<dir>/ | <path>] to receive it",
+          do
+            cath <# "#team alice> sends file test.jpg (136.5 KiB / 139737 bytes)"
+            cath <## "use /fr 1 [<dir>/ | <path>] to receive it"
+        ]
+      alice <## "completed uploading file 1 (test.jpg) for #team"
+
+      bob ##> ("/fr 1 " <> tmpDir bob)
+      bob
+        <### [ ConsoleString $ "saving file 1 from alice to " <> bobJpg,
+               "started receiving file 1 (test.jpg) from alice"
+             ]
+      bob <## "completed receiving file 1 (test.jpg) from alice"
+
+      cath ##> ("/fr 1 " <> tmpDir cath)
+      cath
+        <### [ ConsoleString $ "saving file 1 from alice to " <> cathJpg,
+               "started receiving file 1 (test.jpg) from alice"
+             ]
+      cath <## "completed receiving file 1 (test.jpg) from alice"
+      threadDelay 1000000
+      bob #> "#team received"
+      [alice, cath] *<# "#team bob> received"
+      threadDelay 1000000
+      cath #> "#team received too"
+      [alice, bob] *<# "#team cath> received too"
+
+      src <- B.readFile "./tests/fixtures/test.jpg"
+      dest <- B.readFile bobJpg
+      dest `shouldBe` src
+      dest2 <- B.readFile cathJpg
+      dest2 `shouldBe` src
+
+      alice #$> ("/_get chat #1 count=3", chatF, [((1, ""), Just "./tests/fixtures/test.jpg"), ((0, "received"), Nothing), ((0, "received too"), Nothing)])
+      alice ##> "/_get content types #1"
+      alice <## "Chat content types: image, text"
+      alice #$> ("/_get chat #1 content=image count=100", chatF, [((1, ""), Just "./tests/fixtures/test.jpg")])
+
+      bob #$> ("/_get chat #1 count=3", chatF, [((0, ""), Just bobJpg), ((1, "received"), Nothing), ((0, "received too"), Nothing)])
+      bob ##> "/_get content types #1"
+      bob <## "Chat content types: image, text"
+      bob #$> ("/_get chat #1 content=image count=100", chatF, [((0, ""), Just bobJpg)])
+
+      cath #$> ("/_get chat #1 count=3", chatF, [((0, ""), Just cathJpg), ((0, "received"), Nothing), ((1, "received too"), Nothing)])
+      cath ##> "/_get content types #1"
+      cath <## "Chat content types: image, text"
+      cath #$> ("/_get chat #1 content=image count=100", chatF, [((0, ""), Just cathJpg)])
+
+testGroupSendImageWithTextAndQuote :: HasCallStack => TestParams -> IO ()
+testGroupSendImageWithTextAndQuote =
+  testChat3 aliceProfile bobProfile cathProfile $
+    \alice bob cath -> withXFTPServer alice $ do
+      createGroup3 "team" alice bob cath
+      let bobJpg = tmpFile bob "test.jpg"
+          cathJpg = tmpFile cath "test_1.jpg"
+      threadDelay 1000000
+      bob #> "#team hi team"
+      concurrently_
+        (alice <# "#team bob> hi team")
+        (cath <# "#team bob> hi team")
+      threadDelay 1000000
+      msgItemId <- lastItemId alice
+      alice ##> ("/_send #1 json [{\"filePath\": \"./tests/fixtures/test.jpg\", \"quotedItemId\": " <> msgItemId <> ", \"msgContent\": {\"text\":\"hey bob\",\"type\":\"image\",\"image\":\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAIAQMAAAD+wSzIAAAABlBMVEX///+/v7+jQ3Y5AAAADklEQVQI12P4AIX8EAgALgAD/aNpbtEAAAAASUVORK5CYII=\"}}]")
+      alice <# "#team > bob hi team"
+      alice <## "      hey bob"
+      alice <# "/f #team ./tests/fixtures/test.jpg"
+      alice <## "use /fc 1 to cancel sending"
+      concurrentlyN_
+        [ do
+            bob <# "#team alice!> > bob hi team"
+            bob <## "      hey bob"
+            bob <# "#team alice!> sends file test.jpg (136.5 KiB / 139737 bytes)"
+            bob <## "use /fr 1 [<dir>/ | <path>] to receive it",
+          do
+            cath <# "#team alice> > bob hi team"
+            cath <## "      hey bob"
+            cath <# "#team alice> sends file test.jpg (136.5 KiB / 139737 bytes)"
+            cath <## "use /fr 1 [<dir>/ | <path>] to receive it"
+        ]
+      alice <## "completed uploading file 1 (test.jpg) for #team"
+
+      bob ##> ("/fr 1 " <> tmpDir bob)
+      bob
+        <### [ ConsoleString $ "saving file 1 from alice to " <> bobJpg,
+               "started receiving file 1 (test.jpg) from alice"
+             ]
+      bob <## "completed receiving file 1 (test.jpg) from alice"
+
+      cath ##> ("/fr 1 " <> tmpDir cath)
+      cath
+        <### [ ConsoleString $ "saving file 1 from alice to " <> cathJpg,
+               "started receiving file 1 (test.jpg) from alice"
+             ]
+      cath <## "completed receiving file 1 (test.jpg) from alice"
+
+      src <- B.readFile "./tests/fixtures/test.jpg"
+      dest <- B.readFile bobJpg
+      dest `shouldBe` src
+      dest2 <- B.readFile cathJpg
+      dest2 `shouldBe` src
+      alice #$> ("/_get chat #1 count=2", chat'', [((0, "hi team"), Nothing, Nothing), ((1, "hey bob"), Just (0, "hi team"), Just "./tests/fixtures/test.jpg")])
+      alice @@@ [("#team", "hey bob"), ("@bob", "sent invitation to join group team as admin"), ("@cath", "sent invitation to join group team as admin")]
+      bob #$> ("/_get chat #1 count=2", chat'', [((1, "hi team"), Nothing, Nothing), ((0, "hey bob"), Just (1, "hi team"), Just bobJpg)])
+      bob @@@ [("#team", "hey bob"), ("@alice", "received invitation to join group team as admin")]
+      cath #$> ("/_get chat #1 count=2", chat'', [((0, "hi team"), Nothing, Nothing), ((0, "hey bob"), Just (0, "hi team"), Just cathJpg)])
+      cath @@@ [("#team", "hey bob"), ("@alice", "received invitation to join group team as admin")]
+
+testSendMultiFilesDirect :: HasCallStack => TestParams -> IO ()
+testSendMultiFilesDirect =
+  testChat2 aliceProfile bobProfile $ \alice bob -> do
+    withXFTPServer alice $ do
+      connectUsers alice bob
+
+      let aliceFiles = tmpFile alice "alice_app_files"
+          bobFiles = tmpFile bob "bob_app_files"
+      alice #$> ("/_files_folder " <> aliceFiles, id, "ok")
+      copyFile "./tests/fixtures/test.jpg" (aliceFiles </> "test.jpg")
+      copyFile "./tests/fixtures/test.pdf" (aliceFiles </> "test.pdf")
+      bob #$> ("/_files_folder " <> bobFiles, id, "ok")
+
+      let cm1 = "{\"msgContent\": {\"type\": \"text\", \"text\": \"message without file\"}}"
+          cm2 = "{\"filePath\": \"test.jpg\", \"msgContent\": {\"type\": \"text\", \"text\": \"sending file 1\"}}"
+          cm3 = "{\"filePath\": \"test.pdf\", \"msgContent\": {\"type\": \"text\", \"text\": \"sending file 2\"}}"
+      alice ##> ("/_send @2 json [" <> cm1 <> "," <> cm2 <> "," <> cm3 <> "]")
+
+      alice <# "@bob message without file"
+
+      alice <# "@bob sending file 1"
+      alice <# "/f @bob test.jpg"
+      alice <## "use /fc 1 to cancel sending"
+
+      alice <# "@bob sending file 2"
+      alice <# "/f @bob test.pdf"
+      alice <## "use /fc 2 to cancel sending"
+
+      bob <# "alice> message without file"
+
+      bob <# "alice> sending file 1"
+      bob <# "alice> sends file test.jpg (136.5 KiB / 139737 bytes)"
+      bob <## "use /fr 1 [<dir>/ | <path>] to receive it"
+
+      bob <# "alice> sending file 2"
+      bob <# "alice> sends file test.pdf (266.0 KiB / 272376 bytes)"
+      bob <## "use /fr 2 [<dir>/ | <path>] to receive it"
+
+      alice <## "completed uploading file 1 (test.jpg) for bob"
+      alice <## "completed uploading file 2 (test.pdf) for bob"
+
+      bob ##> "/fr 1"
+      bob
+        <### [ "saving file 1 from alice to test.jpg",
+               "started receiving file 1 (test.jpg) from alice"
+             ]
+      bob <## "completed receiving file 1 (test.jpg) from alice"
+
+      bob ##> "/fr 2"
+      bob
+        <### [ "saving file 2 from alice to test.pdf",
+               "started receiving file 2 (test.pdf) from alice"
+             ]
+      bob <## "completed receiving file 2 (test.pdf) from alice"
+
+      src1 <- B.readFile (aliceFiles </> "test.jpg")
+      dest1 <- B.readFile (bobFiles </> "test.jpg")
+      dest1 `shouldBe` src1
+
+      src2 <- B.readFile (aliceFiles </> "test.pdf")
+      dest2 <- B.readFile (bobFiles </> "test.pdf")
+      dest2 `shouldBe` src2
+
+      alice #$> ("/_get chat @2 count=3", chatF, [((1, "message without file"), Nothing), ((1, "sending file 1"), Just "test.jpg"), ((1, "sending file 2"), Just "test.pdf")])
+      bob #$> ("/_get chat @2 count=3", chatF, [((0, "message without file"), Nothing), ((0, "sending file 1"), Just "test.jpg"), ((0, "sending file 2"), Just "test.pdf")])
+
+testSendMultiFilesGroup :: HasCallStack => TestParams -> IO ()
+testSendMultiFilesGroup =
+  testChat3 aliceProfile bobProfile cathProfile $ \alice bob cath -> do
+    withXFTPServer alice $ do
+      createGroup3 "team" alice bob cath
+
+      threadDelay 1000000
+
+      let aliceFiles = tmpFile alice "alice_app_files"
+          bobFiles = tmpFile bob "bob_app_files"
+          cathFiles = tmpFile cath "cath_app_files"
+      alice #$> ("/_files_folder " <> aliceFiles, id, "ok")
+      copyFile "./tests/fixtures/test.jpg" (aliceFiles </> "test.jpg")
+      copyFile "./tests/fixtures/test.pdf" (aliceFiles </> "test.pdf")
+      bob #$> ("/_files_folder " <> bobFiles, id, "ok")
+      cath #$> ("/_files_folder " <> cathFiles, id, "ok")
+
+      let cm1 = "{\"msgContent\": {\"type\": \"text\", \"text\": \"message without file\"}}"
+          cm2 = "{\"filePath\": \"test.jpg\", \"msgContent\": {\"type\": \"text\", \"text\": \"sending file 1\"}}"
+          cm3 = "{\"filePath\": \"test.pdf\", \"msgContent\": {\"type\": \"text\", \"text\": \"sending file 2\"}}"
+      alice ##> ("/_send #1 json [" <> cm1 <> "," <> cm2 <> "," <> cm3 <> "]")
+
+      alice <# "#team message without file"
+
+      alice <# "#team sending file 1"
+      alice <# "/f #team test.jpg"
+      alice <## "use /fc 1 to cancel sending"
+
+      alice <# "#team sending file 2"
+      alice <# "/f #team test.pdf"
+      alice <## "use /fc 2 to cancel sending"
+
+      bob <# "#team alice> message without file"
+
+      bob <# "#team alice> sending file 1"
+      bob <# "#team alice> sends file test.jpg (136.5 KiB / 139737 bytes)"
+      bob <## "use /fr 1 [<dir>/ | <path>] to receive it"
+
+      bob <# "#team alice> sending file 2"
+      bob <# "#team alice> sends file test.pdf (266.0 KiB / 272376 bytes)"
+      bob <## "use /fr 2 [<dir>/ | <path>] to receive it"
+
+      cath <# "#team alice> message without file"
+
+      cath <# "#team alice> sending file 1"
+      cath <# "#team alice> sends file test.jpg (136.5 KiB / 139737 bytes)"
+      cath <## "use /fr 1 [<dir>/ | <path>] to receive it"
+
+      cath <# "#team alice> sending file 2"
+      cath <# "#team alice> sends file test.pdf (266.0 KiB / 272376 bytes)"
+      cath <## "use /fr 2 [<dir>/ | <path>] to receive it"
+
+      alice <## "completed uploading file 1 (test.jpg) for #team"
+      alice <## "completed uploading file 2 (test.pdf) for #team"
+
+      bob ##> "/fr 1"
+      bob
+        <### [ "saving file 1 from alice to test.jpg",
+               "started receiving file 1 (test.jpg) from alice"
+             ]
+      bob <## "completed receiving file 1 (test.jpg) from alice"
+
+      bob ##> "/fr 2"
+      bob
+        <### [ "saving file 2 from alice to test.pdf",
+               "started receiving file 2 (test.pdf) from alice"
+             ]
+      bob <## "completed receiving file 2 (test.pdf) from alice"
+
+      cath ##> "/fr 1"
+      cath
+        <### [ "saving file 1 from alice to test.jpg",
+               "started receiving file 1 (test.jpg) from alice"
+             ]
+      cath <## "completed receiving file 1 (test.jpg) from alice"
+
+      cath ##> "/fr 2"
+      cath
+        <### [ "saving file 2 from alice to test.pdf",
+               "started receiving file 2 (test.pdf) from alice"
+             ]
+      cath <## "completed receiving file 2 (test.pdf) from alice"
+
+      src1 <- B.readFile (aliceFiles </> "test.jpg")
+      dest1_1 <- B.readFile (bobFiles </> "test.jpg")
+      dest1_2 <- B.readFile (cathFiles </> "test.jpg")
+      dest1_1 `shouldBe` src1
+      dest1_2 `shouldBe` src1
+
+      src2 <- B.readFile (aliceFiles </> "test.pdf")
+      dest2_1 <- B.readFile (bobFiles </> "test.pdf")
+      dest2_2 <- B.readFile (cathFiles </> "test.pdf")
+      dest2_1 `shouldBe` src2
+      dest2_2 `shouldBe` src2
+
+      alice #$> ("/_get chat #1 count=3", chatF, [((1, "message without file"), Nothing), ((1, "sending file 1"), Just "test.jpg"), ((1, "sending file 2"), Just "test.pdf")])
+      bob #$> ("/_get chat #1 count=3", chatF, [((0, "message without file"), Nothing), ((0, "sending file 1"), Just "test.jpg"), ((0, "sending file 2"), Just "test.pdf")])
+      cath #$> ("/_get chat #1 count=3", chatF, [((0, "message without file"), Nothing), ((0, "sending file 1"), Just "test.jpg"), ((0, "sending file 2"), Just "test.pdf")])
+
+testXFTPRoundFDCount :: Expectation
+testXFTPRoundFDCount = do
+  roundedFDCount (-100) `shouldBe` 4
+  roundedFDCount (-1) `shouldBe` 4
+  roundedFDCount 0 `shouldBe` 4
+  roundedFDCount 1 `shouldBe` 4
+  roundedFDCount 2 `shouldBe` 4
+  roundedFDCount 4 `shouldBe` 4
+  roundedFDCount 5 `shouldBe` 8
+  roundedFDCount 20 `shouldBe` 32
+  roundedFDCount 128 `shouldBe` 128
+  roundedFDCount 500 `shouldBe` 512
+
+testXFTPFileTransfer :: HasCallStack => TestParams -> IO ()
+testXFTPFileTransfer =
+  testChat2 aliceProfile bobProfile $ \alice bob -> do
+    withXFTPServer alice $ do
+      connectUsers alice bob
+      let testPdf = tmpFile bob "test.pdf"
+
+      alice #> "/f @bob ./tests/fixtures/test.pdf"
+      alice <## "use /fc 1 to cancel sending"
+      bob <# "alice> sends file test.pdf (266.0 KiB / 272376 bytes)"
+      bob <## "use /fr 1 [<dir>/ | <path>] to receive it"
+      bob ##> ("/fr 1 " <> tmpDir bob)
+      concurrentlyN_
+        [ alice <## "completed uploading file 1 (test.pdf) for bob",
+          bob
+            <### [ ConsoleString $ "saving file 1 from alice to " <> testPdf,
+                   "started receiving file 1 (test.pdf) from alice"
+                 ]
+        ]
+      bob <## "completed receiving file 1 (test.pdf) from alice"
+
+      alice ##> "/fs 1"
+      alice <## "sending file 1 (test.pdf) complete"
+      bob ##> "/fs 1"
+      bob <## ("receiving file 1 (test.pdf) complete, path: " <> testPdf)
+
+      src <- B.readFile "./tests/fixtures/test.pdf"
+      dest <- B.readFile testPdf
+      dest `shouldBe` src
+
+testXFTPFileTransferEncrypted :: HasCallStack => TestParams -> IO ()
+testXFTPFileTransferEncrypted =
+  testChat2 aliceProfile bobProfile $ \alice bob -> do
+    src <- B.readFile "./tests/fixtures/test.pdf"
+    srcLen <- getFileSize "./tests/fixtures/test.pdf"
+    let srcPath = tmpFile alice "alice/test.pdf"
+        bobDir = tmpFile bob "bob/"
+    createDirectoryIfMissing True $ tmpFile alice "alice/"
+    createDirectoryIfMissing True bobDir
+    WFResult cfArgs <- chatWriteFile (chatController alice) srcPath src
+    let fileJSON = LB.unpack $ J.encode $ CryptoFile srcPath $ Just cfArgs
+    withXFTPServer alice $ do
+      connectUsers alice bob
+      alice ##> ("/_send @2 json [{\"msgContent\":{\"type\":\"file\", \"text\":\"\"}, \"fileSource\": " <> fileJSON <> "}]")
+      alice <# ("/f @bob " <> srcPath)
+      alice <## "use /fc 1 to cancel sending"
+      bob <# "alice> sends file test.pdf (266.0 KiB / 272376 bytes)"
+      bob <## "use /fr 1 [<dir>/ | <path>] to receive it"
+      bob ##> ("/fr 1 encrypt=on " <> bobDir)
+      bob
+        <### [ ConsoleString $ "saving file 1 from alice to " <> bobDir <> "test.pdf",
+               "started receiving file 1 (test.pdf) from alice"
+             ]
+      alice <## "completed uploading file 1 (test.pdf) for bob"
+      bob <## "completed receiving file 1 (test.pdf) from alice"
+      Just (CFArgs key nonce) <- J.decode . LB.pack <$> getTermLine bob
+      Right dest <- chatReadFile (bobDir <> "test.pdf") (strEncode key) (strEncode nonce)
+      LB.length dest `shouldBe` fromIntegral srcLen
+      LB.toStrict dest `shouldBe` src
+
+testXFTPAcceptAfterUpload :: HasCallStack => TestParams -> IO ()
+testXFTPAcceptAfterUpload =
+  testChat2 aliceProfile bobProfile $ \alice bob -> do
+    withXFTPServer alice $ do
+      connectUsers alice bob
+
+      alice #> "/f @bob ./tests/fixtures/test.pdf"
+      alice <## "use /fc 1 to cancel sending"
+      bob <# "alice> sends file test.pdf (266.0 KiB / 272376 bytes)"
+      bob <## "use /fr 1 [<dir>/ | <path>] to receive it"
+      alice <## "completed uploading file 1 (test.pdf) for bob"
+
+      threadDelay 100000
+
+      bob ##> ("/fr 1 " <> tmpDir bob)
+      bob
+        <### [ ConsoleString $ "saving file 1 from alice to " <> tmpFile bob "test.pdf",
+               "started receiving file 1 (test.pdf) from alice"
+             ]
+      bob <## "completed receiving file 1 (test.pdf) from alice"
+
+      src <- B.readFile "./tests/fixtures/test.pdf"
+      dest <- B.readFile (tmpFile bob "test.pdf")
+      dest `shouldBe` src
+
+testXFTPGroupFileTransfer :: HasCallStack => TestParams -> IO ()
+testXFTPGroupFileTransfer =
+  testChat3 aliceProfile bobProfile cathProfile $ \alice bob cath -> do
+    withXFTPServer alice $ do
+      createGroup3 "team" alice bob cath
+
+      alice #> "/f #team ./tests/fixtures/test.pdf"
+      alice <## "use /fc 1 to cancel sending"
+      concurrentlyN_
+        [ do
+            bob <# "#team alice> sends file test.pdf (266.0 KiB / 272376 bytes)"
+            bob <## "use /fr 1 [<dir>/ | <path>] to receive it",
+          do
+            cath <# "#team alice> sends file test.pdf (266.0 KiB / 272376 bytes)"
+            cath <## "use /fr 1 [<dir>/ | <path>] to receive it"
+        ]
+      alice <## "completed uploading file 1 (test.pdf) for #team"
+
+      bob ##> ("/fr 1 " <> tmpDir bob)
+      bob
+        <### [ ConsoleString $ "saving file 1 from alice to " <> tmpFile bob "test.pdf",
+               "started receiving file 1 (test.pdf) from alice"
+             ]
+      bob <## "completed receiving file 1 (test.pdf) from alice"
+
+      cath ##> ("/fr 1 " <> tmpDir cath)
+      cath
+        <### [ ConsoleString $ "saving file 1 from alice to " <> tmpFile cath "test_1.pdf",
+               "started receiving file 1 (test.pdf) from alice"
+             ]
+      cath <## "completed receiving file 1 (test.pdf) from alice"
+
+      src <- B.readFile "./tests/fixtures/test.pdf"
+      dest1 <- B.readFile (tmpFile bob "test.pdf")
+      dest2 <- B.readFile (tmpFile cath "test_1.pdf")
+      dest1 `shouldBe` src
+      dest2 `shouldBe` src
+
+badgeFileCfg :: BBSPublicKey -> ChatConfig
+badgeFileCfg pk = badgeFileCfgLimits pk FileSizeLimits {noBadge = 100000, supporter = 300000, legend = 400000}
+
+badgeFileCfgLimits :: BBSPublicKey -> FileSizeLimits -> ChatConfig
+badgeFileCfgLimits pk lims = testCfg {badgePublicKeys = testBadgeKeys pk, fileSizeLimits = lims}
+
+testXFTPFileBadgeProof :: HasCallStack => TestParams -> IO ()
+testXFTPFileBadgeProof ps = do
+  Right (pk, sk) <- bbsKeyGen
+  testChatCfg2 (badgeFileCfg pk) aliceProfile bobProfile (test sk) ps
+  where
+    test sk alice bob = withXFTPServer ps $ do
+      connectUsers alice bob
+      addTestBadge alice =<< issueTestBadge sk futureDate
+
+      alice #> "/f @bob ./tests/fixtures/test.pdf"
+      alice <## "use /fc 1 to cancel sending"
+      bob <# "alice *> sends file test.pdf (266.0 KiB / 272376 bytes)"
+      bob <## "use /fr 1 [<dir>/ | <path>] to receive it"
+      bob ##> ("/fr 1 " <> tmpDir ps)
+      concurrentlyN_
+        [ alice <## "completed uploading file 1 (test.pdf) for bob",
+          bob
+            <### [ ConsoleString $ "saving file 1 from alice to " <> tmpFile ps "test.pdf",
+                   "started receiving file 1 (test.pdf) from alice"
+                 ]
+        ]
+      bob <## "completed receiving file 1 (test.pdf) from alice"
+
+      src <- B.readFile "./tests/fixtures/test.pdf"
+      dest <- B.readFile (tmpFile ps "test.pdf")
+      dest `shouldBe` src
+
+testXFTPGroupFileBadgeProof :: HasCallStack => TestParams -> IO ()
+testXFTPGroupFileBadgeProof ps = do
+  Right (pk, sk) <- bbsKeyGen
+  testChatCfg3 (badgeFileCfg pk) aliceProfile bobProfile cathProfile (test sk) ps
+  where
+    test sk alice bob cath = withXFTPServer ps $ do
+      createGroup3 "team" alice bob cath
+      addTestBadge alice =<< issueTestBadge sk futureDate
+
+      alice #> "/f #team ./tests/fixtures/test.pdf"
+      alice <## "use /fc 1 to cancel sending"
+      concurrentlyN_
+        [ do
+            bob <# "#team alice> sends file test.pdf (266.0 KiB / 272376 bytes)"
+            bob <## "use /fr 1 [<dir>/ | <path>] to receive it",
+          do
+            cath <# "#team alice> sends file test.pdf (266.0 KiB / 272376 bytes)"
+            cath <## "use /fr 1 [<dir>/ | <path>] to receive it"
+        ]
+      alice <## "completed uploading file 1 (test.pdf) for #team"
+
+      bob ##> ("/fr 1 " <> tmpDir ps)
+      bob
+        <### [ ConsoleString $ "saving file 1 from alice to " <> tmpFile ps "test.pdf",
+               "started receiving file 1 (test.pdf) from alice"
+             ]
+      bob <## "completed receiving file 1 (test.pdf) from alice"
+
+      src <- B.readFile "./tests/fixtures/test.pdf"
+      dest <- B.readFile (tmpFile ps "test.pdf")
+      dest `shouldBe` src
+
+testXFTPFileNoBadgeProof :: HasCallStack => TestParams -> IO ()
+testXFTPFileNoBadgeProof ps =
+  withNewTestChatCfg ps sndCfg "alice" aliceProfile $ \alice ->
+    withNewTestChatCfg ps rcvCfg "bob" bobProfile $ \bob -> withXFTPServer ps $ do
+      connectUsers alice bob
+
+      alice #> "/f @bob ./tests/fixtures/test.pdf"
+      alice <## "use /fc 1 to cancel sending"
+      bob <# "alice> sends file test.pdf (266.0 KiB / 272376 bytes)"
+      bob <## "file is above the limit of 100000 bytes: sender has no badge"
+      bob ##> ("/fr 1 " <> tmpDir ps)
+      concurrentlyN_
+        [ bob <## "file size exceeds the limit: test.pdf",
+          alice <## "completed uploading file 1 (test.pdf) for bob"
+        ]
+  where
+    sndCfg = testCfg {fileSizeLimits = defaultFileSizeLimits {noBadge = 1000000}}
+    rcvCfg = testCfg {fileSizeLimits = defaultFileSizeLimits {noBadge = 100000}}
+
+testXFTPFileBadgeAboveLimit :: HasCallStack => TestParams -> IO ()
+testXFTPFileBadgeAboveLimit ps = do
+  Right (pk, sk) <- bbsKeyGen
+  withNewTestChatCfg ps (badgeFileCfg pk) "alice" aliceProfile $ \alice ->
+    withNewTestChatCfg ps (rcvCfg pk) "bob" bobProfile $ \bob -> withXFTPServer ps $ do
+      connectUsers alice bob
+      addTestBadge alice =<< issueTestBadge sk futureDate
+
+      alice #> "/f @bob ./tests/fixtures/test.pdf"
+      alice <## "use /fc 1 to cancel sending"
+      bob <# "alice *> sends file test.pdf (266.0 KiB / 272376 bytes)"
+      bob <## "file is above the limit of 150000 bytes: above the limit of the sender badge"
+      bob ##> ("/fr 1 " <> tmpDir ps)
+      concurrentlyN_
+        [ bob <## "file size exceeds the limit: test.pdf",
+          alice <## "completed uploading file 1 (test.pdf) for bob"
+        ]
+  where
+    rcvCfg pk = badgeFileCfgLimits pk FileSizeLimits {noBadge = 100000, supporter = 150000, legend = 400000}
+
+testXFTPSndFileBadgeLimit :: HasCallStack => TestParams -> IO ()
+testXFTPSndFileBadgeLimit ps = do
+  Right (pk, sk) <- bbsKeyGen
+  testChatCfg2 (cfg pk) aliceProfile bobProfile (test sk) ps
+  where
+    cfg pk = badgeFileCfgLimits pk FileSizeLimits {noBadge = 100000, supporter = 150000, legend = 300000}
+    test sk alice bob = withXFTPServer ps $ do
+      connectUsers alice bob
+
+      addTestBadge alice =<< issueTestBadgeType sk BTSupporter futureDate
+      alice ##> "/f @bob ./tests/fixtures/test.pdf"
+      alice <## "file size exceeds the limit: ./tests/fixtures/test.pdf"
+
+      addTestBadge alice =<< issueTestBadgeType sk BTLegend futureDate
+      alice #> "/f @bob ./tests/fixtures/test.pdf"
+      alice <## "use /fc 1 to cancel sending"
+      concurrentlyN_
+        [ alice <## "completed uploading file 1 (test.pdf) for bob",
+          do
+            bob <# "alice *> sends file test.pdf (266.0 KiB / 272376 bytes)"
+            bob <## "use /fr 1 [<dir>/ | <path>] to receive it"
+        ]
+
+testXFTPSndFileBadgeGrace :: HasCallStack => TestParams -> IO ()
+testXFTPSndFileBadgeGrace ps = do
+  Right (pk, sk) <- bbsKeyGen
+  testChatCfg2 (badgeFileCfg pk) aliceProfile bobProfile (test sk) ps
+  where
+    test sk alice bob = withXFTPServer ps $ do
+      connectUsers alice bob
+      now <- getCurrentTime
+
+      addTestBadge alice =<< issueTestBadge sk (addUTCTime (-3 * nominalDay) now)
+      alice ##> "/f @bob ./tests/fixtures/test.pdf"
+      alice <## "file size exceeds the limit: ./tests/fixtures/test.pdf"
+
+      addTestBadge alice =<< issueTestBadge sk (addUTCTime (-3600) now)
+      alice #> "/f @bob ./tests/fixtures/test.pdf"
+      alice <## "use /fc 1 to cancel sending"
+      concurrentlyN_
+        [ alice <## "completed uploading file 1 (test.pdf) for bob",
+          do
+            bob <# "alice *> sends file test.pdf (266.0 KiB / 272376 bytes)"
+            bob <## "use /fr 1 [<dir>/ | <path>] to receive it"
+        ]
+
+testFileBadgeProofStatus :: HasCallStack => TestParams -> IO ()
+testFileBadgeProofStatus ps = do
+  Right (pk, sk) <- bbsKeyGen
+  withNewTestChatCfg ps (badgeFileCfg pk) "alice" aliceProfile $ \alice -> do
+    now <- getCurrentTime
+    let ph = PHFileInv {chatBinding = "Dalice-binding", fileSize = 272376}
+        otherBinding = PHFileInv {chatBinding = "Dbob-binding", fileSize = 272376}
+        otherSize = PHFileInv {chatBinding = "Dalice-binding", fileSize = 1}
+        proofFor expiry = do
+          cred <- issueTestBadge sk expiry
+          Right badge <- badgeProof pk cred ph
+          pure badge
+        statusOf expected badge = do
+          Right st <- runExceptT (badgeProofStatus expected badge) `runReaderT` chatController alice
+          pure st
+    badge <- proofFor futureDate
+    statusOf (Just ph) badge `shouldReturn` BSActive
+    statusOf (Just otherBinding) badge `shouldReturn` BSFailed
+    statusOf (Just otherSize) badge `shouldReturn` BSFailed
+    -- the receiver has no binding for the sender, so no header can be expected
+    statusOf Nothing badge `shouldReturn` BSFailed
+    expired <- proofFor $ addUTCTime (-10 * nominalDay) now
+    statusOf (Just ph) expired `shouldReturn` BSExpired
+
+testXFTPDeleteUploadedFile :: HasCallStack => TestParams -> IO ()
+testXFTPDeleteUploadedFile =
+  testChat2 aliceProfile bobProfile $ \alice bob -> do
+    withXFTPServer alice $ do
+      connectUsers alice bob
+
+      alice #> "/f @bob ./tests/fixtures/test.pdf"
+      alice <## "use /fc 1 to cancel sending"
+      bob <# "alice> sends file test.pdf (266.0 KiB / 272376 bytes)"
+      bob <## "use /fr 1 [<dir>/ | <path>] to receive it"
+      alice <## "completed uploading file 1 (test.pdf) for bob"
+
+      alice ##> "/fc 1"
+      concurrentlyN_
+        [ alice <## "cancelled sending file 1 (test.pdf)",
+          bob <## "alice cancelled sending file 1 (test.pdf)"
+        ]
+
+      bob ##> ("/fr 1 " <> tmpDir bob)
+      bob <## "file cancelled: test.pdf"
+
+testXFTPDeleteUploadedFileGroup :: HasCallStack => TestParams -> IO ()
+testXFTPDeleteUploadedFileGroup =
+  testChat3 aliceProfile bobProfile cathProfile $ \alice bob cath -> do
+    withXFTPServer alice $ do
+      createGroup3 "team" alice bob cath
+      let testPdf = tmpFile bob "test.pdf"
+
+      alice #> "/f #team ./tests/fixtures/test.pdf"
+      alice <## "use /fc 1 to cancel sending"
+      concurrentlyN_
+        [ do
+            bob <# "#team alice> sends file test.pdf (266.0 KiB / 272376 bytes)"
+            bob <## "use /fr 1 [<dir>/ | <path>] to receive it",
+          do
+            cath <# "#team alice> sends file test.pdf (266.0 KiB / 272376 bytes)"
+            cath <## "use /fr 1 [<dir>/ | <path>] to receive it"
+        ]
+      alice <## "completed uploading file 1 (test.pdf) for #team"
+
+      bob ##> ("/fr 1 " <> tmpDir bob)
+      bob
+        <### [ ConsoleString $ "saving file 1 from alice to " <> testPdf,
+               "started receiving file 1 (test.pdf) from alice"
+             ]
+      bob <## "completed receiving file 1 (test.pdf) from alice"
+
+      alice ##> "/fs 1"
+      alice <## "sending file 1 (test.pdf) complete"
+      bob ##> "/fs 1"
+      bob <## ("receiving file 1 (test.pdf) complete, path: " <> testPdf)
+      cath ##> "/fs 1"
+      cath <## "receiving file 1 (test.pdf) not accepted yet, use /fr 1 to receive file"
+
+      src <- B.readFile "./tests/fixtures/test.pdf"
+      dest <- B.readFile testPdf
+      dest `shouldBe` src
+
+      alice ##> "/fc 1"
+      concurrentlyN_
+        [ do
+            recipients <- dropStrPrefix "cancelled sending file 1 (test.pdf) to " <$> getTermLine alice
+            recipients == "bob, cath" || recipients == "cath, bob" `shouldBe` True,
+          cath <## "alice cancelled sending file 1 (test.pdf)"
+        ]
+
+      alice ##> "/fs 1"
+      alice <## "sending file 1 (test.pdf) cancelled"
+      bob ##> "/fs 1"
+      bob <## ("receiving file 1 (test.pdf) complete, path: " <> testPdf)
+      cath ##> "/fs 1"
+      cath <## "receiving file 1 (test.pdf) cancelled"
+
+      cath ##> ("/fr 1 " <> tmpDir cath)
+      cath <## "file cancelled: test.pdf"
+
+testXFTPWithRelativePaths :: HasCallStack => TestParams -> IO ()
+testXFTPWithRelativePaths =
+  testChat2 aliceProfile bobProfile $ \alice bob -> do
+    withXFTPServer alice $ do
+      -- agent is passed xftp work directory only on chat start,
+      -- so for test we work around by stopping and starting chat
+      setRelativePaths alice "./tests/fixtures" (tmpFile alice "alice_xftp")
+      setRelativePaths bob (tmpFile bob "bob_files") (tmpFile bob "bob_xftp")
+      connectUsers alice bob
+
+      alice #> "/f @bob test.pdf"
+      alice <## "use /fc 1 to cancel sending"
+      bob <# "alice> sends file test.pdf (266.0 KiB / 272376 bytes)"
+      bob <## "use /fr 1 [<dir>/ | <path>] to receive it"
+      bob ##> "/fr 1"
+      concurrentlyN_
+        [ alice <## "completed uploading file 1 (test.pdf) for bob",
+          bob
+            <### [ "saving file 1 from alice to test.pdf",
+                   "started receiving file 1 (test.pdf) from alice"
+                 ]
+        ]
+      bob <## "completed receiving file 1 (test.pdf) from alice"
+
+      src <- B.readFile "./tests/fixtures/test.pdf"
+      dest <- B.readFile (tmpFile bob "bob_files/test.pdf")
+      dest `shouldBe` src
+
+testXFTPContinueRcv :: HasCallStack => TestParams -> IO ()
+testXFTPContinueRcv ps = do
+  withXFTPServer ps $ do
+    withNewTestChat ps "alice" aliceProfile $ \alice -> do
+      withNewTestChat ps "bob" bobProfile $ \bob -> do
+        connectUsers alice bob
+
+        alice #> "/f @bob ./tests/fixtures/test.pdf"
+        alice <## "use /fc 1 to cancel sending"
+        bob <# "alice> sends file test.pdf (266.0 KiB / 272376 bytes)"
+        bob <## "use /fr 1 [<dir>/ | <path>] to receive it"
+        alice <## "completed uploading file 1 (test.pdf) for bob"
+
+  -- server is down - file is not received
+  withTestChat ps "bob" $ \bob -> do
+    bob <## "subscribed 1 connections on server localhost"
+    bob ##> ("/fr 1 " <> tmpDir ps)
+    bob
+      <### [ ConsoleString $ "saving file 1 from alice to " <> tmpFile ps "test.pdf",
+             "started receiving file 1 (test.pdf) from alice"
+           ]
+
+    bob ##> "/fs 1"
+    bob <## "receiving file 1 (test.pdf) progress 0% of 266.0 KiB"
+
+    (bob </)
+
+  withXFTPServer ps $ do
+    -- server is up - file reception is continued
+    withTestChat ps "bob" $ \bob -> do
+      bob <## "subscribed 1 connections on server localhost"
+      bob <## "completed receiving file 1 (test.pdf) from alice"
+      src <- B.readFile "./tests/fixtures/test.pdf"
+      dest <- B.readFile (tmpFile ps "test.pdf")
+      dest `shouldBe` src
+
+testXFTPMarkToReceive :: HasCallStack => TestParams -> IO ()
+testXFTPMarkToReceive = do
+  testChat2 aliceProfile bobProfile $ \alice bob -> do
+    withXFTPServer alice $ do
+      connectUsers alice bob
+
+      alice #> "/f @bob ./tests/fixtures/test.pdf"
+      alice <## "use /fc 1 to cancel sending"
+      bob <# "alice> sends file test.pdf (266.0 KiB / 272376 bytes)"
+      bob <## "use /fr 1 [<dir>/ | <path>] to receive it"
+      alice <## "completed uploading file 1 (test.pdf) for bob"
+      bob #$> ("/_set_file_to_receive 1", id, "ok")
+
+      threadDelay 100000
+
+      bob ##> "/_stop"
+      bob <## "chat stopped"
+
+      bob #$> ("/_files_folder " <> tmpFile bob "bob_files", id, "ok")
+      bob #$> ("/_temp_folder " <> tmpFile bob "bob_xftp", id, "ok")
+
+      threadDelay 100000
+
+      bob ##> "/_start"
+
+      bob
+        <### [ "chat started",
+               "subscribed 1 connections on server localhost",
+               "started receiving file 1 (test.pdf) from alice",
+               "saving file 1 from alice to test.pdf"
+             ]
+      bob <## "completed receiving file 1 (test.pdf) from alice"
+
+      src <- B.readFile "./tests/fixtures/test.pdf"
+      dest <- B.readFile (tmpFile bob "bob_files/test.pdf")
+      dest `shouldBe` src
+
+testXFTPRcvError :: HasCallStack => TestParams -> IO ()
+testXFTPRcvError ps = do
+  withXFTPServer ps $ do
+    withNewTestChat ps "alice" aliceProfile $ \alice -> do
+      withNewTestChat ps "bob" bobProfile $ \bob -> do
+        connectUsers alice bob
+
+        alice #> "/f @bob ./tests/fixtures/test.pdf"
+        alice <## "use /fc 1 to cancel sending"
+        bob <# "alice> sends file test.pdf (266.0 KiB / 272376 bytes)"
+        bob <## "use /fr 1 [<dir>/ | <path>] to receive it"
+        alice <## "completed uploading file 1 (test.pdf) for bob"
+
+  -- server is up w/t store log - file reception should fail
+  withXFTPServer' (xftpServerConfig ps) {serverStoreCfg = XSCMemory Nothing, storeLogFile = Nothing} $ do
+    withTestChat ps "bob" $ \bob -> do
+      bob <## "subscribed 1 connections on server localhost"
+      bob ##> ("/fr 1 " <> tmpDir ps)
+      bob
+        <### [ ConsoleString $ "saving file 1 from alice to " <> tmpFile ps "test.pdf",
+               "started receiving file 1 (test.pdf) from alice"
+             ]
+      bob <## "error receiving file 1 (test.pdf) from alice"
+      _ <- getTermLine bob
+
+      bob ##> "/fs 1"
+      bob <## "receiving file 1 (test.pdf) error: FileErrAuth"
+
+testXFTPCancelRcvRepeat :: HasCallStack => TestParams -> IO ()
+testXFTPCancelRcvRepeat =
+  testChatCfg2 cfg aliceProfile bobProfile $ \alice bob -> do
+    withXFTPServer alice $ do
+      let testfile = tmpFile alice "testfile"
+          testfile1 = tmpFile bob "testfile_1"
+      xftpCLI ["rand", testfile, "17mb"] `shouldReturn` ["File created: " <> testfile]
+
+      connectUsers alice bob
+
+      alice #> ("/f @bob " <> testfile)
+      alice <## "use /fc 1 to cancel sending"
+      bob <# "alice> sends file testfile (17.0 MiB / 17825792 bytes)"
+      bob <## "use /fr 1 [<dir>/ | <path>] to receive it"
+      bob ##> ("/fr 1 " <> tmpDir bob)
+      concurrentlyN_
+        [ alice <## "completed uploading file 1 (testfile) for bob",
+          bob
+            <### [ ConsoleString $ "saving file 1 from alice to " <> testfile1,
+                   "started receiving file 1 (testfile) from alice"
+                 ]
+        ]
+
+      threadDelay 100000
+
+      bob ##> "/fs 1"
+      bob <##. "receiving file 1 (testfile) progress"
+
+      bob ##> "/fc 1"
+      bob
+        <### [ "cancelled receiving file 1 (testfile) from alice",
+               StartsWith "chat db error: SERcvFileNotFoundXFTP"
+             ]
+
+      bob ##> "/fs 1"
+      bob <## "receiving file 1 (testfile) not accepted yet, use /fr 1 to receive file"
+
+      bob ##> ("/fr 1 " <> tmpDir bob)
+      bob
+        <### [ ConsoleString $ "saving file 1 from alice to " <> testfile1,
+               "started receiving file 1 (testfile) from alice"
+             ]
+      bob <## "completed receiving file 1 (testfile) from alice"
+
+      bob ##> "/fs 1"
+      bob <## ("receiving file 1 (testfile) complete, path: " <> testfile1)
+
+      src <- B.readFile testfile
+      dest <- B.readFile testfile1
+      dest `shouldBe` src
+  where
+    cfg = testCfg {xftpDescrPartSize = 200}
+
+testAutoAcceptFile :: HasCallStack => TestParams -> IO ()
+testAutoAcceptFile =
+  testChatOpts2 opts aliceProfile bobProfile $ \alice bob -> withXFTPServer alice $ do
+    connectUsers alice bob
+    bob ##> ("/_files_folder " <> tmpFile bob "bob_files")
+    bob <## "ok"
+    alice #> "/f @bob ./tests/fixtures/test.jpg"
+    alice <## "use /fc 1 to cancel sending"
+    alice <## "completed uploading file 1 (test.jpg) for bob"
+    bob <# "alice> sends file test.jpg (136.5 KiB / 139737 bytes)"
+    bob <## "use /fr 1 [<dir>/ | <path>] to receive it"
+    bob <## "saving file 1 from alice to test.jpg"
+    bob <## "started receiving file 1 (test.jpg) from alice"
+    bob <## "completed receiving file 1 (test.jpg) from alice"
+    (bob </)
+    alice #> "/f @bob ./tests/fixtures/test_1MB.pdf"
+    alice <## "use /fc 2 to cancel sending"
+    alice <## "completed uploading file 2 (test_1MB.pdf) for bob"
+    bob <# "alice> sends file test_1MB.pdf (1017.7 KiB / 1042157 bytes)"
+    bob <## "use /fr 2 [<dir>/ | <path>] to receive it"
+    -- no auto accept for large files
+    (bob </)
+  where
+    opts = (testOpts :: ChatOpts) {autoAcceptFileSize = 200000}
+
+testProhibitFiles :: HasCallStack => TestParams -> IO ()
+testProhibitFiles =
+  testChat3 aliceProfile bobProfile cathProfile $ \alice bob cath -> withXFTPServer alice $ do
+    createGroup3 "team" alice bob cath
+    alice ##> "/set files #team off"
+    alice <## "updated group preferences:"
+    alice <## "Files and media: off"
+    concurrentlyN_
+      [ do
+          bob <## "alice updated group #team: (signed)"
+          bob <## "updated group preferences:"
+          bob <## "Files and media: off",
+        do
+          cath <## "alice updated group #team: (signed)"
+          cath <## "updated group preferences:"
+          cath <## "Files and media: off"
+      ]
+    alice ##> "/f #team ./tests/fixtures/test.jpg"
+    alice <## "bad chat command: feature not allowed Files and media"
+    (bob </)
+    (cath </)
+
+testXFTPStandaloneSmall :: HasCallStack => TestParams -> IO ()
+testXFTPStandaloneSmall = testChat2 aliceProfile aliceDesktopProfile $ \src dst -> do
+  withXFTPServer src $ do
+    logNote "sending"
+    src ##> "/_upload 1 ./tests/fixtures/logo.jpg"
+    src <## "started standalone uploading file 1 (logo.jpg)"
+    -- silent progress events
+    threadDelay 250000
+    src <## "file 1 (logo.jpg) upload complete. download with:"
+    -- file description fits, enjoy the direct URIs
+    _uri1 <- getTermLine src
+    _uri2 <- getTermLine src
+    uri3 <- getTermLine src
+    _uri4 <- getTermLine src
+
+    logNote "receiving"
+    let dstFile = tmpFile dst "logo.jpg"
+    dst ##> ("/_download 1 " <> uri3 <> " " <> dstFile)
+    dst <## "started standalone receiving file 1 (logo.jpg)"
+    -- silent progress events
+    threadDelay 250000
+    dst <## "completed standalone receiving file 1 (logo.jpg)"
+    srcBody <- B.readFile "./tests/fixtures/logo.jpg"
+    B.readFile dstFile `shouldReturn` srcBody
+
+testXFTPStandaloneSmallInfo :: HasCallStack => TestParams -> IO ()
+testXFTPStandaloneSmallInfo = testChat2 aliceProfile aliceDesktopProfile $ \src dst -> do
+  withXFTPServer src $ do
+    logNote "sending"
+    src ##> "/_upload 1 ./tests/fixtures/logo.jpg"
+    src <## "started standalone uploading file 1 (logo.jpg)"
+    -- silent progress events
+    threadDelay 250000
+    src <## "file 1 (logo.jpg) upload complete. download with:"
+    -- file description fits, enjoy the direct URIs
+    _uri1 <- getTermLine src
+    _uri2 <- getTermLine src
+    uri3 <- getTermLine src
+    _uri4 <- getTermLine src
+    let uri = uri3 <> "&data=" <> B.unpack (urlEncode False . LB.toStrict . J.encode $ J.object ["secret" J..= J.String "*********"])
+
+    logNote "info"
+    dst ##> ("/_download info " <> uri)
+    dst <## "{\"secret\":\"*********\"}"
+
+    logNote "receiving"
+    let dstFile = tmpFile dst "logo.jpg"
+    dst ##> ("/_download 1 " <> uri <> " " <> dstFile) -- download sucessfully discarded extra info
+    dst <## "started standalone receiving file 1 (logo.jpg)"
+    -- silent progress events
+    threadDelay 250000
+    dst <## "completed standalone receiving file 1 (logo.jpg)"
+    srcBody <- B.readFile "./tests/fixtures/logo.jpg"
+    B.readFile dstFile `shouldReturn` srcBody
+
+testXFTPStandaloneLarge :: HasCallStack => TestParams -> IO ()
+testXFTPStandaloneLarge = testChat2 aliceProfile aliceDesktopProfile $ \src dst -> do
+  withXFTPServer src $ do
+    let srcFile = tmpFile src "testfile.in"
+    xftpCLI ["rand", srcFile, "17mb"] `shouldReturn` ["File created: " <> srcFile]
+
+    logNote "sending"
+    src ##> ("/_upload 1 " <> srcFile)
+    src <## "started standalone uploading file 1 (testfile.in)"
+    -- silent progress events
+    threadDelay 250000
+    src <## "file 1 (testfile.in) uploaded, preparing redirect file 2"
+    src <## "file 1 (testfile.in) upload complete. download with:"
+    uri <- getTermLine src
+    _uri2 <- getTermLine src
+    _uri3 <- getTermLine src
+    _uri4 <- getTermLine src
+
+    logNote "receiving"
+    let dstFile = tmpFile dst "testfile.out"
+    dst ##> ("/_download 1 " <> uri <> " " <> dstFile)
+    dst <## "started standalone receiving file 1 (testfile.out)"
+    -- silent progress events
+    threadDelay 250000
+    dst <## "completed standalone receiving file 1 (testfile.out)"
+    srcBody <- B.readFile srcFile
+    B.readFile dstFile `shouldReturn` srcBody
+
+testXFTPStandaloneLargeInfo :: HasCallStack => TestParams -> IO ()
+testXFTPStandaloneLargeInfo = testChat2 aliceProfile aliceDesktopProfile $ \src dst -> do
+  withXFTPServer src $ do
+    let srcFile = tmpFile src "testfile.in"
+    xftpCLI ["rand", srcFile, "17mb"] `shouldReturn` ["File created: " <> srcFile]
+
+    logNote "sending"
+    src ##> ("/_upload 1 " <> srcFile)
+    src <## "started standalone uploading file 1 (testfile.in)"
+
+    -- silent progress events
+    threadDelay 250000
+    src <## "file 1 (testfile.in) uploaded, preparing redirect file 2"
+    src <## "file 1 (testfile.in) upload complete. download with:"
+    uri1 <- getTermLine src
+    _uri2 <- getTermLine src
+    _uri3 <- getTermLine src
+    _uri4 <- getTermLine src
+    let uri = uri1 <> "&data=" <> B.unpack (urlEncode False . LB.toStrict . J.encode $ J.object ["secret" J..= J.String "*********"])
+
+    logNote "info"
+    dst ##> ("/_download info " <> uri)
+    dst <## "{\"secret\":\"*********\"}"
+
+    logNote "receiving"
+    let dstFile = tmpFile dst "testfile.out"
+    dst ##> ("/_download 1 " <> uri <> " " <> dstFile)
+    dst <## "started standalone receiving file 1 (testfile.out)"
+    -- silent progress events
+    threadDelay 250000
+    dst <## "completed standalone receiving file 1 (testfile.out)"
+    srcBody <- B.readFile srcFile
+    B.readFile dstFile `shouldReturn` srcBody
+
+testXFTPStandaloneCancelSnd :: HasCallStack => TestParams -> IO ()
+testXFTPStandaloneCancelSnd = testChat2 aliceProfile aliceDesktopProfile $ \src dst -> do
+  withXFTPServer src $ do
+    let srcFile = tmpFile src "testfile.in"
+    xftpCLI ["rand", srcFile, "17mb"] `shouldReturn` ["File created: " <> srcFile]
+
+    logNote "sending"
+    src ##> ("/_upload 1 " <> srcFile)
+    src <## "started standalone uploading file 1 (testfile.in)"
+    -- silent progress events
+    threadDelay 250000
+    src <## "file 1 (testfile.in) uploaded, preparing redirect file 2"
+    src <## "file 1 (testfile.in) upload complete. download with:"
+    uri <- getTermLine src
+    _uri2 <- getTermLine src
+    _uri3 <- getTermLine src
+    _uri4 <- getTermLine src
+
+    logNote "cancelling"
+    src ##> "/fc 1"
+    src <## "cancelled sending file 1 (testfile.in)"
+    threadDelay 1000000
+
+    logNote "trying to receive cancelled"
+    dst ##> ("/_download 1 " <> uri <> " " <> tmpFile dst "should.not.extist")
+    dst <## "started standalone receiving file 1 (should.not.extist)"
+    threadDelay 100000
+    logWarn "no error?"
+    dst <## "error receiving file 1 (should.not.extist)"
+    dst <## "INTERNAL {internalErr = \"XFTP {xftpErr = AUTH}\"}"
+
+testXFTPStandaloneRelativePaths :: HasCallStack => TestParams -> IO ()
+testXFTPStandaloneRelativePaths = testChat2 aliceProfile aliceDesktopProfile $ \src dst -> do
+  withXFTPServer src $ do
+    logNote "sending"
+    let srcFiles = tmpFile src "src_files"
+        dstFiles = tmpFile dst "dst_files"
+    src #$> ("/_files_folder " <> srcFiles, id, "ok")
+    src #$> ("/_temp_folder " <> tmpFile src "src_xftp_temp", id, "ok")
+
+    xftpCLI ["rand", srcFiles </> "testfile.in", "17mb"] `shouldReturn` ["File created: " <> (srcFiles </> "testfile.in")]
+
+    src ##> "/_upload 1 testfile.in"
+    src <## "started standalone uploading file 1 (testfile.in)"
+    -- silent progress events
+    threadDelay 250000
+    src <## "file 1 (testfile.in) uploaded, preparing redirect file 2"
+    src <## "file 1 (testfile.in) upload complete. download with:"
+    uri <- getTermLine src
+    _uri2 <- getTermLine src
+    _uri3 <- getTermLine src
+    _uri4 <- getTermLine src
+
+    logNote "receiving"
+    dst #$> ("/_files_folder " <> dstFiles, id, "ok")
+    dst #$> ("/_temp_folder " <> tmpFile dst "dst_xftp_temp", id, "ok")
+    dst ##> ("/_download 1 " <> uri <> " testfile.out")
+    dst <## "started standalone receiving file 1 (testfile.out)"
+    -- silent progress events
+    threadDelay 250000
+    dst <## "completed standalone receiving file 1 (testfile.out)"
+    srcBody <- B.readFile (srcFiles </> "testfile.in")
+    B.readFile (dstFiles </> "testfile.out") `shouldReturn` srcBody
+
+testXFTPStandaloneCancelRcv :: HasCallStack => TestParams -> IO ()
+testXFTPStandaloneCancelRcv = testChat2 aliceProfile aliceDesktopProfile $ \src dst -> do
+  withXFTPServer src $ do
+    let srcFile = tmpFile src "testfile.in"
+    xftpCLI ["rand", srcFile, "17mb"] `shouldReturn` ["File created: " <> srcFile]
+
+    logNote "sending"
+    src ##> ("/_upload 1 " <> srcFile)
+    src <## "started standalone uploading file 1 (testfile.in)"
+    -- silent progress events
+    threadDelay 250000
+    src <## "file 1 (testfile.in) uploaded, preparing redirect file 2"
+    src <## "file 1 (testfile.in) upload complete. download with:"
+    uri <- getTermLine src
+    _uri2 <- getTermLine src
+    _uri3 <- getTermLine src
+    _uri4 <- getTermLine src
+
+    logNote "receiving"
+    let dstFile = tmpFile dst "testfile.out"
+    dst ##> ("/_download 1 " <> uri <> " " <> dstFile)
+    dst <## "started standalone receiving file 1 (testfile.out)"
+    threadDelay 25000 -- give workers some time to avoid internal errors from starting tasks
+    logNote "cancelling"
+    dst ##> "/fc 1"
+    dst <## "cancelled receiving file 1 (testfile.out)"
+    threadDelay 25000
+    doesFileExist dstFile `shouldReturn` False

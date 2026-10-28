@@ -1,0 +1,106 @@
+package chat.simplex.common.views.chat.item
+
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.*
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.desktop.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import chat.simplex.common.model.ChatItem
+import chat.simplex.common.model.MsgErrorType
+import chat.simplex.common.model.RcvMsgError
+import chat.simplex.common.ui.theme.*
+import chat.simplex.common.views.helpers.AlertManager
+import chat.simplex.common.views.helpers.generalGetString
+import chat.simplex.res.*
+
+@Composable
+fun IntegrityErrorItemView(msgError: MsgErrorType, ci: ChatItem, showTimestamp: Boolean, timedMessagesTTL: Int?) {
+  CIMsgError(ci, showTimestamp, timedMessagesTTL) {
+    when (msgError) {
+      is MsgErrorType.MsgSkipped ->
+        AlertManager.shared.showAlertMsg(
+          title = generalGetString(MR.strings.alert_title_skipped_messages),
+          text = generalGetString(MR.strings.alert_text_skipped_messages_it_can_happen_when)
+        )
+      is MsgErrorType.MsgBadHash ->
+        AlertManager.shared.showAlertMsg(
+          title = generalGetString(MR.strings.alert_title_msg_bad_hash),
+          text = generalGetString(MR.strings.alert_text_msg_bad_hash) + "\n" +
+              generalGetString(MR.strings.alert_text_fragment_encryption_out_of_sync_old_database) + "\n" +
+              generalGetString(MR.strings.alert_text_fragment_please_report_to_developers)
+        )
+      is MsgErrorType.MsgBadId, is MsgErrorType.MsgDuplicate ->
+        AlertManager.shared.showAlertMsg(
+          title = generalGetString(MR.strings.alert_title_msg_bad_id),
+          text = generalGetString(MR.strings.alert_text_msg_bad_id) + "\n" +
+              generalGetString(MR.strings.alert_text_fragment_please_report_to_developers)
+        )
+    }
+  }
+}
+
+@Composable
+fun CIMsgError(ci: ChatItem, showTimestamp: Boolean, timedMessagesTTL: Int?, onClick: () -> Unit) {
+  val receivedColor = MaterialTheme.appColors.receivedMessage
+  ItemWithMeta(meta = { CIMetaView(ci, timedMessagesTTL, showViaProxy = false, showTimestamp = showTimestamp) }) { inlineMeta ->
+    Surface(
+      Modifier.clickable(onClick = onClick),
+      shape = RoundedCornerShape(18.dp),
+      color = receivedColor,
+      contentColor = LocalContentColor.current
+    ) {
+      Row(
+        Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.Bottom
+      ) {
+        Text(
+          buildAnnotatedString {
+            withStyle(SpanStyle(fontStyle = FontStyle.Italic, color = Color.Red)) { append(ci.content.text) }
+          },
+          style = MaterialTheme.typography.body1.copy(lineHeight = 22.sp),
+          modifier = Modifier.padding(end = if (inlineMeta != null) 8.dp else 0.dp)
+        )
+        inlineMeta?.invoke()
+      }
+    }
+  }
+}
+
+@Composable
+fun RcvMsgErrorItemView(rcvMsgError: RcvMsgError, ci: ChatItem, showTimestamp: Boolean, timedMessagesTTL: Int?) {
+  CIMsgError(ci, showTimestamp, timedMessagesTTL) {
+    AlertManager.shared.showAlertMsg(
+      title = generalGetString(MR.strings.alert_title_msg_error),
+      text = when (rcvMsgError) {
+        is RcvMsgError.Dropped -> String.format(generalGetString(MR.strings.alert_text_msg_reception_error), rcvMsgError.attempts)
+        is RcvMsgError.ParseError -> rcvMsgError.parseError
+      }
+    )
+  }
+}
+
+@Preview/*(
+  uiMode = Configuration.UI_MODE_NIGHT_YES,
+  name = "Dark Mode"
+)*/
+@Composable
+fun IntegrityErrorItemViewPreview() {
+  SimpleXTheme {
+    IntegrityErrorItemView(
+      MsgErrorType.MsgBadHash(),
+      ChatItem.getDeletedContentSampleData(ts = previewDate),
+      showTimestamp = true,
+      null,
+    )
+  }
+}
