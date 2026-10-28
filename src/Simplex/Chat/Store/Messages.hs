@@ -234,6 +234,28 @@ deleteGroupChatItemsMessages db User {userId} GroupInfo {groupId} = do
   DB.execute db "DELETE FROM messages WHERE group_id = ?" (Only groupId)
   DB.execute db "DELETE FROM chat_item_reactions WHERE group_id = ?" (Only groupId)
   DB.execute db "DELETE FROM chat_items WHERE user_id = ? AND group_id = ? AND item_content_tag != 'chatBanner'" (userId, groupId)
+  DB.execute
+    db
+    [sql|
+      UPDATE group_members
+      SET support_chat_items_unread = 0,
+          support_chat_items_member_attention = 0,
+          support_chat_items_mentions = 0
+      WHERE group_id = ?
+    |]
+    (Only groupId)
+  DB.execute
+    db
+    [sql|
+      UPDATE groups
+      SET members_require_attention = (
+        SELECT COUNT(1)
+        FROM group_members
+        WHERE group_id = ? AND member_category != ? AND member_status IN (?,?)
+      )
+      WHERE user_id = ? AND group_id = ?
+    |]
+    (groupId, GCUserMember, GSMemPendingApproval, GSMemPendingReview, userId, groupId)
 
 createNewSndMessage :: MsgEncodingI e => DB.Connection -> TVar ChaChaDRG -> ConnOrGroupId -> ChatMsgEvent e -> Maybe MsgSigning -> (SharedMsgId -> EncodedChatMessage) -> ExceptT StoreError IO SndMessage
 createNewSndMessage db gVar connOrGroupId chatMsgEvent msgSigning_ encodeMessage =
