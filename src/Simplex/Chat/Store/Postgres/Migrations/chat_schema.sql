@@ -2784,15 +2784,15 @@ CREATE INDEX idx_group_members_member_profile_id ON test_chat_schema.group_membe
 
 
 
+CREATE INDEX idx_group_members_member_role ON test_chat_schema.group_members USING btree (member_role, user_id, group_id);
+
+
+
 CREATE INDEX idx_group_members_user_id ON test_chat_schema.group_members USING btree (user_id);
 
 
 
 CREATE INDEX idx_group_members_user_id_local_display_name ON test_chat_schema.group_members USING btree (user_id, local_display_name);
-
-
-
-CREATE INDEX idx_group_members_user_id_member_role ON test_chat_schema.group_members USING btree (user_id, member_role, group_id);
 
 
 
