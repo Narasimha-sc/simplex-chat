@@ -1678,12 +1678,12 @@ getGroupChatAround' db user g scopeInfo contentFilter aroundId count search stat
   beforeCIs <- liftIO $ mapM (safeGetGroupItem db user g ts) beforeIds
   afterCIs <- liftIO $ mapM (safeGetGroupItem db user g ts) afterIds
   let cis = reverse beforeCIs <> [aroundCI] <> afterCIs
-  navInfo <- liftIO $ getNavInfo cis
+  navInfo <- getNavInfo cis
   pure (Chat cInfo cis stats, Just navInfo)
   where
     getNavInfo cis_ = case cis_ of
       [] -> pure $ NavigationInfo 0 0
-      cis -> getGroupNavInfo_ db user g (last cis)
+      cis -> getGroupNavInfo_ db user g scopeInfo contentFilter (last cis)
 
 getGroupChatInitial_ :: DB.Connection -> User -> GroupInfo -> Maybe GroupChatScopeInfo -> Maybe MsgContentTag -> Int -> ExceptT StoreError IO (Chat 'CTGroup, Maybe NavigationInfo)
 getGroupChatInitial_ db user g scopeInfo_ contentFilter count = do
@@ -1744,55 +1744,26 @@ queryUnreadGroupItems db User {userId} GroupInfo {groupId} scopeInfo_ contentFil
   withGroupItemsCond scopeInfo_ contentFilter $ \cond params ->
     DB.query db (baseQuery <> cond <> "AND " <> statusCond <> orderLimit) ((userId, groupId) :. params :. Only statusParam)
 
-getGroupNavInfo_ :: DB.Connection -> User -> GroupInfo -> CChatItem 'CTGroup -> IO NavigationInfo
-getGroupNavInfo_ db User {userId} GroupInfo {groupId} afterCI = do
-  afterUnread <- getAfterUnreadCount
-  afterTotal <- getAfterTotalCount
-  pure NavigationInfo {afterUnread, afterTotal}
+getGroupNavInfo_ :: DB.Connection -> User -> GroupInfo -> Maybe GroupChatScopeInfo -> Maybe MsgContentTag -> CChatItem 'CTGroup -> ExceptT StoreError IO NavigationInfo
+getGroupNavInfo_ db User {userId} GroupInfo {groupId} scopeInfo_ contentFilter afterCI =
+  withGroupItemsCond scopeInfo_ contentFilter $ \cond params -> do
+    afterUnread <- countAfter (cond <> "AND item_status = ? ") (params :. Only CISRcvNew)
+    afterTotal <- countAfter cond params
+    pure NavigationInfo {afterUnread, afterTotal}
   where
-    getAfterUnreadCount :: IO Int
-    getAfterUnreadCount =
+    countAfter :: ToRow p => Query -> p -> IO Int
+    countAfter cond params =
       fromOnly . head
         <$> DB.query
           db
-          [sql|
-            SELECT COUNT(1)
-            FROM (
-              SELECT 1
-              FROM chat_items
-              WHERE user_id = ? AND group_id = ? AND item_status = ?
-                AND item_ts > ?
-              UNION ALL
-              SELECT 1
-              FROM chat_items
-              WHERE user_id = ? AND group_id = ? AND item_status = ?
-                AND item_ts = ? AND chat_item_id > ?
-            ) ci
-          |]
-          ( (userId, groupId, CISRcvNew, chatItemTs afterCI)
-              :. (userId, groupId, CISRcvNew, chatItemTs afterCI, cChatItemId afterCI)
+          ( "SELECT COUNT(1) FROM (SELECT 1 FROM chat_items WHERE user_id = ? AND group_id = ? "
+              <> cond
+              <> " AND item_ts > ? UNION ALL SELECT 1 FROM chat_items WHERE user_id = ? AND group_id = ? "
+              <> cond
+              <> " AND item_ts = ? AND chat_item_id > ?) ci"
           )
-    getAfterTotalCount :: IO Int
-    getAfterTotalCount =
-      fromOnly . head
-        <$> DB.query
-          db
-          [sql|
-            SELECT COUNT(1)
-            FROM (
-              SELECT 1
-              FROM chat_items
-              WHERE user_id = ? AND group_id = ?
-                AND item_ts > ?
-              UNION ALL
-              SELECT 1
-              FROM chat_items
-              WHERE user_id = ? AND group_id = ?
-                AND item_ts = ? AND chat_item_id > ?
-            ) ci
-          |]
-          ( (userId, groupId, chatItemTs afterCI)
-              :. (userId, groupId, chatItemTs afterCI, cChatItemId afterCI)
+          ( ((userId, groupId) :. params :. Only (chatItemTs afterCI))
+              :. ((userId, groupId) :. params :. (chatItemTs afterCI, cChatItemId afterCI))
           )
 
 getLocalChat :: DB.Connection -> User -> Int64 -> Maybe MsgContentTag -> ChatPagination -> Maybe Text -> ExceptT StoreError IO (Chat 'CTLocal, Maybe NavigationInfo)
