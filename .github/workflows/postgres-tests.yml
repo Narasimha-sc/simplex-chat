@@ -1,0 +1,70 @@
+name: postgres-tests
+run-name: "${{ github.event_name == 'workflow_dispatch' && format('postgres-tests {0} {1}', inputs.ref, inputs.target) || 'postgres-tests: registered by a push to its branch, nothing built' }}"
+on:
+  push:
+    branches: [ci/postgres-combo]
+    paths: [.github/workflows/postgres-tests.yml]
+  workflow_dispatch:
+    inputs:
+      ref: {description: branch or sha to test, type: string, default: sf/combined-review-2026-10-28}
+      target: {description: 'test:simplex-chat-test or lib:simplex-chat', type: string, default: 'test:simplex-chat-test'}
+      tests: {description: hspec -m patterns, one per line, type: string, default: ''}
+permissions: {contents: read}
+jobs:
+  postgres:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v3
+        with: {ref: '${{ inputs.ref }}', submodules: recursive}
+      - id: haskell
+        uses: simplex-chat/setup-haskell-action@v2
+        with: {ghc-version: 9.6.3, cabal-version: 3.10.2.0}
+      - id: cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            ${{ steps.haskell.outputs.cabal-store }}
+            dist-postgres
+          key: pg-store-ghc9.6.3-${{ hashFiles('cabal.project', 'simplex-chat.cabal') }}-${{ github.run_id }}
+          restore-keys: |
+            pg-store-ghc9.6.3-${{ hashFiles('cabal.project', 'simplex-chat.cabal') }}-
+            pg-store-ghc9.6.3-
+      - name: Install libraries and PostgreSQL 15 client
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc --fail https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          sudo sh -c 'echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+          sudo apt-get update
+          sudo apt-get install -y libgmp3-dev zlib1g-dev libnuma-dev libssl-dev libpq-dev postgresql-client-15
+      - name: Start PostgreSQL 15
+        run: |
+          docker run -d --name pg -p 5432:5432 -e POSTGRES_HOST_AUTH_METHOD=trust postgres:15 -c max_connections=500 -c fsync=off
+          timeout 60 sh -c 'until pg_isready -h localhost; do sleep 1; done'
+      - name: Build
+        run: |
+          cabal update
+          cabal build --builddir=dist-postgres --enable-tests -j --ghc-options=-O0 --constraint 'simplexmq +client_postgres' --constraint 'simplex-chat +client_postgres' ${{ inputs.target }}
+      - name: Save cache
+        if: ${{ !cancelled() }}
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ${{ steps.haskell.outputs.cabal-store }}
+            dist-postgres
+          key: ${{ steps.cache.outputs.cache-primary-key }}
+      - name: Test
+        if: startsWith(inputs.target, 'test:')
+        env: {PGHOST: localhost, CI: 'true', TESTS: '${{ inputs.tests }}'}
+        run: |
+          mkdir -p tests/tmp; sudo mount -t tmpfs -o size=2G tmpfs tests/tmp; sudo chown $(id -u):$(id -g) tests/tmp
+          args=(); while read -r p; do if [ -n "$p" ]; then args+=(-m "$p"); fi; done <<< "$TESTS"
+          bin=$(cabal list-bin --builddir=dist-postgres --enable-tests --constraint 'simplexmq +client_postgres' --constraint 'simplex-chat +client_postgres' test:simplex-chat-test)
+          "$bin" "${args[@]}" --fail-on=empty
+      - name: Schema diff
+        if: ${{ !cancelled() }}
+        run: git diff --stat -- src/Simplex/Chat/Store/Postgres/Migrations/chat_schema.sql; git diff -- src/Simplex/Chat/Store/Postgres/Migrations/chat_schema.sql > pg-schema.diff
+      - uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() }}
+        with: {name: pg-artifacts, path: pg-schema.diff}
