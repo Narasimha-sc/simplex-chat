@@ -39,6 +39,7 @@ import chat.simplex.common.platform.*
 import chat.simplex.common.ui.theme.*
 import chat.simplex.common.views.chat.item.CIFileViewScope
 import chat.simplex.common.views.chat.topPaddingToContent
+import chat.simplex.common.views.createProfileForInvitation
 import chat.simplex.common.views.helpers.*
 import chat.simplex.common.views.usersettings.*
 import chat.simplex.common.BuildConfigCommon
@@ -374,6 +375,17 @@ fun ActiveProfilePicker(
   }
 
   @Composable
+  fun NewProfileOption() {
+    ProfilePickerOption(
+      title = stringResource(MR.strings.users_add),
+      disabled = switchingProfile.value,
+      selected = false,
+      onSelected = { createProfileForInvitation(rhId) { selectProfile(it) } },
+      image = { AddProfileOptionImage() }
+    )
+  }
+
+  @Composable
   fun IncognitoUserOption() {
     ProfilePickerOption(
       disabled = switchingProfile.value,
@@ -453,6 +465,11 @@ fun ActiveProfilePicker(
           }
           itemsIndexed(filteredProfiles) { _, p ->
             ProfilePickerUserOption(p)
+          }
+        }
+        if (contactConnection != null) {
+          item {
+            NewProfileOption()
           }
         }
         item {
@@ -593,6 +610,18 @@ fun ToggleShortLinkButton(short: MutableState<Boolean>) {
         indication = null
       ) { short.value = !short.value },
       style = MaterialTheme.typography.body2, fontSize = 14.sp, color = MaterialTheme.colors.primary
+    )
+  }
+}
+
+@Composable
+fun AddProfileOptionImage() {
+  Box(Modifier.size(42.dp), contentAlignment = Alignment.Center) {
+    Icon(
+      painterResource(MR.images.ic_manage_accounts),
+      contentDescription = null,
+      Modifier.size(24.dp),
+      tint = MaterialTheme.colors.primary,
     )
   }
 }
