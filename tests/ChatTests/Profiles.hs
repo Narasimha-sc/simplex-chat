@@ -2166,6 +2166,12 @@ testBusinessCustomerDescription = testChat3 businessProfile aliceProfile cathPro
     alice <## "#biz: joining the group..."
     biz <## "#alice: alice_1 joined the group"
     alice <## "#biz: you joined the group"
+    biz ##> "/set welcome #alice Welcome!"
+    biz <## "welcome message changed to:"
+    biz <## "Welcome!"
+    alice <## "biz_1 updated group #biz: (signed)"
+    alice <## "welcome message changed to:"
+    alice <## "Welcome!"
     alice ##> "/_profile 1 {\"displayName\": \"alice\", \"fullName\": \"\", \"shortDescr\": \"Alice\", \"description\": \"Hi, I'm Alice\"}"
     alice <## "user description changed to Hi, I'm Alice (your 0 contacts are notified)"
     alice #> "#biz hello" -- profile update is sent with message
@@ -2179,7 +2185,7 @@ testBusinessCustomerDescription = testChat3 businessProfile aliceProfile cathPro
     concurrentlyN_
       [ do
           cath <## "#alice: you joined the group"
-          cath <### [WithTime "#alice alice_1> hello [>>]"]
+          cath <### [WithTime "#alice alice_1> hello [>>]", WithTime "#alice biz> Welcome!"]
           cath <## "#alice: member alice_1 (Alice) is connected",
         biz <## "#alice: cath joined the group",
         do
