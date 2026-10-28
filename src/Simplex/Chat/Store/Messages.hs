@@ -10,6 +10,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TupleSections #-}
@@ -1531,39 +1532,23 @@ getGroupChatLast_ db user g scopeInfo_ contentFilter count search stats = do
   cis <- mapM (liftIO . safeGetGroupItem db user g ts) ciIds
   pure $ Chat cInfo (reverse cis) stats
 
+withGroupItemsCond :: Maybe GroupChatScopeInfo -> Maybe MsgContentTag -> (forall p. ToRow p => Query -> p -> IO a) -> ExceptT StoreError IO a
+withGroupItemsCond scopeInfo_ contentFilter f = case (scopeInfo_, contentFilter) of
+  (Nothing, Nothing) -> liftIO $ f " AND group_scope_tag IS NULL AND group_scope_group_member_id IS NULL " ()
+  (Nothing, Just MCLink_) -> liftIO $ f " AND has_link = 1 " ()
+  (Nothing, Just mcTag) -> liftIO $ f " AND msg_content_tag = ? " (Only mcTag)
+  (Just GCSIMemberSupport {groupMember_ = m}, Nothing) ->
+    liftIO $ f " AND group_scope_tag = ? AND group_scope_group_member_id IS NOT DISTINCT FROM ? " (GCSTMemberSupport_, groupMemberId' <$> m)
+  (Just _scope, Just _mcTag) ->
+    throwError $ SEInternalError "group scope and content filter are not supported together"
+
 data ChatItemIDsRange = CRLast | CRAfter UTCTime ChatItemId | CRBefore UTCTime ChatItemId
 
 getChatItemIDs :: DB.Connection -> User -> ChatInfo c -> Maybe MsgContentTag -> ChatItemIDsRange -> Int -> Text -> ExceptT StoreError IO [ChatItemId]
 getChatItemIDs db User {userId} cInfo contentFilter range count search = case cInfo of
-  GroupChat GroupInfo {groupId} scopeInfo_ -> case (scopeInfo_, contentFilter) of
-    (Nothing, Nothing) ->
-      liftIO $
-        idsQuery
-          (grCond <> " AND group_scope_tag IS NULL AND group_scope_group_member_id IS NULL ")
-          (userId, groupId)
-          "item_ts"
-    (Nothing, Just MCLink_) ->
-      liftIO $
-        idsQuery
-          (grCond <> " AND has_link = 1 ")
-          (userId, groupId)
-          "item_ts"
-    (Nothing, Just mcTag) ->
-      liftIO $
-        idsQuery
-          (grCond <> " AND msg_content_tag = ? ")
-          (userId, groupId, mcTag)
-          "item_ts"
-    (Just GCSIMemberSupport {groupMember_ = m}, Nothing) ->
-      liftIO $
-        idsQuery
-          (grCond <> " AND group_scope_tag = ? AND group_scope_group_member_id IS NOT DISTINCT FROM ? ")
-          (userId, groupId, GCSTMemberSupport_, groupMemberId' <$> m)
-          "item_ts"
-    (Just _scope, Just _mcTag) ->
-      throwError $ SEInternalError "group scope and content filter are not supported together"
-    where
-      grCond = " user_id = ? AND group_id = ? "
+  GroupChat GroupInfo {groupId} scopeInfo_ ->
+    withGroupItemsCond scopeInfo_ contentFilter $ \cond params ->
+      idsQuery (" user_id = ? AND group_id = ? " <> cond) ((userId, groupId) :. params) "item_ts"
   DirectChat Contact {contactId} -> liftIO $ case contentFilter of
     Nothing -> idsQuery ctCond (userId, contactId) "created_at"
     Just MCLink_ -> idsQuery (ctCond <> " AND has_link = 1 ") (userId, contactId) "created_at"
