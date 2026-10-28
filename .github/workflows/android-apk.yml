@@ -1,0 +1,187 @@
+name: android-apk
+run-name: "${{ github.event_name == 'workflow_dispatch' && format('android-apk {0} {1}@{2}', inputs.nonce, inputs.repo, inputs.sha) || 'android-apk: registered by a push to its branch, nothing built' }}"
+
+# Builds the arm64-v8a debug APK of one commit (the foss flavor when the commit has flavors) with the core libs of a
+# successful android-core.yml run (same android-core key). Started by ~/build/android.sh, which re-signs the APK with
+# its own debug key. The push trigger only makes GitHub list the workflow.
+on:
+  push:
+    branches: [ci/builds]
+    paths: [.github/workflows/android-apk.yml]
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: Full commit SHA to build
+        required: true
+        type: string
+      repo:
+        description: Repository holding the commit
+        type: choice
+        default: Narasimha-sc/simplex-chat
+        options: [Narasimha-sc/simplex-chat, simplex-chat/simplex-chat]
+      nonce:
+        description: Identifies the run to the script that started it
+        required: true
+        type: string
+      tree:
+        description: Expected git tree id of the commit (the run fails if it differs); empty to skip the check
+        type: string
+        default: ''
+      core_run:
+        description: Run id of the successful android-core.yml run whose artifact holds the core libs
+        required: true
+        type: string
+      key:
+        description: android-core key of the libs (names the artifact android-core-aarch64-<key>)
+        required: true
+        type: string
+      test:
+        description: Also build the instrumented test APK
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: android-apk-${{ inputs.nonce || github.sha }}
+
+jobs:
+  apk:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - name: Check inputs
+        env:
+          SHA: ${{ inputs.sha }}
+          NONCE: ${{ inputs.nonce }}
+          TREE: ${{ inputs.tree }}
+          CORE_RUN: ${{ inputs.core_run }}
+          KEY: ${{ inputs.key }}
+        run: |
+          [[ $SHA =~ ^[0-9a-f]{40}$ ]] || { echo "::error::sha must be a full commit SHA"; exit 1; }
+          [[ $NONCE =~ ^[0-9a-f]{12}$ ]] || { echo "::error::nonce must be 12 hex digits"; exit 1; }
+          [[ -z $TREE || $TREE =~ ^[0-9a-f]{40}$ ]] || { echo "::error::tree must be a full tree id"; exit 1; }
+          [[ $CORE_RUN =~ ^[0-9]+$ ]] || { echo "::error::core_run must be a run id"; exit 1; }
+          [[ $KEY =~ ^[0-9a-f]{24}$ ]] || { echo "::error::key must be 24 hex digits"; exit 1; }
+
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          repository: ${{ inputs.repo }}
+          ref: ${{ inputs.sha }}
+          path: chat
+          submodules: recursive
+          persist-credentials: false
+
+      - name: Check tree
+        working-directory: chat
+        env:
+          SHA: ${{ inputs.sha }}
+          TREE: ${{ inputs.tree }}
+        run: |
+          [ "$(git rev-parse HEAD)" = "$SHA" ]
+          [[ -z $TREE || "$(git rev-parse 'HEAD^{tree}')" == "$TREE" ]] || { echo "::error::the commit's tree is $(git rev-parse 'HEAD^{tree}'), not $TREE"; exit 1; }
+
+      - name: Download core libs
+        uses: actions/download-artifact@v7
+        with:
+          name: android-core-aarch64-${{ inputs.key }}
+          path: ${{ runner.temp }}/core
+          run-id: ${{ inputs.core_run }}
+          github-token: ${{ github.token }}
+
+      # BUILD-INFO of the artifact must name the key asked for and the libs it carries.
+      - name: Stage core libs
+        working-directory: chat
+        env:
+          KEY: ${{ inputs.key }}
+        run: |
+          set -euo pipefail
+          d="$RUNNER_TEMP/core/x"
+          mkdir -p "$d"
+          tar -xzf "$RUNNER_TEMP/core/android-core.tar.gz" -C "$d" --no-same-owner --no-same-permissions
+          [ "$(sed -n 's/^key=//p' "$d/BUILD-INFO")" = "$KEY" ]
+          for f in libsimplex.so libsupport.so; do
+            [ "$(sha256sum < "$d/$f" | cut -d' ' -f1)" = "$(sed -n "s/^sha256\.$f=//p" "$d/BUILD-INFO")" ]
+          done
+          dst=apps/multiplatform/common/src/commonMain/cpp/android/libs/arm64-v8a
+          mkdir -p "$dst"
+          cp "$d/libsimplex.so" "$d/libsupport.so" "$dst/"
+          ls -la "$dst"
+
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: corretto
+          java-version: 17
+          cache: gradle
+
+      # the NDK and CMake versions the project pins
+      - name: Setup Android SDK parts
+        run: |
+          set -euo pipefail
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;23.1.7779620" "cmake;3.22.1" "platforms;android-35" "build-tools;35.0.0" | tail -3
+
+      - name: Build APK
+        working-directory: chat/apps/multiplatform
+        env:
+          TEST: ${{ inputs.test }}
+        run: |
+          set -euo pipefail
+          if grep -q 'create("foss")' android/build.gradle.kts; then task=:android:assembleFossDebug; else task=:android:assembleDebug; fi
+          tasks=( "$task" )
+          [ "$TEST" = true ] && tasks+=( "${task}AndroidTest" )
+          ./gradlew --no-daemon --console=plain -Psimplex.assets.dir=../../assets "${tasks[@]}"
+
+      - name: Package
+        working-directory: chat/apps/multiplatform
+        env:
+          SHA: ${{ inputs.sha }}
+          REPO: ${{ inputs.repo }}
+          NONCE: ${{ inputs.nonce }}
+          CORE_RUN: ${{ inputs.core_run }}
+          KEY: ${{ inputs.key }}
+          TEST: ${{ inputs.test }}
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/pkg"
+          mkdir -p "$out"
+          if grep -q 'create("foss")' android/build.gradle.kts; then sub=foss/debug; variant=fossDebug; else sub=debug; variant=debug; fi
+          dir=android/build/outputs/apk/$sub
+          name=$(python3 -I -c '
+          import json, sys
+          m = json.load(open(sys.argv[1]))
+          if m.get("variantName", "").lower() != sys.argv[2].lower(): sys.exit(1)
+          print(next(e["outputFile"] for e in m["elements"] if any(f.get("value") == "arm64-v8a" for f in e.get("filters", []))))
+          ' "$dir/output-metadata.json" "$variant")
+          [[ -n $name && $name != */* && -f $dir/$name ]]
+          cp "$dir/$name" "$out/app.apk"
+          if [ "$TEST" = true ]; then
+            t=$(ls android/build/outputs/apk/androidTest/$sub/*.apk | head -1)
+            cp "$t" "$out/androidTest.apk"
+          fi
+          {
+            echo "repo=$REPO"
+            echo "sha=$SHA"
+            echo "tree=$(git -C ../.. rev-parse 'HEAD^{tree}')"
+            echo "nonce=$NONCE"
+            echo "run=$GITHUB_RUN_ID"
+            echo "core_run=$CORE_RUN"
+            echo "key=$KEY"
+            for f in "$out"/*.apk; do echo "sha256.${f##*/}=$(sha256sum < "$f" | cut -d' ' -f1)"; done
+          } > "$out/BUILD-INFO"
+          cat "$out/BUILD-INFO"
+          ls -la "$out"
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: android-apk-${{ inputs.nonce }}
+          path: ${{ runner.temp }}/pkg
+          compression-level: 0
+          retention-days: 3
+          if-no-files-found: error

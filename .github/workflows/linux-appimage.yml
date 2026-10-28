@@ -1,0 +1,193 @@
+name: linux-appimage
+run-name: "${{ github.event_name == 'workflow_dispatch' && format('linux-appimage {0} {1}@{2}', inputs.nonce, inputs.repo, inputs.sha) || 'linux-appimage: registered by a push to its branch, nothing built' }}"
+
+# Builds the release-equivalent Linux x86_64 AppImage (-O2 core, Corretto 17, Ubuntu 22.04 like build.yml's release job) of one commit.
+# Started by ~/build/linux.sh. The build steps of the commit built run as they are in that commit; this workflow only
+# supplies the runner setup, the caches and the artifact. The push trigger only makes GitHub list the workflow.
+on:
+  push:
+    branches: [ci/builds]
+    paths: [.github/workflows/linux-appimage.yml]
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: Full commit SHA to build
+        required: true
+        type: string
+      repo:
+        description: Repository holding the commit
+        type: choice
+        default: Narasimha-sc/simplex-chat
+        options: [Narasimha-sc/simplex-chat, simplex-chat/simplex-chat]
+      nonce:
+        description: Identifies the run to the script that started it
+        required: true
+        type: string
+      tree:
+        description: Expected git tree id of the commit (the run fails if it differs); empty to skip the check
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: linux-appimage-${{ inputs.nonce || github.sha }}
+
+jobs:
+  appimage:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 150
+    defaults:
+      run:
+        working-directory: chat
+    steps:
+      - name: Check inputs
+        working-directory: .
+        env:
+          SHA: ${{ inputs.sha }}
+          NONCE: ${{ inputs.nonce }}
+          TREE: ${{ inputs.tree }}
+        run: |
+          [[ $SHA =~ ^[0-9a-f]{40}$ ]] || { echo "::error::sha must be a full commit SHA"; exit 1; }
+          [[ $NONCE =~ ^[0-9a-f]{12}$ ]] || { echo "::error::nonce must be 12 hex digits"; exit 1; }
+          [[ -z $TREE || $TREE =~ ^[0-9a-f]{40}$ ]] || { echo "::error::tree must be a full tree id"; exit 1; }
+
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          repository: ${{ inputs.repo }}
+          ref: ${{ inputs.sha }}
+          path: chat
+          submodules: recursive
+          persist-credentials: false
+
+      - name: Check tree
+        env:
+          SHA: ${{ inputs.sha }}
+          TREE: ${{ inputs.tree }}
+        run: |
+          [ "$(git rev-parse HEAD)" = "$SHA" ]
+          [[ -z $TREE || "$(git rev-parse 'HEAD^{tree}')" == "$TREE" ]] || { echo "::error::the commit's tree is $(git rev-parse 'HEAD^{tree}'), not $TREE"; exit 1; }
+
+      - name: Show runner
+        run: |
+          lsb_release -ds
+          nproc
+          free -h
+          df -h /
+
+      - name: Restore core library
+        id: core-cache
+        uses: actions/cache/restore@v5
+        with:
+          path: |
+            chat/apps/multiplatform/common/src/commonMain/cpp/desktop/libs/linux-x86_64
+            chat/apps/multiplatform/build/links
+          key: linux-appimage-core-${{ hashFiles('chat/src/**', 'chat/cabal.project', 'chat/simplex-chat.cabal', 'chat/PRIVACY.md', 'chat/scripts/desktop/build-lib-linux.sh') }}
+
+      - name: Setup Haskell
+        id: haskell
+        if: steps.core-cache.outputs.cache-hit != 'true'
+        uses: simplex-chat/setup-haskell-action@v2
+        with:
+          ghc-version: 9.6.3
+          cabal-version: 3.10.2.0
+
+      # each run starts from the newest store and saves its own, so dist-newstyle never goes stale
+      - name: Restore cabal store
+        id: cabal-cache
+        if: steps.core-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/restore@v5
+        with:
+          path: |
+            ${{ steps.haskell.outputs.cabal-store }}
+            chat/dist-newstyle
+          key: linux-appimage-store-ghc9.6.3-${{ hashFiles('chat/cabal.project', 'chat/simplex-chat.cabal') }}-${{ github.run_id }}
+          restore-keys: |
+            linux-appimage-store-ghc9.6.3-${{ hashFiles('chat/cabal.project', 'chat/simplex-chat.cabal') }}-
+            linux-appimage-store-ghc9.6.3-
+
+      - name: Install libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgmp3-dev zlib1g-dev libnuma-dev libssl-dev patchelf strip-nondeterminism libfuse2 desktop-file-utils file
+
+      - name: Prepare cabal.project.local
+        if: steps.core-cache.outputs.cache-hit != 'true'
+        run: |
+          echo "ignore-project: False"    >> cabal.project.local
+          echo "package direct-sqlcipher" >> cabal.project.local
+          echo "    flags: +openssl"      >> cabal.project.local
+          # a restored dist-newstyle can hold an older version's build directory, which breaks the script's simplex-chat-* glob
+          version=$(sed -n 's/^version: *//p' simplex-chat.cabal)
+          find "dist-newstyle/build/$(uname -m)-linux/ghc-9.6.3" -maxdepth 1 -name 'simplex-chat-*' ! -name "simplex-chat-$version" -exec rm -rf {} + 2> /dev/null || true
+
+      - name: Build core library
+        id: core
+        if: steps.core-cache.outputs.cache-hit != 'true'
+        run: scripts/desktop/build-lib-linux.sh
+
+      # saved even when a later step fails
+      - name: Save cabal store
+        if: ${{ !cancelled() && steps.core-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v5
+        with:
+          path: |
+            ${{ steps.haskell.outputs.cabal-store }}
+            chat/dist-newstyle
+          key: ${{ steps.cabal-cache.outputs.cache-primary-key }}
+
+      - name: Save core library
+        if: ${{ steps.core.outcome == 'success' }}
+        uses: actions/cache/save@v5
+        with:
+          path: |
+            chat/apps/multiplatform/common/src/commonMain/cpp/desktop/libs/linux-x86_64
+            chat/apps/multiplatform/build/links
+          key: ${{ steps.core-cache.outputs.cache-primary-key }}
+
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: corretto
+          java-version: 17
+          cache: gradle
+
+      - name: Build AppImage
+        run: |
+          export ASSETS_DIR='../../assets'
+          scripts/desktop/make-appimage-linux.sh
+
+      - name: Package
+        env:
+          SHA: ${{ inputs.sha }}
+          REPO: ${{ inputs.repo }}
+          NONCE: ${{ inputs.nonce }}
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/pkg"
+          mkdir -p "$out"
+          shopt -s nullglob
+          files=( apps/multiplatform/release/main/*imple*.AppImage )
+          [ "${#files[@]}" = 1 ] || { echo "::error::expected one AppImage, found ${#files[@]}"; exit 1; }
+          cp "${files[0]}" "$out/SimpleX.AppImage"
+          {
+            echo "repo=$REPO"
+            echo "sha=$SHA"
+            echo "tree=$(git rev-parse 'HEAD^{tree}')"
+            echo "nonce=$NONCE"
+            echo "run=$GITHUB_RUN_ID"
+            echo "sha256.SimpleX.AppImage=$(sha256sum < "$out/SimpleX.AppImage" | cut -d' ' -f1)"
+          } > "$out/BUILD-INFO"
+          cat "$out/BUILD-INFO"
+          ls -la "$out"
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: linux-appimage-${{ inputs.nonce }}
+          path: ${{ runner.temp }}/pkg
+          compression-level: 0
+          retention-days: 3
+          if-no-files-found: error
