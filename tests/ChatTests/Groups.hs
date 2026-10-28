@@ -9013,6 +9013,10 @@ testScopedSupportForwardLeave =
       bob <## "#team: eve left the group (signed)"
       dan <## "#team: eve left the group (signed)"
 
+      alice #$> ("/_get chat #1 count=1", chat, [(0, "left (signed)")])
+      bob #$> ("/_get chat #1 count=1", chat, [(0, "left (signed)")])
+      dan #$> ("/_get chat #1 count=1", chat, [(0, "left (signed)")])
+
       alice ##> "#team (support: eve) hi"
       alice <## "bad chat command: support member not current or pending"
       bob ##> "#team (support: eve) hi"
