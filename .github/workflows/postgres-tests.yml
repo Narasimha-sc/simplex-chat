@@ -40,7 +40,7 @@ jobs:
           sudo apt-get install -y libgmp3-dev zlib1g-dev libnuma-dev libssl-dev libpq-dev postgresql-client-15
       - name: Start PostgreSQL 15
         run: |
-          docker run -d --name pg -p 5432:5432 -e POSTGRES_HOST_AUTH_METHOD=trust postgres:15 -c max_connections=500 -c fsync=off
+          docker run -d --name pg -p 5432:5432 -e POSTGRES_HOST_AUTH_METHOD=trust postgres:15 postgres -c max_connections=3000 -c fsync=off -c shared_buffers=512MB
           timeout 60 sh -c 'until pg_isready -h localhost; do sleep 1; done'
       - name: Build
         run: |
