@@ -289,6 +289,8 @@ class ActiveChatState {
     var unreadAfter: Int = 0
     // exclusive
     var unreadAfterNewestLoaded: Int = 0
+    // item to open the chat at, set on initial load, nil to open at the last item
+    var openAtItemId: Int64? = nil
 
     func moveUnreadAfterItem(_ toItemId: Int64?, _ nonReversedItems: [ChatItem]) {
         guard let toItemId else { return }
@@ -322,6 +324,7 @@ class ActiveChatState {
         unreadTotal = 0
         unreadAfter = 0
         unreadAfterNewestLoaded = 0
+        openAtItemId = nil
     }
 
     func itemsRead(_ itemIds: Set<Int64>?, _ newItems: [ChatItem]) {

@@ -25,7 +25,7 @@ import chat.simplex.common.model.*
 import chat.simplex.common.platform.*
 import chat.simplex.common.ui.theme.*
 import chat.simplex.common.views.helpers.*
-import chat.simplex.res.*
+import chat.simplex.res.MR
 import java.io.File
 import java.net.URI
 
@@ -38,12 +38,12 @@ fun CIFileView(
   showTimestamp: Boolean,
   showMenu: MutableState<Boolean>,
   smallView: Boolean = false,
+  senderProfile: LocalProfile?,
   receiveFile: (Long) -> Unit
 ) {
   val saveFileLauncher = rememberSaveFileLauncher(ciFile = file)
   val sizeMultiplier = 1f
   val progressSizeMultiplier = if (smallView) 0.7f else 1f
-  val terminal = LocalTerminalLayout.current
   @Composable
   fun fileIcon(
     innerIcon: Painter? = null,
@@ -77,12 +77,13 @@ fun CIFileView(
     if (file != null) {
       when {
         file.fileStatus is CIFileStatus.RcvInvitation || file.fileStatus is CIFileStatus.RcvAborted -> {
-          val prohibited = file.fileProhibited
-          if (prohibited != null) {
-            showProhibitedFileAlert(file, prohibited)
-          } else {
-            chatModel.openWhenReceived(file, smallView)
+          if (fileSizeValid(file, senderProfile)) {
             receiveFile(file.fileId)
+          } else {
+            AlertManager.shared.showAlertMsg(
+              generalGetString(MR.strings.large_file),
+              String.format(generalGetString(MR.strings.contact_sent_large_file), formatBytes(getMaxFileSize(file.fileProtocol, senderProfile)))
+            )
           }
         }
         file.fileStatus is CIFileStatus.RcvAccepted ->
@@ -100,15 +101,13 @@ fun CIFileView(
             FileProtocol.LOCAL -> {}
           }
         file.fileStatus is CIFileStatus.RcvError ->
-          showFileErrorAlert(file.fileStatus.rcvFileError, file)
+          showFileErrorAlert(file.fileStatus.rcvFileError)
         file.fileStatus is CIFileStatus.RcvWarning ->
           showFileErrorAlert(file.fileStatus.rcvFileError, temporary = true)
         file.fileStatus is CIFileStatus.SndError ->
           showFileErrorAlert(file.fileStatus.sndFileError)
         file.fileStatus is CIFileStatus.SndWarning ->
           showFileErrorAlert(file.fileStatus.sndFileError, temporary = true)
-        isMarkdownFile(file) && file.loaded ->
-          showMarkdownFile(file)
         file.forwardingAllowed() -> {
           withLongRunningApi(slow = 600_000) {
             var filePath = getLoadedFilePath(file)
@@ -134,7 +133,7 @@ fun CIFileView(
   fun fileIndicator() {
     Box(
       Modifier
-        .padding(top = if (terminal) 0.dp else 2.sp.toDp())
+        .padding(top = 2.sp.toDp())
         .size(40.sp.toDp() * sizeMultiplier)
         .clip(RoundedCornerShape(4.sp.toDp() * sizeMultiplier)),
       contentAlignment = Alignment.Center
@@ -158,12 +157,10 @@ fun CIFileView(
           is CIFileStatus.SndError -> fileIcon(innerIcon = painterResource(MR.images.ic_close))
           is CIFileStatus.SndWarning -> fileIcon(innerIcon = painterResource(MR.images.ic_warning_filled))
           is CIFileStatus.RcvInvitation ->
-            if (!fileSizeValid(file))
-              fileIcon(innerIcon = painterResource(MR.images.ic_priority_high), color = WarningOrange)
-            else if (file.expired)
-              fileIcon(innerIcon = painterResource(MR.images.ic_close))
-            else
+            if (fileSizeValid(file, senderProfile))
               fileIcon(innerIcon = painterResource(MR.images.ic_arrow_downward), color = MaterialTheme.colors.primary, topPadding = 10.sp.toDp())
+            else
+              fileIcon(innerIcon = painterResource(MR.images.ic_priority_high), color = WarningOrange)
           is CIFileStatus.RcvAccepted -> fileIcon(innerIcon = painterResource(MR.images.ic_more_horiz))
           is CIFileStatus.RcvTransfer ->
             if (file.fileProtocol == FileProtocol.XFTP && file.fileStatus.rcvProgress < file.fileStatus.rcvTotal) {
@@ -187,32 +184,24 @@ fun CIFileView(
 
   val showOpenSaveMenu = rememberSaveable(file?.fileId) { mutableStateOf(false) }
   val ext = file?.fileSource?.filePath?.substringAfterLast(".")?.takeIf { it.isNotBlank() }
-  val loadedFilePath = if (appPlatform.isAndroid && file?.fileSource != null && !isMarkdownFile(file)) getLoadedFilePath(file) else null
+  val loadedFilePath = if (appPlatform.isAndroid && file?.fileSource != null) getLoadedFilePath(file) else null
   if (loadedFilePath != null && file?.fileSource != null) {
     val encrypted = file.fileSource.cryptoArgs != null
     SaveOrOpenFileMenu(showOpenSaveMenu, encrypted, ext, File(loadedFilePath).toURI(), file.fileSource, saveFile = { fileAction() })
   }
-  val onClick: () -> Unit = {
-    if (appPlatform.isAndroid && loadedFilePath != null) {
-      showOpenSaveMenu.value = true
-    } else {
-      fileAction()
-    }
-  }
-  if (file != null) OpenWhenReceivedEffect(file, smallView, onClick)
   Row(
     Modifier
       .combinedClickable(
-        onClick = onClick,
+        onClick = {
+          if (appPlatform.isAndroid && loadedFilePath != null) {
+            showOpenSaveMenu.value = true
+          } else {
+            fileAction()
+          }
+        },
         onLongClick = { showMenu.value = true }
       )
-      .padding(
-        when {
-          smallView -> PaddingValues()
-          terminal -> PaddingValues(top = TERMINAL_FILE_TOP_GAP.toDp(), start = 6.sp.toDp(), end = 12.sp.toDp())
-          else -> PaddingValues(top = 4.sp.toDp(), bottom = 6.sp.toDp(), start = 6.sp.toDp(), end = 12.sp.toDp())
-        }
-      ),
+      .padding(if (smallView) PaddingValues() else PaddingValues(top = 4.sp.toDp(), bottom = 6.sp.toDp(), start = 6.sp.toDp(), end = 12.sp.toDp())),
     verticalAlignment = Alignment.Bottom,
     horizontalArrangement = Arrangement.spacedBy(2.sp.toDp())
   ) {
@@ -248,38 +237,11 @@ fun CIFileView(
   }
 }
 
-// the core decides whether a received file is above the size the sender's badge allows
-fun fileSizeValid(file: CIFile): Boolean = file.fileProhibited == null
+// whether a received file is within the size we accept from its sender
+fun fileSizeValid(file: CIFile, senderProfile: LocalProfile?): Boolean =
+  file.fileSize <= getMaxFileSize(file.fileProtocol, senderProfile)
 
-@Composable
-fun OpenWhenReceivedEffect(file: CIFile, inChatList: Boolean, open: () -> Unit) {
-  KeyChangeEffect(file.loaded) {
-    if (chatModel.receivedFileToOpen(file, inChatList)) open()
-  }
-}
-
-fun showProhibitedFileAlert(file: CIFile, prohibited: FileProhibited) {
-  val badgeIssue = when (prohibited.badgeStatus) {
-    null, BadgeStatus.Active -> ""
-    BadgeStatus.Expired, BadgeStatus.ExpiredOld -> generalGetString(MR.strings.badge_expired)
-    BadgeStatus.Failed -> generalGetString(MR.strings.badge_verification_failed)
-    BadgeStatus.UnknownKey -> generalGetString(MR.strings.badge_no_key)
-  }
-  AlertManager.shared.showAlertMsg(
-    generalGetString(MR.strings.large_file),
-    largeFileMessage(file.fileSize, badgeIssue = badgeIssue)
-  )
-}
-
-fun showFileErrorAlert(err: FileError, file: CIFile? = null, temporary: Boolean = false) {
-  val fileExpires = file?.fileExpires
-  if (file != null && fileExpires != null && file.expired && (err is FileError.Auth || err is FileError.NoFile)) {
-    AlertManager.shared.showAlertMsg(
-      generalGetString(MR.strings.file_expired),
-      String.format(generalGetString(MR.strings.file_error_expired), localTimestamp(fileExpires))
-    )
-    return
-  }
+fun showFileErrorAlert(err: FileError, temporary: Boolean = false) {
   val title: String = generalGetString(if (temporary) MR.strings.temporary_file_error else MR.strings.file_error)
   val btn = err.moreInfoButton
   if (btn != null) {

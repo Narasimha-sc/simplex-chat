@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Callable
-from typing import Any
+from typing import Any, Callable
 
 
 def compile_message_filter(kw: dict[str, Any]) -> Callable[[Any], bool]:

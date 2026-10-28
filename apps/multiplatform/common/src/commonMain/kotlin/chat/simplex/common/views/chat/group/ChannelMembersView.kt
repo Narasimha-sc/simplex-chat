@@ -21,7 +21,7 @@ import chat.simplex.common.views.chat.ownersContributorsCountStr
 import chat.simplex.common.views.chat.subscriberCountStr
 import chat.simplex.common.views.chat.topPaddingToContent
 import chat.simplex.common.views.helpers.*
-import chat.simplex.res.*
+import chat.simplex.res.MR
 
 @Composable
 fun ModalData.ChannelMembersView(
@@ -44,7 +44,7 @@ fun ModalData.ChannelMembersView(
   val s = searchText.value.text.trim().lowercase()
   val subscriberCount = groupInfo.groupSummary.publicMemberCount ?: (members.size + 1).toLong()
   val oneHandUI = remember { ChatController.appPrefs.oneHandUI.state }
-  val title = if (groupInfo.canModerate) {
+  val title = if (groupInfo.isOwner) {
     generalGetString(MR.strings.channel_members_title_subscribers)
   } else {
     generalGetString(MR.strings.channel_members_section_owners)
@@ -57,7 +57,7 @@ fun ModalData.ChannelMembersView(
     item {
       AppBarTitle(title)
     }
-    if (groupInfo.canModerate) {
+    if (groupInfo.isOwner) {
       val showSearch = members.size > 8
       item {
         SectionView(title = subscriberCountStr(subscriberCount)) {

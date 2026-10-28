@@ -20,7 +20,7 @@ import dev.icerock.moko.resources.compose.painterResource
 import dev.icerock.moko.resources.compose.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import chat.simplex.res.*
+import chat.simplex.res.MR
 import chat.simplex.common.model.*
 import chat.simplex.common.model.ChatController.appPrefs
 import chat.simplex.common.ui.theme.*
@@ -87,14 +87,19 @@ fun PrivacySettingsView(
     val currentUser = chatModel.currentUser.value
     if (currentUser != null && !chatModel.desktopNoUserNoRemote) {
       SectionDividerSpaced()
-      AutoAcceptSection(
+      ContacRequestsFromGroupsSection(
         currentUser = currentUser,
-        setAutoAcceptMemberContacts = { enable ->
+        setAutoAcceptGrpDirectInvs = { enable ->
           withApi {
             chatModel.controller.apiSetUserAutoAcceptMemberContacts(currentUser, enable)
             chatModel.currentUser.value = currentUser.copy(autoAcceptMemberContacts = enable)
           }
-        },
+        }
+      )
+
+      SectionDividerSpaced()
+      GroupInvitationsSection(
+        currentUser = currentUser,
         setAutoAcceptGroupInvitations = { enable ->
           withApi {
             chatModel.controller.apiSetUserAutoAcceptGroupInvitations(currentUser, enable)
@@ -339,22 +344,40 @@ expect fun PrivacyDeviceSection(
 )
 
 @Composable
-private fun AutoAcceptSection(
+private fun ContacRequestsFromGroupsSection(
   currentUser: User,
-  setAutoAcceptMemberContacts: (Boolean) -> Unit,
-  setAutoAcceptGroupInvitations: (Boolean) -> Unit
+  setAutoAcceptGrpDirectInvs: (Boolean) -> Unit
 ) {
-  // legacy string key names, reused for their values so this section stays translated
-  SectionView(stringResource(MR.strings.auto_accept_contact)) {
-    SettingsActionItemWithContent(painterResource(MR.images.ic_person), stringResource(MR.strings.settings_section_title_contact_requests_from_groups)) {
+  SectionView(stringResource(MR.strings.settings_section_title_contact_requests_from_groups)) {
+    SettingsActionItemWithContent(painterResource(MR.images.ic_check), stringResource(MR.strings.auto_accept_contact)) {
       DefaultSwitch(
         checked = currentUser.autoAcceptMemberContacts,
         onCheckedChange = { enable ->
-          setAutoAcceptMemberContacts(enable)
+          setAutoAcceptGrpDirectInvs(enable)
         }
       )
     }
-    SettingsActionItemWithContent(painterResource(MR.images.ic_group), stringResource(MR.strings.group_invitations)) {
+  }
+  SectionTextFooter(
+    remember(currentUser.displayName) {
+      buildAnnotatedString {
+        append(generalGetString(MR.strings.this_setting_is_for_your_current_profile) + " ")
+        withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
+          append(currentUser.displayName)
+        }
+        append(".")
+      }
+    }
+  )
+}
+
+@Composable
+private fun GroupInvitationsSection(
+  currentUser: User,
+  setAutoAcceptGroupInvitations: (Boolean) -> Unit
+) {
+  SectionView(stringResource(MR.strings.settings_section_title_group_invitations)) {
+    SettingsActionItemWithContent(painterResource(MR.images.ic_check), stringResource(MR.strings.auto_accept_contact)) {
       DefaultSwitch(
         checked = currentUser.autoAcceptGroupInvitations,
         onCheckedChange = { enable ->
@@ -366,7 +389,7 @@ private fun AutoAcceptSection(
   SectionTextFooter(
     remember(currentUser.displayName) {
       buildAnnotatedString {
-        append(generalGetString(MR.strings.these_settings_are_for_your_current_profile) + " ")
+        append(generalGetString(MR.strings.this_setting_is_for_your_current_profile) + " ")
         withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
           append(currentUser.displayName)
         }
@@ -403,7 +426,7 @@ private fun DeliveryReceiptsSection(
   SectionTextFooter(
     remember(currentUser.displayName) {
       buildAnnotatedString {
-        append(generalGetString(MR.strings.these_settings_are_for_your_current_profile) + " ")
+        append(generalGetString(MR.strings.receipts_section_description) + " ")
         withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
           append(currentUser.displayName)
         }

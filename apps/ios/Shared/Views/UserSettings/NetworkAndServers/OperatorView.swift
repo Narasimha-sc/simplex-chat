@@ -623,15 +623,13 @@ func conditionsLinkButton() -> some View {
     }
 }
 
-struct OperatorView_Previews: PreviewProvider {
-    static var previews: some View {
-        OperatorView(
-            currUserServers: Binding.constant([UserOperatorServers.sampleData1, UserOperatorServers.sampleDataNilOperator]),
-            userServers: Binding.constant([UserOperatorServers.sampleData1, UserOperatorServers.sampleDataNilOperator]),
-            serverErrors: Binding.constant([]),
-            serverWarnings: Binding.constant([]),
-            operatorIndex: 1,
-            useOperator: ServerOperator.sampleData1.enabled
-        )
-    }
+#Preview {
+    OperatorView(
+        currUserServers: Binding.constant([UserOperatorServers.sampleData1, UserOperatorServers.sampleDataNilOperator]),
+        userServers: Binding.constant([UserOperatorServers.sampleData1, UserOperatorServers.sampleDataNilOperator]),
+        serverErrors: Binding.constant([]),
+        serverWarnings: Binding.constant([]),
+        operatorIndex: 1,
+        useOperator: ServerOperator.sampleData1.enabled
+    )
 }

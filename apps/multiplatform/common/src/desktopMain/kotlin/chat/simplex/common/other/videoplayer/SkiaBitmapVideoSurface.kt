@@ -8,7 +8,6 @@ import org.jetbrains.skia.Bitmap
 import org.jetbrains.skia.ColorAlphaType
 import org.jetbrains.skia.ColorType
 import org.jetbrains.skia.ImageInfo
-import uk.co.caprica.vlcj.media.VideoOrientation
 import uk.co.caprica.vlcj.player.base.MediaPlayer
 import uk.co.caprica.vlcj.player.embedded.videosurface.CallbackVideoSurface
 import uk.co.caprica.vlcj.player.embedded.videosurface.VideoSurface
@@ -23,49 +22,38 @@ import javax.swing.SwingUtilities
 // https://github.com/JetBrains/compose-multiplatform/pull/3336/files
 internal class SkiaBitmapVideoSurface : VideoSurface(VideoSurfaceAdapters.getVideoSurfaceAdapter()) {
 
-  private companion object {
-    // A received file declares its own size, and vlc allocates the buffer we ask for here (and we copy
-    // it into a java array of the same size), so an unbounded request is an out-of-memory from a message.
-    // Above the budget the picture is scaled down keeping its aspect - 4096x4096 of RV32 is 64 MB
-    const val MAX_BUFFER_PIXELS = 4096L * 4096L
-    val transposedOrientations = setOf(
-      VideoOrientation.LEFT_TOP,
-      VideoOrientation.LEFT_BOTTOM,
-      VideoOrientation.RIGHT_TOP,
-      VideoOrientation.RIGHT_BOTTOM,
-    )
-
-    // Keeps the aspect, never returns a side below 1, and keeps width * height * 4 inside an Int
-    fun boundedSize(width: Int, height: Int): Pair<Int, Int> {
-      val w = width.coerceAtLeast(1)
-      val h = height.coerceAtLeast(1)
-      val pixels = w.toLong() * h.toLong()
-      if (pixels <= MAX_BUFFER_PIXELS) return w to h
-      val scale = kotlin.math.sqrt(MAX_BUFFER_PIXELS.toDouble() / pixels.toDouble())
-      var sw = (w * scale).toInt().coerceAtLeast(1)
-      var sh = (h * scale).toInt().coerceAtLeast(1)
-      // Scaling both sides assumes both shrink; a side pinned at 1 only shrinks the area linearly,
-      // so a 2_000_000_000 x 1 declaration would still get 45 times the budget. Divide the budget
-      // by the pinned side instead
-      if (sw.toLong() * sh.toLong() > MAX_BUFFER_PIXELS) {
-        if (sw >= sh) sw = (MAX_BUFFER_PIXELS / sh).toInt() else sh = (MAX_BUFFER_PIXELS / sw).toInt()
-      }
-      return sw to sh
-    }
-  }
-
   private val videoSurface = SkiaBitmapVideoSurface()
-  @Volatile private var mediaPlayer: MediaPlayer? = null
-  private lateinit var imageInfo: ImageInfo
-  private lateinit var frameBytes: ByteArray
-  @Volatile private var allocated = false
+
+  // Every frame is decoded into one reused bitmap, and asComposeImageBitmap() hands out a view of it rather
+  // than a copy. installPixels replaces that bitmap's pixel storage, so a thread reading the view while a
+  // frame lands reads storage that is being freed - Skia's load_8888 then dereferences null. The lock makes
+  // the write indivisible; snapshot() copies under it, so a reader ends up owning pixels nobody rewrites.
+  private val frameLock = Any()
+  private var imageInfo: ImageInfo? = null
+  private var frameBytes: ByteArray? = null
+  private var frameArrived = false
   private val skiaBitmap: Bitmap = Bitmap()
   private val composeBitmap = mutableStateOf<ImageBitmap?>(null)
 
   val bitmap: State<ImageBitmap?> = composeBitmap
 
+  /**
+   * The current frame as an image that keeps its pixels, for callers that outlive the next frame - taking a
+   * still of a video, say. [bitmap] is the playing surface and its pixels are gone by the frame after next.
+   */
+  fun snapshot(): ImageBitmap? = synchronized(frameLock) {
+    val info = imageInfo
+    val bytes = frameBytes
+    if (!frameArrived || info == null || bytes == null) return null
+    Bitmap()
+      .apply {
+        installPixels(info, bytes.copyOf(), info.minRowBytes)
+        setImmutable()
+      }
+      .asComposeImageBitmap()
+  }
+
   override fun attach(mediaPlayer: MediaPlayer) {
-    this.mediaPlayer = mediaPlayer
     videoSurface.attach(mediaPlayer)
   }
 
@@ -74,44 +62,22 @@ internal class SkiaBitmapVideoSurface : VideoSurface(VideoSurfaceAdapters.getVid
     private var sourceHeight: Int = 0
 
     override fun getBufferFormat(sourceWidth: Int, sourceHeight: Int): BufferFormat {
-      // libvlc passes the size the decoder padded the picture to, not the size of the picture (dav1d
-      // pads to a multiple of 128, so 1920x1080 arrives as 1920x1152), and vlc stretches the picture to
-      // fill whatever size is returned. Ask for the size of the video track instead. Not the selected
-      // track: video().track() takes the input lock, which stop() holds while it waits for this thread
-      // to finish, so asking here deadlocks both, and every caller of the player after them
-      val tracks = mediaPlayer?.media()?.info()?.videoTracks()
-      val track = tracks?.singleOrNull()
-      // Both track sides or neither: one side from the track and the other from the padded size libvlc
-      // passed never described the same picture, and transposing such a pair compounds the mismatch
-      val trackW = track?.width() ?: 0
-      val trackH = track?.height() ?: 0
-      val useTrack = trackW > 0 && trackH > 0
-      val width = if (useTrack) trackW else sourceWidth
-      val height = if (useTrack) trackH else sourceHeight
-      // The track carries the size before rotation, but vlc rotates the picture before it reaches
-      // this buffer, so for the transposed orientations the picture arrives with the sides swapped.
-      // Only when the track's own sides are used: the size libvlc passed is already rotated
-      val transposed = useTrack && (track?.orientation() in transposedOrientations)
-      val orientedWidth = if (transposed) height else width
-      val orientedHeight = if (transposed) width else height
-      val (w, h) = boundedSize(orientedWidth, orientedHeight)
-      this.sourceWidth = w
-      this.sourceHeight = h
-      return RV32BufferFormat(w, h)
+      this.sourceWidth = sourceWidth
+      this.sourceHeight = sourceHeight
+      return RV32BufferFormat(sourceWidth, sourceHeight)
     }
 
     override fun allocatedBuffers(buffers: Array<ByteBuffer>) {
-      // rewind first, as in display: remaining() on an already-read buffer would size this short
-      frameBytes = buffers[0].run { rewind(); ByteArray(remaining()).also(::get) }
-      imageInfo = ImageInfo(
-        sourceWidth,
-        sourceHeight,
-        ColorType.BGRA_8888,
-        ColorAlphaType.PREMUL,
-      )
-      // Last, and volatile: vlc calls this on its own thread while display reads imageInfo and
-      // frameBytes on the event thread, and this write is what publishes them to it
-      this@SkiaBitmapVideoSurface.allocated = true
+      synchronized(frameLock) {
+        frameBytes = buffers[0].run { ByteArray(remaining()).also(::get) }
+        imageInfo = ImageInfo(
+          sourceWidth,
+          sourceHeight,
+          ColorType.BGRA_8888,
+          ColorAlphaType.PREMUL,
+        )
+        frameArrived = false
+      }
     }
   }
 
@@ -121,34 +87,21 @@ internal class SkiaBitmapVideoSurface : VideoSurface(VideoSurfaceAdapters.getVid
       nativeBuffers: Array<ByteBuffer>,
       bufferFormat: BufferFormat,
     ) {
-      // The native buffer belongs to vlc and is only guaranteed to exist for the duration of this
-      // callback, so everything that touches it has to happen here, on vlc's thread - deferred code
-      // would read through a pointer vlc may have freed on a format change. Only the copy is done
-      // here; skia and compose are event-thread objects and get the private copy
-      if (!this@SkiaBitmapVideoSurface.allocated) return
-      val info = imageInfo
-      // imageInfo comes from the format that was last allocated and this frame from the format it was
-      // rendered with; they differ across a renegotiation, and the pixels would be read with the
-      // wrong stride, so display only what matches
-      if (bufferFormat.width != info.width || bufferFormat.height != info.height) return
-      val rowBytes = info.width.toLong() * 4
-      val needed = rowBytes * info.height
-      val buffer = nativeBuffers[0]
-      // rewind first: the same buffer is reused for every frame, so its position is at the end of
-      // the previous read and remaining() would be 0
-      buffer.rewind()
-      // Capture the array: a renegotiation replaces the field with one of another size before the
-      // deferred install runs, and info's geometry must be read against the array it was copied into.
-      // The next frame's copy can overwrite it while the install reads - a torn frame at worst, since
-      // the geometry checks above hold for both frames of the same format
-      val bytes = frameBytes
-      if (needed > bytes.size || buffer.remaining().toLong() < needed) return
-      buffer.get(bytes, 0, needed.toInt())
       SwingUtilities.invokeLater {
-        // installPixels reports whether skia took the pixels; publishing the bitmap when it did not
-        // would hand compose a bitmap with no pixels behind it
-        if (skiaBitmap.installPixels(info, bytes, rowBytes.toInt())) {
+        synchronized(frameLock) {
+          val info = imageInfo ?: return@invokeLater
+          val bytes = frameBytes ?: return@invokeLater
+          // VLC renegotiates the format when it cannot build the output it first asked for, and then displays
+          // through a buffer of the new size against the info describing the old one. Skia reads the frame as
+          // that info says, so the mismatch is read off the end of the array. Wait for the matching format.
+          if (bufferFormat.width != info.width || bufferFormat.height != info.height) return@invokeLater
+          val buffer = nativeBuffers[0]
+          buffer.rewind()
+          if (buffer.remaining() < bytes.size) return@invokeLater
+          buffer.get(bytes)
+          skiaBitmap.installPixels(info, bytes, info.minRowBytes)
           composeBitmap.value = skiaBitmap.asComposeImageBitmap()
+          frameArrived = true
         }
       }
     }

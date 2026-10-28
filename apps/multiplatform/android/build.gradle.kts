@@ -9,13 +9,13 @@ plugins {
 }
 
 android {
-    compileSdk = 36
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "chat.simplex.app"
         namespace = "chat.simplex.app"
         minSdk = 26
-        targetSdk = 36
+        targetSdk = 35
         // !!!
         // skip version code after release to F-Droid, as it uses two version codes
         versionCode = (extra["android.version_code"] as String).toInt()
@@ -33,21 +33,6 @@ android {
         manifestPlaceholders["app_name"] = "@string/app_name"
         manifestPlaceholders["provider_authorities"] = "chat.simplex.app.provider"
         manifestPlaceholders["extract_native_libs"] = rootProject.extra["compression.level"] as Int != 0
-    }
-
-    // `google` is distributed via Google Play as an app bundle and includes Play Billing.
-    // `foss` is distributed via F-Droid and as APKs on GitHub, without Play dependencies.
-    flavorDimensions += "store"
-    productFlavors {
-        create("google") {
-            dimension = "store"
-            buildConfigField("boolean", "PLAY_STORE", "true")
-        }
-        create("foss") {
-            dimension = "store"
-            isDefault = true
-            buildConfigField("boolean", "PLAY_STORE", "false")
-        }
     }
 
     buildTypes {
@@ -135,7 +120,7 @@ android {
                 if (isRelease) {
                     include("arm64-v8a", "armeabi-v7a")
                 } else {
-                    include("arm64-v8a", "armeabi-v7a")
+                    include("arm64-v8a")
                     isUniversalApk = false
                 }
             }
@@ -143,28 +128,8 @@ android {
     }
 }
 
-// The graph is checked rather than the requested task, because every aggregate task
-// (assemble, assembleRelease, build, bundle, ...) packages these variants too.
-val projectPath = project.path
-val apkTasks = setOf("packageFossDebug", "packageGoogleDebug", "packageFossRelease", "packageGoogleRelease")
-val apkTaskPaths = apkTasks.map { "$projectPath:$it" }.toSet()
-val bundleTaskPaths = apkTaskPaths.map { it + "Bundle" }.toSet()
-gradle.taskGraph.whenReady {
-    if (hasTask("$projectPath:packageGoogleRelease")) {
-        throw GradleException("A release apk must not include Play Billing, use assembleFossRelease or bundleGoogleRelease")
-    }
-    if (hasTask("$projectPath:packageFossReleaseBundle")) {
-        throw GradleException("An app bundle must include Play Billing, use bundleGoogleRelease or assembleFossRelease")
-    }
-    // `isBundle` above is derived from the whole invocation, so a bundle in it disables abi splits
-    if (apkTaskPaths.any { hasTask(it) } && bundleTaskPaths.any { hasTask(it) }) {
-        throw GradleException("Build the apks and the bundle in separate invocations, the bundle disables abi splits")
-    }
-}
-
 dependencies {
     implementation(project(":common"))
-    "googleImplementation"("com.android.billingclient:billing:9.1.0")
     implementation("androidx.core:core-ktx:1.13.1")
     //implementation("androidx.compose.ui:ui:${rootProject.extra["compose.version"] as String}")
     //implementation("androidx.compose.material:material:$compose_version")
@@ -195,61 +160,58 @@ dependencies {
 tasks {
     val compressApk by creating {
         doLast {
+            val isRelease = gradle.startParameter.taskNames.find { it.lowercase().contains("release") } != null
+            val buildType: String = if (isRelease) "release" else "debug"
             val javaHome = System.getProperties()["java.home"] ?: org.gradle.internal.jvm.Jvm.current().javaHome
             val sdkDir = android.sdkDirectory.absolutePath
-            // A single invocation can package more than one variant, for example assembleDebug
-            gradle.taskGraph.allTasks.filter { it.path in apkTaskPaths }.forEach { packageTask ->
-                val variant = packageTask.name.removePrefix("package")
-                val buildType: String = if (variant.endsWith("Release")) "release" else "debug"
-                val keyAlias: String
-                val keyPassword: String
-                val storeFile: String
-                val storePassword: String
-                if (project.properties["android.injected.signing.key.alias"] != null) {
-                    keyAlias = project.properties["android.injected.signing.key.alias"] as String
-                    keyPassword = project.properties["android.injected.signing.key.password"] as String
-                    storeFile = project.properties["android.injected.signing.store.file"] as String
-                    storePassword = project.properties["android.injected.signing.store.password"] as String
-                } else {
-                    try {
-                        val gradleConfig = android.signingConfigs.getByName(buildType)
-                        keyAlias = gradleConfig.keyAlias!!
-                        keyPassword = gradleConfig.keyPassword!!
-                        storeFile = gradleConfig.storeFile!!.absolutePath
-                        storePassword = gradleConfig.storePassword!!
-                    } catch (e: UnknownDomainObjectException) {
-                        // There is no signing config for current build type, can"t sign the apk
-                        println("No signing configs for this build type: $buildType")
-                        return@forEach
-                    }
+            val keyAlias: String
+            val keyPassword: String
+            val storeFile: String
+            val storePassword: String
+            if (project.properties["android.injected.signing.key.alias"] != null) {
+                keyAlias = project.properties["android.injected.signing.key.alias"] as String
+                keyPassword = project.properties["android.injected.signing.key.password"] as String
+                storeFile = project.properties["android.injected.signing.store.file"] as String
+                storePassword = project.properties["android.injected.signing.store.password"] as String
+            } else {
+                try {
+                    val gradleConfig = android.signingConfigs.getByName(buildType)
+                    keyAlias = gradleConfig.keyAlias!!
+                    keyPassword = gradleConfig.keyPassword!!
+                    storeFile = gradleConfig.storeFile!!.absolutePath
+                    storePassword = gradleConfig.storePassword!!
+                } catch (e: UnknownDomainObjectException) {
+                    // There is no signing config for current build type, can"t sign the apk
+                    println("No signing configs for this build type: $buildType")
+                    return@doLast
                 }
-                val outputDir = packageTask.outputs.files.files.last()
-                exec {
-                    workingDir("../../scripts/android")
-                    environment = mapOf(
-                      "JAVA_HOME" to "$javaHome",
-                      "PATH" to "${System.getenv("PATH")}:$javaHome/bin"
-                    )
-                    commandLine = listOf(
-                        "./compress-and-sign-apk.sh",
-                        "${rootProject.extra["compression.level"]}",
-                        "$outputDir",
-                        sdkDir,
-                        storeFile,
-                        storePassword,
-                        keyAlias,
-                        keyPassword
-                    )
-                }
+            }
+            lateinit var outputDir: File
+            named(if (isRelease) "packageRelease" else "packageDebug") {
+                outputDir = outputs.files.files.last()
+            }
+            exec {
+                workingDir("../../scripts/android")
+                environment = mapOf(
+                  "JAVA_HOME" to "$javaHome",
+                  "PATH" to "${System.getenv("PATH")}:$javaHome/bin"
+                )
+                commandLine = listOf(
+                    "./compress-and-sign-apk.sh",
+                    "${rootProject.extra["compression.level"]}",
+                    "$outputDir",
+                    sdkDir,
+                    storeFile,
+                    storePassword,
+                    keyAlias,
+                    keyPassword
+                )
+            }
 
-                if (project.properties["android.injected.signing.key.alias"] != null && buildType == "release") {
-                    val flavor = variant.removeSuffix("Release").lowercase()
-                    mapOf("arm64-v8a" to "simplex.apk", "armeabi-v7a" to "simplex-armv7a.apk").forEach { (abi, name) ->
-                        if (!File(outputDir, "android-$flavor-$abi-release.apk").renameTo(File(outputDir, name))) {
-                            logger.warn("No $abi apk to rename to $name")
-                        }
-                    }
-                }
+            if (project.properties["android.injected.signing.key.alias"] != null && buildType == "release") {
+                File(outputDir, "android-release.apk").renameTo(File(outputDir, "simplex.apk"))
+                File(outputDir, "android-armeabi-v7a-release.apk").renameTo(File(outputDir, "simplex-armv7a.apk"))
+                File(outputDir, "android-arm64-v8a-release.apk").renameTo(File(outputDir, "simplex.apk"))
             }
             // View all gradle properties set
             // project.properties.each { k, v -> println "$k -> $v" }
@@ -259,7 +221,9 @@ tasks {
     // Don"t do anything if no compression is needed
     if (rootProject.extra["compression.level"] as Int != 0) {
         whenTaskAdded {
-            if (name in apkTasks) {
+            if (name == "packageDebug") {
+                finalizedBy(compressApk)
+            } else if (name == "packageRelease") {
                 finalizedBy(compressApk)
             }
         }

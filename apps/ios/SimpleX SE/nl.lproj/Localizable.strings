@@ -17,6 +17,9 @@
 "Comment" = "Opmerking";
 
 /* No comment provided by engineer. */
+"Currently maximum supported file size is %@." = "De momenteel maximaal ondersteunde bestandsgrootte is %@.";
+
+/* No comment provided by engineer. */
 "Database downgrade required" = "Database downgrade vereist";
 
 /* No comment provided by engineer. */

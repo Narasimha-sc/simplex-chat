@@ -200,8 +200,6 @@ SimpleX links (`simplex:/chat#...`) are handled via [`connectViaUrl()`](../../Sh
 
 URL processing routes to the appropriate connection flow (join group, add contact, etc.) via [`planAndConnect()`](../../Shared/Views/NewChat/NewChatView.swift#L1181).
 
-App links use the app's own scheme, `simplexchat:`, for everything that is not a connection link. `connectViaUrl_()` branches on that scheme before the path switch, so an app link never reaches `planAndConnect()`, and `openAppLink()` dispatches on its path. A badge link (`simplexchat:/badge/code/<code>`) goes to `openBadgeLink()` in [`BadgesRedeemCodeView.swift`](../../Shared/Views/Badges/BadgesRedeemCodeView.swift), which presents `BadgesRedeemLinkView` as an app sheet. The sheet names the active profile and asks before redeeming, since any web page can send the link and a profile holds one badge at a time. On *Add badge* it redeems the code into that profile and then shows `BadgesView`; *Cancel* sends nothing. If that profile already shows a badge (read from `BadgeModel` when the sheet renders), which core would refuse, the sheet does not offer to add it: it says nothing was added, says where a code for another badge is (on the page it was bought on, under *Show code*), and offers *View your badge*; it cannot tell a repeated link for the badge it shows from another badge's code, so it asserts neither. While the code is being redeemed, *Dismiss* or a swipe closes the sheet without cancelling anything; if the redemption then succeeds with the sheet closed or covered, an alert says the badge was added and names the profile, unless the profile is hidden and no longer active, when nothing is shown (`showBadgeAddedAlert()`, which the store lane shares). While the sheet shows a redemption in flight (`isBadgeLinkIssuing()`), `connectViaUrl_()` ignores a further app link; otherwise it dismisses the sheets as for any link, which replaces an earlier badge link sheet. Any other path is a link type from a later version, and gets an alert asking to check for app updates. An app link can carry a secret, so `onOpenURL` logs it as "app link" rather than the URL.
-
 ### Call Deep Link
 
 Call invitations from notifications:
@@ -331,14 +329,22 @@ In `connectViaUrl_()`, relay address links (URL path `/r`) are intercepted befor
 ```swift
 if path == "/r" {
     showAlert(NSLocalizedString("Relay address", ...),
-              message: NSLocalizedString("This is a chat relay address, it cannot be used to connect.", ...))
-    return
+              message: NSLocalizedString("This is a chat relay address, it cannot be used to connect. To use it, open Network & servers, Your servers, Add server, then Chat relay, paste the address, then Test relay.", ...))
 }
 ```
 
 Similarly, in `planAndConnect()` (`NewChatView.swift`), `.simplexLink(_, .relay, _, _)` patterns trigger the same alert and block connection.
 
-## 11. Channel-Specific NewChatView Behavior
+## 11. Scanned Link Classification
+
+**Source:** [`Shared/Views/NewChat/WrongQRCode.swift`](../../Shared/Views/NewChat/WrongQRCode.swift)
+
+Each scanner, and the Migrate-to-device paste button, routes its input through
+`checkLink()` first. A recognised code of the wrong kind is reported by
+`wrongQRCodeMessage(_:)` / `wrongQRCodeAlert(_:)`, which name what the code is and
+where to use it; an unrecognised string falls back to that scanner's own error.
+
+## 12. Channel-Specific NewChatView Behavior
 
 **Source:** [`Shared/Views/NewChat/NewChatView.swift`](../../Shared/Views/NewChat/NewChatView.swift)
 
@@ -346,7 +352,7 @@ Similarly, in `planAndConnect()` (`NewChatView.swift`), `.simplexLink(_, .relay,
 
 When `groupShortLinkInfo?.direct == false` (channel relay link), the prepare alert uses:
 - Channel icon: `antenna.radiowaves.left.and.right.circle.fill`
-- Title: "Open channel"
+- Title: "Open new channel"
 - Error: "Error opening channel"
 - `apiPrepareGroup` call passes `directLink: false`
 - Stores `groupShortLinkInfo.groupRelays` in `ChatModel.shared.channelRelayHostnames`
@@ -357,7 +363,7 @@ For channels: shows "This is your link for channel" with only "Open channel" + "
 
 ### Known Group Alert (`showOpenKnownGroupAlert`)
 
-For channels (`groupInfo.useRelays`): the title is "Open channel"; for groups, "Open group"; business chats keep "Open chat" / "Open new chat". Unless the chat is merely prepared (`nextConnectPrepared`) or a business chat, the alert shows an information line with the user's membership role (`memberRoleInformation`) in the secondary color: subscriber/contributor for channels, observer/member for groups, moderator/admin/owner for both.
+For channels (`groupInfo.useRelays`): titles become "Open channel" / "Open new channel".
 
 ---
 
@@ -374,6 +380,7 @@ For channels (`groupInfo.useRelays`): the title is "Open channel"; for groups, "
 | New chat view | [`Shared/Views/NewChat/NewChatView.swift`](../../Shared/Views/NewChat/NewChatView.swift) |
 | Channel creation | [`Shared/Views/NewChat/AddChannelView.swift`](../../Shared/Views/NewChat/AddChannelView.swift) |
 | New chat menu | [`Shared/Views/NewChat/NewChatMenuButton.swift`](../../Shared/Views/NewChat/NewChatMenuButton.swift) |
+| Wrong QR code alert | [`Shared/Views/NewChat/WrongQRCode.swift`](../../Shared/Views/NewChat/WrongQRCode.swift) |
 | Settings view | [`Shared/Views/UserSettings/SettingsView.swift`](../../Shared/Views/UserSettings/SettingsView.swift) |
 | User profiles | [`Shared/Views/UserSettings/UserProfilesView.swift`](../../Shared/Views/UserSettings/UserProfilesView.swift) |
 | Onboarding view | [`Shared/Views/Onboarding/OnboardingView.swift`](../../Shared/Views/Onboarding/OnboardingView.swift) |

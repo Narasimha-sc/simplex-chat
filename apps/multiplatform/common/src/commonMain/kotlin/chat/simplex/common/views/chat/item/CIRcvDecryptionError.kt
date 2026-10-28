@@ -17,7 +17,7 @@ import chat.simplex.common.ui.theme.CurrentColors
 import chat.simplex.common.ui.theme.appColors
 import chat.simplex.common.views.helpers.AlertManager
 import chat.simplex.common.views.helpers.generalGetString
-import chat.simplex.res.*
+import chat.simplex.res.MR
 import dev.icerock.moko.resources.compose.painterResource
 import dev.icerock.moko.resources.compose.stringResource
 
@@ -139,48 +139,44 @@ fun DecryptionErrorItemFixButton(
   syncSupported: Boolean
 ) {
   val receivedColor = MaterialTheme.appColors.receivedMessage
-  ItemWithMeta(meta = { CIMetaView(ci, timedMessagesTTL = null, showViaProxy = false, showTimestamp = true) }) { inlineMeta ->
-    Surface(
-      Modifier.clickable(onClick = onClick),
-      shape = RoundedCornerShape(18.dp),
-      color = receivedColor,
-      contentColor = LocalContentColor.current
+  Surface(
+    Modifier.clickable(onClick = onClick),
+    shape = RoundedCornerShape(18.dp),
+    color = receivedColor,
+    contentColor = LocalContentColor.current
+  ) {
+    Box(
+      Modifier.padding(vertical = 6.dp, horizontal = 12.dp),
+      contentAlignment = Alignment.BottomEnd,
     ) {
-      Box(
-        Modifier.padding(vertical = 6.dp, horizontal = 12.dp),
-        contentAlignment = Alignment.BottomEnd,
+      Column(
+        verticalArrangement = Arrangement.spacedBy(2.dp)
       ) {
-        Column(
-          verticalArrangement = Arrangement.spacedBy(2.dp)
-        ) {
+        Text(
+          buildAnnotatedString {
+            withStyle(SpanStyle(fontStyle = FontStyle.Italic, color = Color.Red)) { append(ci.content.text) }
+          },
+          style = MaterialTheme.typography.body1.copy(lineHeight = 22.sp)
+        )
+        Row {
+          Icon(
+            painterResource(MR.images.ic_sync_problem),
+            stringResource(MR.strings.fix_connection),
+            tint = if (syncSupported) MaterialTheme.colors.primary else MaterialTheme.colors.secondary
+          )
+          Spacer(Modifier.padding(2.dp))
+          val secondaryColor = MaterialTheme.colors.secondary
           Text(
             buildAnnotatedString {
-              withStyle(SpanStyle(fontStyle = FontStyle.Italic, color = Color.Red)) { append(ci.content.text) }
+              append(generalGetString(MR.strings.fix_connection))
+              withStyle(reserveTimestampStyle) { append(reserveSpaceForMeta(ci.meta, null, encrypted = null, secondaryColor = secondaryColor, showTimestamp = true)) }
+              withStyle(reserveTimestampStyle) { append("    ") } // for icon
             },
-            style = MaterialTheme.typography.body1.copy(lineHeight = 22.sp)
+            color = if (syncSupported) MaterialTheme.colors.primary else MaterialTheme.colors.secondary
           )
-          Row {
-            Icon(
-              painterResource(MR.images.ic_sync_problem),
-              stringResource(MR.strings.fix_connection),
-              tint = if (syncSupported) MaterialTheme.colors.primary else MaterialTheme.colors.secondary
-            )
-            Spacer(Modifier.padding(2.dp))
-            val secondaryColor = MaterialTheme.colors.secondary
-            Text(
-              buildAnnotatedString {
-                append(generalGetString(MR.strings.fix_connection))
-                if (inlineMeta != null) {
-                  withStyle(reserveTimestampStyle) { append(reserveSpaceForMeta(ci.meta, null, encrypted = null, secondaryColor = secondaryColor, showTimestamp = true)) }
-                  withStyle(reserveTimestampStyle) { append("    ") } // for icon
-                }
-              },
-              color = if (syncSupported) MaterialTheme.colors.primary else MaterialTheme.colors.secondary
-            )
-          }
         }
-        inlineMeta?.invoke()
       }
+      CIMetaView(ci, timedMessagesTTL = null, showViaProxy = false, showTimestamp = true)
     }
   }
 }
@@ -191,29 +187,25 @@ fun DecryptionErrorItem(
   onClick: () -> Unit
 ) {
   val receivedColor = MaterialTheme.appColors.receivedMessage
-  ItemWithMeta(meta = { CIMetaView(ci, timedMessagesTTL = null, showViaProxy = false, showTimestamp = true) }) { inlineMeta ->
-    Surface(
-      Modifier.clickable(onClick = onClick),
-      shape = RoundedCornerShape(18.dp),
-      color = receivedColor,
-      contentColor = LocalContentColor.current
+  Surface(
+    Modifier.clickable(onClick = onClick),
+    shape = RoundedCornerShape(18.dp),
+    color = receivedColor,
+    contentColor = LocalContentColor.current
+  ) {
+    Box(
+      Modifier.padding(vertical = 6.dp, horizontal = 12.dp),
+      contentAlignment = Alignment.BottomEnd,
     ) {
-      Box(
-        Modifier.padding(vertical = 6.dp, horizontal = 12.dp),
-        contentAlignment = Alignment.BottomEnd,
-      ) {
-        val secondaryColor = MaterialTheme.colors.secondary
-        Text(
-          buildAnnotatedString {
-            withStyle(SpanStyle(fontStyle = FontStyle.Italic, color = Color.Red)) { append(ci.content.text) }
-            if (inlineMeta != null) {
-              withStyle(reserveTimestampStyle) { append(reserveSpaceForMeta(ci.meta, null, encrypted = null, secondaryColor = secondaryColor, showTimestamp = true)) }
-            }
-          },
-          style = MaterialTheme.typography.body1.copy(lineHeight = 22.sp)
-        )
-        inlineMeta?.invoke()
-      }
+      val secondaryColor = MaterialTheme.colors.secondary
+      Text(
+        buildAnnotatedString {
+          withStyle(SpanStyle(fontStyle = FontStyle.Italic, color = Color.Red)) { append(ci.content.text) }
+          withStyle(reserveTimestampStyle) { append(reserveSpaceForMeta(ci.meta, null, encrypted = null, secondaryColor = secondaryColor, showTimestamp = true)) }
+        },
+        style = MaterialTheme.typography.body1.copy(lineHeight = 22.sp)
+      )
+      CIMetaView(ci, timedMessagesTTL = null, showViaProxy = false, showTimestamp = true)
     }
   }
 }

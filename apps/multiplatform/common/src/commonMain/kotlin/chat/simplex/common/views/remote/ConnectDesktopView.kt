@@ -33,9 +33,10 @@ import chat.simplex.common.ui.theme.*
 import chat.simplex.common.views.chat.item.ItemAction
 import chat.simplex.common.views.helpers.*
 import chat.simplex.common.views.newchat.QRCodeScanner
+import chat.simplex.common.views.newchat.showWrongQRCodeAlert
 import chat.simplex.common.views.usersettings.PreferenceToggle
 import chat.simplex.common.views.usersettings.SettingsActionItem
-import chat.simplex.res.*
+import chat.simplex.res.MR
 import dev.icerock.moko.resources.ImageResource
 import dev.icerock.moko.resources.compose.painterResource
 import dev.icerock.moko.resources.compose.stringResource
@@ -147,11 +148,8 @@ private fun ConnectDesktop(deviceName: String, remoteCtrls: SnapshotStateList<Re
 private fun ConnectingDesktop(session: RemoteCtrlSession, rc: RemoteCtrlInfo?) {
   AppBarTitle(stringResource(MR.strings.connecting_to_desktop))
   SectionView(stringResource(MR.strings.connecting_to_desktop), contentPadding = PaddingValues(horizontal = DEFAULT_PADDING)) {
-    Column {
-      CtrlDeviceNameText(session, rc)
-      Spacer(Modifier.height(DEFAULT_PADDING_HALF))
-      CtrlDeviceVersionText(session)
-    }
+    CtrlDeviceNameText(session, rc)
+    CtrlDeviceVersionText(session)
   }
 
   if (session.sessionCode != null) {
@@ -226,12 +224,10 @@ private fun FoundDesktop(
   }
   SectionDividerSpaced()
   SectionView(stringResource(MR.strings.found_desktop), contentPadding = PaddingValues(horizontal = DEFAULT_PADDING)) {
-    Column {
-      CtrlDeviceNameText(session, rc)
-      CtrlDeviceVersionText(session)
-      if (!compatible) {
-        Text(stringResource(MR.strings.not_compatible), color = MaterialTheme.colors.error)
-      }
+    CtrlDeviceNameText(session, rc)
+    CtrlDeviceVersionText(session)
+    if (!compatible) {
+      Text(stringResource(MR.strings.not_compatible), color = MaterialTheme.colors.error)
     }
   }
 
@@ -260,11 +256,8 @@ private fun FoundDesktop(
 private fun VerifySession(session: RemoteCtrlSession, rc: RemoteCtrlInfo?, sessCode: String, remoteCtrls: SnapshotStateList<RemoteCtrlInfo>) {
   AppBarTitle(stringResource(MR.strings.verify_connection))
   SectionView(stringResource(MR.strings.connected_to_desktop), contentPadding = PaddingValues(horizontal = DEFAULT_PADDING)) {
-    Column {
-      CtrlDeviceNameText(session, rc)
-      Spacer(Modifier.height(DEFAULT_PADDING_HALF))
-      CtrlDeviceVersionText(session)
-    }
+    CtrlDeviceNameText(session, rc)
+    CtrlDeviceVersionText(session)
   }
 
   SectionDividerSpaced()
@@ -316,11 +309,8 @@ private fun CtrlDeviceVersionText(session: RemoteCtrlSession) {
 private fun ActiveSession(session: RemoteCtrlSession, rc: RemoteCtrlInfo, close: () -> Unit) {
   AppBarTitle(stringResource(MR.strings.connected_to_desktop))
   SectionView(stringResource(MR.strings.connected_desktop), contentPadding = PaddingValues(horizontal = DEFAULT_PADDING)) {
-    Column {
-      Text(rc.deviceViewName)
-      Spacer(Modifier.height(DEFAULT_PADDING_HALF))
-      CtrlDeviceVersionText(session)
-    }
+    Text(rc.deviceViewName)
+    CtrlDeviceVersionText(session)
   }
 
   if (session.sessionCode != null) {
@@ -363,8 +353,16 @@ private fun DevicesView(deviceName: String, remoteCtrls: SnapshotStateList<Remot
 private fun ScanDesktopAddressView(sessionAddress: MutableState<String>) {
   SectionView(stringResource(MR.strings.scan_qr_code_from_desktop)) {
     QRCodeScanner { text ->
-      sessionAddress.value = text
-      connectDesktopAddress(sessionAddress, text)
+      val trimmed = text.trim()
+      val type = checkLink(trimmed)
+      if (type != null && type != ScannedLinkType.DesktopCtrl) {
+        showWrongQRCodeAlert(type)
+        false
+      } else {
+        // a desktop address, or unrecognised text: let the core parse and report
+        sessionAddress.value = trimmed
+        connectDesktopAddress(sessionAddress, trimmed)
+      }
     }
   }
 }

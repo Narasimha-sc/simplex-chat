@@ -17,6 +17,9 @@
 "Comment" = "Commento";
 
 /* No comment provided by engineer. */
+"Currently maximum supported file size is %@." = "Attualmente la dimensione massima supportata è di %@.";
+
+/* No comment provided by engineer. */
 "Database downgrade required" = "Downgrade del database necessario";
 
 /* No comment provided by engineer. */

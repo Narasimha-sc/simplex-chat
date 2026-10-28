@@ -12,7 +12,7 @@ import androidx.compose.ui.graphics.*
 import androidx.compose.ui.unit.*
 import chat.simplex.common.ui.theme.*
 import chat.simplex.common.views.chatlist.*
-import chat.simplex.res.*
+import chat.simplex.res.MR
 import dev.icerock.moko.resources.compose.painterResource
 import kotlin.math.absoluteValue
 
@@ -31,8 +31,7 @@ fun AppBarTitle(
   val connection = if (enableAlphaChanges) handler?.connection else null
   LaunchedEffect(title) {
     if (enableAlphaChanges) {
-      // the app bar shows a single line, so the line breaks of the large title are replaced with spaces
-      handler?.title?.value = title.replace("\n", " ")
+      handler?.title?.value = title
     } else {
       handler?.connection?.scrollTrackingEnabled = false
     }

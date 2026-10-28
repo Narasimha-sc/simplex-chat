@@ -23,7 +23,7 @@ import chat.simplex.common.platform.ColumnWithScrollBar
 import chat.simplex.common.ui.theme.*
 import chat.simplex.common.views.call.parseRTCIceServers
 import chat.simplex.common.views.helpers.*
-import chat.simplex.res.*
+import chat.simplex.res.MR
 
 @Composable
 fun RTCServersView(

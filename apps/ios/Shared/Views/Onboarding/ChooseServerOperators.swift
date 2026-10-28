@@ -184,14 +184,7 @@ struct OnboardingConditionsView: View {
     private func completeOnboarding() {
         let m = ChatModel.shared
         onboardingStageDefault.set(.onboardingComplete)
-        // defer the stage swap off the Accept handler's call stack so the deep onboarding nav stack
-        // isn't torn down from inside its own event handling (UIKit crash on completion); the inner
-        // async guarantees this even if dismissAllSheets runs its completion synchronously.
-        dismissAllSheets(animated: false) {
-            DispatchQueue.main.async {
-                m.onboardingStage = .onboardingComplete
-            }
-        }
+        m.onboardingStage = .onboardingComplete
     }
 
     private func enabledOperators(_ operators: [ServerOperator]) -> [ServerOperator]? {
@@ -398,8 +391,6 @@ struct ChooseServerOperatorsInfoView: View {
     }
 }
 
-struct OnboardingConditionsView_Previews: PreviewProvider {
-    static var previews: some View {
-        OnboardingConditionsView(selectedOperatorIds: [])
-    }
+#Preview {
+    OnboardingConditionsView(selectedOperatorIds: [])
 }

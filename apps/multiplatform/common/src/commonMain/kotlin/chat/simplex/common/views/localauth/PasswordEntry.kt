@@ -16,15 +16,14 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.*
 import chat.simplex.common.platform.appPlatform
-import chat.simplex.res.*
+import chat.simplex.res.MR
 
 @Composable
 fun PasscodeEntry(
   password: MutableState<String>,
   vertical: Boolean,
-  modifier: Modifier = Modifier,
 ) {
-  Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+  Column(horizontalAlignment = Alignment.CenterHorizontally) {
     PasscodeView(password)
     BoxWithConstraints {
       if (vertical) {

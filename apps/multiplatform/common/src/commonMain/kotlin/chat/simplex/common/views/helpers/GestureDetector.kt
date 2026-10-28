@@ -46,7 +46,6 @@ private val NoPressGesture: suspend PressGestureScope.(Offset) -> Unit = { }
 suspend fun PointerInputScope.detectGesture(
   onLongPress: ((Offset) -> Unit)? = null,
   onPress: suspend PressGestureScope.(Offset) -> Unit = NoPressGesture,
-  positionInWindow: (() -> Offset)? = null,
   shouldConsumeEvent: (Offset) -> Boolean
 ) = coroutineScope {
   val pressScope = PressGestureScopeImpl(this@detectGesture)
@@ -58,14 +57,8 @@ suspend fun PointerInputScope.detectGesture(
       val shouldConsume = shouldConsumeEvent(down.position)
       if (shouldConsume)
         down.consumeDownChange()
-      val downPositionInWindow = positionInWindow?.let { it() + down.position }
-      // reset() suspends until the previous gesture's press handler released the mutex,
-      // and release/cancel join resetJob, so flag writes can't be reordered across gestures
-      // (a fast second click would otherwise drop the first click's onClick).
-      // Mirrors detectTapGestures in Compose 1.8.2.
-      val resetJob = launch { pressScope.reset() }
+      pressScope.reset()
       if (onPress !== NoPressGesture) launch {
-        resetJob.join()
         pressScope.onPress(down.position)
       }
       val longPressTimeout = onLongPress?.let {
@@ -74,45 +67,37 @@ suspend fun PointerInputScope.detectGesture(
 
       try {
         val upOrCancel: PointerInputChange? = withTimeout(longPressTimeout) {
-          waitForUpOrCancellation(downPositionInWindow, positionInWindow)
+          waitForUpOrCancellation()
         }
         if (upOrCancel == null) {
-          launch { resetJob.join(); pressScope.cancel() }
+          pressScope.cancel()
         } else {
           if (shouldConsume)
             upOrCancel.consumeDownChange()
-          launch { resetJob.join(); pressScope.release() }
+          pressScope.release()
         }
       } catch (_: PointerEventTimeoutCancellationException) {
         if (onLongPress != null) {
           onLongPress(down.position)
           if (shouldConsume)
             consumeUntilUp()
-          launch { resetJob.join(); pressScope.cancel() }
+          pressScope.cancel()
         } else {
           if (shouldConsume)
             consumeUntilUp()
-          launch { resetJob.join(); pressScope.release() }
+          pressScope.release()
         }
       }
     }
   }
 }
 
-suspend fun PointerInputScope.detectCursorMove(onExit: () -> Unit = {}, onMove: (Offset) -> Unit = {},) {
-  // One scope for all events: re-entering awaitPointerEventScope per event loses events.
-  // Enter/Release update hover when the pointer is stationary (content moved under it, or a click completed).
-  awaitPointerEventScope {
-    while (true) {
+suspend fun PointerInputScope.detectCursorMove(onMove: (Offset) -> Unit = {},) = coroutineScope {
+  forEachGesture {
+    awaitPointerEventScope {
       val event = awaitPointerEvent()
-      if (event.type == PointerEventType.Move || event.type == PointerEventType.Enter || event.type == PointerEventType.Release) {
-        val pos = event.changes[0].position
-        // ignore events while a button is down or outside bounds: a pressed node receives them even after the pointer leaves it
-        if (event.changes.none { it.pressed } && pos.x >= 0 && pos.y >= 0 && pos.x < size.width && pos.y < size.height) {
-          onMove(pos)
-        }
-      } else if (event.type == PointerEventType.Exit) {
-        onExit()
+      if (event.type == PointerEventType.Move) {
+        onMove(event.changes[0].position)
       }
     }
   }
@@ -145,16 +130,7 @@ internal suspend fun AwaitPointerEventScope.awaitFirstDownOnPass(
   return event.changes[0]
 }
 
-suspend fun AwaitPointerEventScope.waitForUpOrCancellation(
-  downPositionInWindow: Offset? = null,
-  positionInWindow: (() -> Offset)? = null
-): PointerInputChange? {
-  // out of bounds in local coordinates while stationary in window coordinates is the node
-  // moving under the pointer (chat list shifted after a sent message), not the pointer
-  // leaving the node — such a press stays valid
-  fun stationaryInWindow(change: PointerInputChange): Boolean =
-    downPositionInWindow != null && positionInWindow != null &&
-      (positionInWindow() + change.position - downPositionInWindow).getDistance() <= viewConfiguration.touchSlop
+suspend fun AwaitPointerEventScope.waitForUpOrCancellation(): PointerInputChange? {
   while (true) {
     val event = awaitPointerEvent(PointerEventPass.Main)
     if (event.changes.all { it.changedToUp() }) {
@@ -162,7 +138,7 @@ suspend fun AwaitPointerEventScope.waitForUpOrCancellation(
     }
 
     if (event.changes.any {
-        it.consumed.downChange || (it.isOutOfBounds(size, extendedTouchPadding) && !stationaryInWindow(it))
+        it.consumed.downChange || it.isOutOfBounds(size, extendedTouchPadding)
       }
     ) {
       return null
@@ -183,18 +159,16 @@ private class PressGestureScopeImpl(
 
   fun cancel() {
     isCanceled = true
-    if (mutex.isLocked) mutex.unlock()
+    mutex.unlock()
   }
 
   fun release() {
     isReleased = true
-    if (mutex.isLocked) mutex.unlock()
+    mutex.unlock()
   }
 
-  // suspends until the previous gesture's tryAwaitRelease finished (or was never started):
-  // the mutex is the serialization token between consecutive gestures
-  suspend fun reset() {
-    mutex.lock()
+  fun reset() {
+    mutex.tryLock()
     isReleased = false
     isCanceled = false
   }
@@ -202,7 +176,6 @@ private class PressGestureScopeImpl(
   override suspend fun tryAwaitRelease(): Boolean {
     if (!isReleased && !isCanceled) {
       mutex.lock()
-      mutex.unlock()
     }
     return isReleased && !isCanceled
   }

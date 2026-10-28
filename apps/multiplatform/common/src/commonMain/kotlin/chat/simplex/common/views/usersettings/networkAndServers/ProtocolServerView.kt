@@ -27,7 +27,7 @@ import chat.simplex.common.views.newchat.QRCode
 import chat.simplex.common.model.ChatModel
 import chat.simplex.common.platform.*
 import chat.simplex.common.views.usersettings.PreferenceToggle
-import chat.simplex.res.*
+import chat.simplex.res.MR
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.distinctUntilChanged
 

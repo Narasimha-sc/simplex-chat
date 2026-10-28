@@ -86,12 +86,11 @@ struct MarkedDeletedItemView: View {
 struct MarkedDeletedItemView_Previews: PreviewProvider {
     static var previews: some View {
         Group {
-            let ci = ChatItem.getSample(1, .directSnd, previewDate, "hello", .sndSent(sndProgress: .complete), itemDeleted: .deleted(deletedTs: previewDate))
             MarkedDeletedItemView(
                 chat: Chat.sampleData,
                 im: ItemsModel.shared,
-                chatItem: ci
-            ).environment(\.revealed, true).modifier(ChatItemClipped(ci, tailVisible: true))
+                chatItem: ChatItem.getSample(1, .directSnd, .now, "hello", .sndSent(sndProgress: .complete), itemDeleted: .deleted(deletedTs: .now))
+            ).environment(\.revealed, true)
         }
         .previewLayout(.fixed(width: 360, height: 200))
     }

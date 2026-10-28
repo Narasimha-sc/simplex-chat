@@ -5,6 +5,7 @@
 
 module SchemaDump where
 
+import ChatClient (withTmpFiles)
 import ChatTests.DBUtils
 import Control.Concurrent.STM
 import Control.DeepSeq
@@ -61,7 +62,7 @@ schemaDumpTest = do
   it "verify strict tables" testVerifyStrict
 
 testVerifySchemaDump :: IO ()
-testVerifySchemaDump = do
+testVerifySchemaDump = withTmpFiles $ do
   savedSchema <- ifM (doesFileExist appSchema) (readFile appSchema) (pure "")
   savedSchema `deepseq` pure ()
   void $ createChatStore (DBOpts testDB chatDBFunctions "" False True TQOff) (MigrationConfig MCError Nothing)
@@ -69,7 +70,7 @@ testVerifySchemaDump = do
   removeFile testDB
 
 testVerifyLintFKeyIndexes :: IO ()
-testVerifyLintFKeyIndexes = do
+testVerifyLintFKeyIndexes = withTmpFiles $ do
   savedLint <- ifM (doesFileExist appLint) (readFile appLint) (pure "")
   savedLint `deepseq` pure ()
   void $ createChatStore (DBOpts testDB chatDBFunctions "" False True TQOff) (MigrationConfig MCError Nothing)
@@ -77,7 +78,7 @@ testVerifyLintFKeyIndexes = do
   removeFile testDB
 
 testSchemaMigrations :: IO ()
-testSchemaMigrations = do
+testSchemaMigrations = withTmpFiles $ do
   let noDownMigrations = dropWhileEnd (\Migration {down} -> isJust down) Store.migrations
   Right st <- createDBStore (DBOpts testDB chatDBFunctions "" False True TQOff) noDownMigrations (MigrationConfig MCError Nothing)
   mapM_ (testDownMigration st) $ drop (length noDownMigrations) Store.migrations
@@ -103,7 +104,7 @@ testSchemaMigrations = do
 
 testVerifyStrict :: IO ()
 testVerifyStrict = do
-  Right st <- createDBStore (DBOpts testDB chatDBFunctions "" False True TQOff) Store.migrations (MigrationConfig MCError Nothing)
+  Right st <- createDBStore (DBOpts testDB chatDBFunctions "" False True TQOff) Store.migrations (MigrationConfig MCConsole Nothing)
   withConnection st (`DB.query_` "SELECT name FROM sqlite_master WHERE type = 'table' AND name != 'sqlite_sequence' AND sql NOT LIKE '% STRICT'")
     `shouldReturn` ([] :: [Only Text])
 
@@ -146,8 +147,7 @@ skipComparisonForDownMigrations =
     -- appends; CREATE INDEX appends).
     "20260529_delivery_job_senders",
     -- group_domain is removed
-    "20260603_simplex_name",
-    "20261018_autoincrement_ids"
+    "20260603_simplex_name"
   ]
 
 getSchema :: FilePath -> FilePath -> IO String

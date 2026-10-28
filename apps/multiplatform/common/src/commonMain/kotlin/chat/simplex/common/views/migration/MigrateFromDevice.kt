@@ -30,7 +30,7 @@ import chat.simplex.common.views.helpers.*
 import chat.simplex.common.views.newchat.LinkTextView
 import chat.simplex.common.views.newchat.SimpleXLinkQRCode
 import chat.simplex.common.views.usersettings.*
-import chat.simplex.res.*
+import chat.simplex.res.MR
 import dev.icerock.moko.resources.compose.painterResource
 import dev.icerock.moko.resources.compose.stringResource
 import kotlinx.coroutines.*
@@ -196,6 +196,7 @@ private fun MutableState<MigrationFromState>.ChatStopInProgressView() {
 private fun MutableState<MigrationFromState>.ChatStopFailedView(reason: String) {
   SectionView(stringResource(MR.strings.error_stopping_chat)) {
     Text(reason)
+    SectionDividerSpaced()
     SettingsActionItemWithContent(
       icon = painterResource(MR.images.ic_report_filled),
       text = stringResource(MR.strings.auth_stop_chat),

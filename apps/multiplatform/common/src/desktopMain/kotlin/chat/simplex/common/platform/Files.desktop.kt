@@ -4,7 +4,7 @@ import androidx.compose.runtime.*
 import chat.simplex.common.*
 import chat.simplex.common.views.helpers.AlertManager
 import chat.simplex.common.views.helpers.generalGetString
-import chat.simplex.res.*
+import chat.simplex.res.MR
 import java.awt.Desktop
 import java.io.*
 import java.net.URI
@@ -75,10 +75,9 @@ actual class FileChooserLauncher actual constructor() {
       )
       res = simplexWindowState.openDialog.awaitResult(params)
     } else {
-      val filename = saveDialogFileName(input)
-      res = simplexWindowState.saveDialog.awaitResult(DialogParams(filename = filename))
+      res = simplexWindowState.saveDialog.awaitResult(DialogParams(filename = input))
       if (res != null && res.isDirectory) {
-        res = File(res, filename)
+        res = File(res, input)
       }
     }
     onResult(res?.toURI())
@@ -115,8 +114,6 @@ private fun fileFilterDescription(input: String): String = when(input) {
   "*/*" -> generalGetString(MR.strings.choose_file)
   else -> ""
 }
-
-internal fun saveDialogFileName(name: String): String = name.trimStart('.').ifEmpty { name }
 
 actual fun URI.inputStream(): InputStream? = toFile().inputStream()
 actual fun URI.outputStream(): OutputStream = toFile().outputStream()

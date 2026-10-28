@@ -2043,7 +2043,7 @@ chat item action */
 /* No comment provided by engineer. */
 "Error saving user password" = "Грешка при запазване на потребителска парола";
 
-/* alert message */
+/* No comment provided by engineer. */
 "Error scanning code: %@" = "Грешка при сканиране на кода: %@";
 
 /* No comment provided by engineer. */
@@ -2503,7 +2503,7 @@ server test error */
 /* alert title */
 "Invalid name!" = "Невалидно име!";
 
-/* alert title */
+/* No comment provided by engineer. */
 "Invalid QR code" = "Невалиден QR код";
 
 /* No comment provided by engineer. */
@@ -2617,7 +2617,7 @@ server test error */
 /* No comment provided by engineer. */
 "KeyChain error" = "KeyChain грешка";
 
-/* file alert title */
+/* No comment provided by engineer. */
 "Large file!" = "Голям файл!";
 
 /* badge alert button */
@@ -3317,7 +3317,7 @@ alert button */
 "Receiving via" = "Получаване чрез";
 
 /* No comment provided by engineer. */
-"Recent history and improved [directory bot](simplex:/contact#/?v=1-4&smp=smp%3A%2F%2Fu2dS9sG8nMNURyZwqASV4yROM28Er0luVTx5X1CsMrU%3D%40smp4.simplex.im%2FeXSPwqTkKyDO3px4fLf1wx3MvPdjdLW3%23%2F%3Fv%3D1-2%26dh%3DMCowBQYDK2VuAyEAaiv6MkMH44L2TcYrt_CsX3ZvM11WgbMEUn0hkIKTOho%253D%26srv%3Do5vmywmrnaxalvz6wi3zicyftgio6psuvyniis6gco6bp6ekl4cqj4id.onion)." = "Скорошна история и подобрен [bot за директория за групи](simplex:/contact#/?v=1-4&smp=smp%3A%2F%2Fu2dS9sG8nMNURyZwqASV4yROM28Er0luVTx5X1CsMrU%3D%40smp4.simplex.im%2FeXSPwqTkKyDO3px4fLf1wx3MvPdjdLW3%23%2F%3Fv%3D1-2%26dh%3DMCowBQYDK2VuAyEAaiv6MkMH44L2TcYrt_CsX3ZvM11WgbMEUn0hkIKTOho%253D%26srv%3Do5vmywmrnaxalvz6wi3zicyftgio6psuvyniis6gco6bp6ekl4cqj4id.onion).";
+"Recent history and improved [directory bot](simplex:/contact#/?v=1-4&smp=smp%3A%2F%2Fu2dS9sG8nMNURyZwqASV4yROM28Er0luVTx5X1CsMrU%3D%40smp4.simplex.im%2FeXSPwqTkKyDO3px4fLf1wx3MvPdjdLW3%23%2F%3Fv%3D1-2%26dh%3DMCowBQYDK2VuAyEAaiv6MkMH44L2TcYrt_CsX3ZvM11WgbMEUn0hkIKTOho%253D%26srv%3Do5vmywmrnaxalvz6wi3zicyftgio6psuvyniis6gco6bp6ekl4cqj4id.onion)." = "Скорошна история и подобрен [bot за директория за групи](simplex:/contact#/?v=1-4&smp=smp%3A%2F%2Fu2dS9sG8nMNURyZwqASV4yROM28Er0luVTx5X1CsMrU%3D%40smp4.simplex.im%2FeXSPwqTkKyDO3px4fLf1wx3MvPd jdLW3%23%2F%3Fv%3D1-2% 26dh%3DMCowBQYDK2VuAyEAaiv6MkMH44L2TcYrt_CsX3ZvM11WgbMEUn0hkIKTOho%253D%26srv%3Do5vmywmrnaxalvz6wi3zicyftgio6psuvyniis6gco6bp6ekl4cqj4id.onion).";
 
 /* No comment provided by engineer. */
 "Recipient(s) can't see who this message is from." = "Получателят(ите) не могат да видят от кого е това съобщение.";
@@ -3516,10 +3516,10 @@ chat item action */
 "Saved" = "Запазено";
 
 /* No comment provided by engineer. */
-"saved from" = "запазено от";
+"Saved from" = "Запазено от";
 
 /* No comment provided by engineer. */
-"Saved from" = "Запазено от";
+"saved from %@" = "запазено от %@";
 
 /* message info title */
 "Saved message" = "Запазено съобщение";
@@ -4393,9 +4393,6 @@ server test failure */
 /* No comment provided by engineer. */
 "You already have a chat profile with the same display name. Please choose another name." = "Вече имате чат профил със същото име. Моля, изберете друго име.";
 
-/* new chat alert */
-"You are a member" = "Вие сте член";
-
 /* No comment provided by engineer. */
 "You are already connected to %@." = "Вече сте вече свързани с %@.";
 
@@ -4416,15 +4413,6 @@ server test failure */
 
 /* new chat sheet title */
 "You are already joining the group!\nRepeat join request?" = "Вече се присъединихте към групата!\nИзпрати отново заявката за присъединяване?";
-
-/* new chat alert */
-"You are an admin" = "Вие сте админ";
-
-/* new chat alert */
-"You are an observer" = "Вие сте наблюдател";
-
-/* new chat alert */
-"You are an owner" = "Вие сте собственик";
 
 /* No comment provided by engineer. */
 "You are invited to group" = "Поканени сте в групата";
@@ -4581,6 +4569,9 @@ server test failure */
 
 /* No comment provided by engineer. */
 "Your contact removed this link, or it was a one-time link that was already used.\nTo connect, ask your contact to create a new link." = "Освен ако вашият контакт не е изтрил връзката или този линк вече е бил използван, това може да е грешка - моля, докладвайте.\nЗа да се свържете, моля, помолете вашия контакт да създаде друг линк за връзка и проверете дали имате стабилна мрежова връзка.";
+
+/* No comment provided by engineer. */
+"Your contact sent a file that is larger than currently supported maximum size (%@)." = "Вашият контакт изпрати файл, който е по-голям от поддържания в момента максимален размер (%@).";
 
 /* No comment provided by engineer. */
 "Your contacts can allow full message deletion." = "Вашите контакти могат да позволят пълното изтриване на съобщението.";

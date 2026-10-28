@@ -34,12 +34,10 @@ public struct WebRTCSession: Codable {
 
 // Spec: spec/services/calls.md#WebRTCExtraInfo
 public struct WebRTCExtraInfo: Codable {
-    public init(rtcSession: String?, rtcIceCandidates: String) {
-        self.rtcSession = rtcSession
+    public init(rtcIceCandidates: String) {
         self.rtcIceCandidates = rtcIceCandidates
     }
 
-    public var rtcSession: String?
     public var rtcIceCandidates: String
 }
 

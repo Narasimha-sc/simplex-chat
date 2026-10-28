@@ -68,15 +68,14 @@ The project uses several custom forks managed via `cabal.project`:
 ```bash
 cd apps/multiplatform
 
-# Build Android debug APK; `foss` ships to F-Droid/GitHub, `google` adds Play Billing.
-# The aggregate tasks fail by design, see apps/multiplatform/README.md
-./gradlew assembleFossDebug
+# Build Android debug APK
+./gradlew assembleDebug
 
 # Build desktop
 ./gradlew :desktop:packageDistributionForCurrentOS
 
 # Run Android tests
-./gradlew connectedFossDebugAndroidTest
+./gradlew connectedAndroidTest
 ```
 
 ### iOS

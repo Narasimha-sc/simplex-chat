@@ -54,10 +54,10 @@ data DirectoryEvent
   | DEPendingMember GroupInfo GroupMember
   | DEPendingMemberMsg GroupInfo GroupMember ChatItemId Text
   | DEGroupItemProhibited GroupInfo GroupMember ChatItemId GroupFeature -- a member posted content prohibited by the group's settings
-  | DEContactRoleChanged GroupInfo ContactId GroupMemberId GroupMemberRole -- contactId/memberId here identify the member whose role changed
+  | DEContactRoleChanged GroupInfo ContactId GroupMemberRole -- contactId here is the contact whose role changed
   | DEServiceRoleChanged GroupInfo GroupMemberRole
-  | DEContactRemovedFromGroup ContactId GroupMemberId GroupInfo
-  | DEContactLeftGroup ContactId GroupMemberId GroupInfo
+  | DEContactRemovedFromGroup ContactId GroupInfo
+  | DEContactLeftGroup ContactId GroupInfo
   | DEServiceRemovedFromGroup GroupInfo
   | DEGroupDeleted GroupInfo
   | DEChatLinkReceived {contact :: Contact, chatItemId :: ChatItemId, chatLink :: MsgChatLink, ownerSig :: Maybe LinkOwnerSig}
@@ -66,7 +66,6 @@ data DirectoryEvent
   | DEItemEditIgnored Contact
   | DEItemDeleteIgnored Contact
   | DEContactCommand Contact ChatItemId ADirectoryCmd
-  | DEVoiceUploadEnded FilePath
   | DELogChatResponse Text
   deriving (Show)
 
@@ -94,9 +93,9 @@ crDirectoryEvent_ = \case
     _ -> Nothing
   CEvtMemberRole {groupInfo, member, toRole}
     | groupMemberId' member == groupMemberId' (membership groupInfo) -> Just $ DEServiceRoleChanged groupInfo toRole
-    | otherwise -> (\ctId -> DEContactRoleChanged groupInfo ctId (groupMemberId' member) toRole) <$> memberContactId member
-  CEvtDeletedMember {groupInfo, deletedMember} -> (\ctId -> DEContactRemovedFromGroup ctId (groupMemberId' deletedMember) groupInfo) <$> memberContactId deletedMember
-  CEvtLeftMember {groupInfo, member} -> (\ctId -> DEContactLeftGroup ctId (groupMemberId' member) groupInfo) <$> memberContactId member
+    | otherwise -> (\ctId -> DEContactRoleChanged groupInfo ctId toRole) <$> memberContactId member
+  CEvtDeletedMember {groupInfo, deletedMember} -> (`DEContactRemovedFromGroup` groupInfo) <$> memberContactId deletedMember
+  CEvtLeftMember {groupInfo, member} -> (`DEContactLeftGroup` groupInfo) <$> memberContactId member
   CEvtDeletedMemberUser {groupInfo} -> Just $ DEServiceRemovedFromGroup groupInfo
   CEvtGroupDeleted {groupInfo} -> Just $ DEGroupDeleted groupInfo
   CEvtUnknownMemberAnnounced {groupInfo, unknownMember, announcedMember} -> Just $ DEMemberUpdated {groupInfo, fromMember = unknownMember, toMember = announcedMember}
@@ -111,17 +110,11 @@ crDirectoryEvent_ = \case
     where
       ciId = chatItemId' ci
       err = ADC SDRUser DCUnknownCommand
-  CEvtSndFileCompleteXFTP {chatItem, fileTransferMeta} -> voiceUploadEnded (Just chatItem) fileTransferMeta
-  CEvtSndFileError {chatItem_, fileTransferMeta} -> voiceUploadEnded chatItem_ fileTransferMeta
   CEvtMessageError {severity, errorMessage} -> Just $ DELogChatResponse $ "message error: " <> severity <> ", " <> errorMessage
   CEvtChatErrors {chatErrors} -> Just $ DELogChatResponse $ "chat errors: " <> T.intercalate ", " (map tshow chatErrors)
   _ -> Nothing
   where
     pending m = memberStatus m == GSMemPendingApproval
-    voiceUploadEnded :: Maybe AChatItem -> FileTransferMeta -> Maybe DirectoryEvent
-    voiceUploadEnded ci_ FileTransferMeta {filePath} = case ci_ of
-      Just (AChatItem _ SMDSnd _ ChatItem {content = CISndMsgContent MCVoice {}}) -> Just $ DEVoiceUploadEnded filePath
-      _ -> Nothing
 
 data DirectoryRole = DRUser | DRAdmin | DRSuperUser
 

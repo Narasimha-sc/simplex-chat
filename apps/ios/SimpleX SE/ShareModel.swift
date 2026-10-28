@@ -97,42 +97,37 @@ class ShareModel: ObservableObject {
             if let e = initChat(with: dbKey) {
                 await MainActor.run { errorAlert = e }
             } else {
-                switch activeUser() {
-                case let .failure(error):
-                    await MainActor.run { errorAlert = error }
-                case let .success(user):
-                    // Load Chats
-                    Task {
-                        switch fetchChats(user) {
-                        case let .success(chats):
-                            // Decode base64 images on background thread
-                            let profileImages = chats.reduce(into: Dictionary<ChatInfo.ID, UIImage>()) { dict, chatData in
-                                if let profileImage = chatData.chatInfo.image,
-                                   let uiImage = imageFromBase64(profileImage) {
-                                    dict[chatData.id] = uiImage
-                                }
+                // Load Chats
+                Task {
+                    switch fetchChats() {
+                    case let .success(chats):
+                        // Decode base64 images on background thread
+                        let profileImages = chats.reduce(into: Dictionary<ChatInfo.ID, UIImage>()) { dict, chatData in
+                            if let profileImage = chatData.chatInfo.image,
+                               let uiImage = imageFromBase64(profileImage) {
+                                dict[chatData.id] = uiImage
                             }
-                            await MainActor.run {
-                                self.chats = chats
-                                self.profileImages = profileImages
-                                withAnimation { isLoaded = true }
-                            }
-                        case let .failure(error):
-                            await MainActor.run { errorAlert = error }
                         }
+                        await MainActor.run {
+                            self.chats = chats
+                            self.profileImages = profileImages
+                            withAnimation { isLoaded = true }
+                        }
+                    case let .failure(error):
+                        await MainActor.run { errorAlert = error }
                     }
-                    // Process Attachment
-                    Task {
-                        switch await getSharedContent(self.itemProvider!, user.profile) {
-                        case let .success(chatItemContent):
-                            await MainActor.run {
-                                self.sharedContent = chatItemContent
-                                self.bottomBar = .sendButton
-                                if case let .text(string) = chatItemContent { comment = string }
-                            }
-                        case let .failure(errorAlert):
-                            await MainActor.run { self.errorAlert = errorAlert }
+                }
+                // Process Attachment
+                Task {
+                    switch await getSharedContent(self.itemProvider!) {
+                    case let .success(chatItemContent):
+                        await MainActor.run {
+                            self.sharedContent = chatItemContent
+                            self.bottomBar = .sendButton
+                            if case let .text(string) = chatItemContent { comment = string }
                         }
+                    case let .failure(errorAlert):
+                        await MainActor.run { self.errorAlert = errorAlert }
                     }
                 }
             }
@@ -247,11 +242,6 @@ class ShareModel: ObservableObject {
                 title: "Keychain error",
                 message: "Cannot access keychain to save database password"
             )
-        case .errorKeyGeneration:
-            ErrorAlert(
-                title: "Database error",
-                message: "Cannot generate random database passphrase"
-            )
         case .invalidConfirmation:
             ErrorAlert("Invalid migration confirmation")
         case let .unknown(json):
@@ -263,7 +253,7 @@ class ShareModel: ObservableObject {
         }
     }
     
-    private func activeUser() -> Result<User, ErrorAlert> {
+    private func fetchChats() -> Result<Array<SEChatData>, ErrorAlert> {
         do {
             guard let user = try apiGetActiveUser() else {
                 return .failure(
@@ -273,14 +263,6 @@ class ShareModel: ObservableObject {
                     )
                 )
             }
-            return .success(user)
-        } catch {
-            return .failure(ErrorAlert(error))
-        }
-    }
-
-    private func fetchChats(_ user: User) -> Result<Array<SEChatData>, ErrorAlert> {
-        do {
             return .success(try apiGetChats(userId: user.id))
         } catch {
             return .failure(ErrorAlert(error))
@@ -423,7 +405,7 @@ enum SharedContent {
     }
 }
 
-fileprivate func getSharedContent(_ ip: NSItemProvider, _ senderProfile: LocalProfile) async -> Result<SharedContent, ErrorAlert> {
+fileprivate func getSharedContent(_ ip: NSItemProvider) async -> Result<SharedContent, ErrorAlert> {
     if let type = firstMatching(of: [.image, .movie, .fileURL, .url, .text]) {
         switch type {
             // Prepare Image message
@@ -461,13 +443,15 @@ fileprivate func getSharedContent(_ ip: NSItemProvider, _ senderProfile: LocalPr
         // Prepare Data message
         case .fileURL:
             if let url = try? await inPlaceUrl(type: .data) {
-                let size = Int64(fileSize(url) ?? 0)
-                let maxSize = getMaxFileSize(.xftp, senderProfile)
-                if size > maxSize {
+                if isFileTooLarge(for: url) {
+                    let sizeString = ByteCountFormatter.string(
+                        fromByteCount: Int64(getMaxFileSize(.xftp)),
+                        countStyle: .binary
+                    )
                     return .failure(
                         ErrorAlert(
                             title: "Large file!",
-                            message: LocalizedStringKey(largeFileMessage(size, badgeIssue: expiredBadgeReason(size, senderProfile)))
+                            message: "Currently maximum supported file size is \(sizeString)."
                         )
                     )
                 }
@@ -548,5 +532,11 @@ fileprivate func transcodeVideo(from input: URL) async -> URL? {
         try? FileManager.default.removeItem(at: outputUrl)
         return nil
     }
+}
+
+fileprivate func isFileTooLarge(for url: URL) -> Bool {
+    fileSize(url)
+        .map { $0 > getMaxFileSize(.xftp) }
+        ?? false
 }
 

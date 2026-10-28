@@ -17,6 +17,9 @@
 "Comment" = "Комментарий";
 
 /* No comment provided by engineer. */
+"Currently maximum supported file size is %@." = "В настоящее время максимальный поддерживаемый размер файла составляет %@.";
+
+/* No comment provided by engineer. */
 "Database downgrade required" = "Требуется откат базы данных";
 
 /* No comment provided by engineer. */
@@ -102,7 +105,4 @@
 
 /* No comment provided by engineer. */
 "Wrong database passphrase" = "Неправильный пароль базы данных";
-
-/* No comment provided by engineer. */
-"You can allow sharing in Your privacy / SimpleX Lock settings." = "Вы можете разрешить отправку в настройках Конфиденциальность / Блокировка SimpleX.";
 

@@ -12,7 +12,6 @@
 - [ErrorNotADatabase](core.DBMigrationError.Interface.ErrorNotADatabase.md)
 - [ErrorSQL](core.DBMigrationError.Interface.ErrorSQL.md)
 - [InvalidConfirmation](core.DBMigrationError.Interface.InvalidConfirmation.md)
-- [InvalidQueueSize](core.DBMigrationError.Interface.InvalidQueueSize.md)
 
 ## Type Aliases
 

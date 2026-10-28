@@ -170,8 +170,6 @@ func hostFromRelayLink(_ link: String) -> String {
     return link
 }
 
-struct ChannelRelaysView_Previews: PreviewProvider {
-    static var previews: some View {
-        ChannelRelaysView(chat: Chat.sampleData, groupInfo: GroupInfo.sampleData)
-    }
+#Preview {
+    ChannelRelaysView(chat: Chat.sampleData, groupInfo: GroupInfo.sampleData)
 }

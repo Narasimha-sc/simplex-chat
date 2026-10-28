@@ -10,64 +10,31 @@ import SwiftUI
 import SimpleXChat
 
 struct StorageView: View {
-    @EnvironmentObject var m: ChatModel
-    @EnvironmentObject var theme: AppTheme
     @State var appGroupFiles: [String: Int64] = [:]
     @State var documentsFiles: [String: Int64] = [:]
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading) {
-                directoryView("App group:", getGroupContainerDirectory(), appGroupFiles)
+                directoryView("App group:", appGroupFiles)
                 if !documentsFiles.isEmpty {
-                    directoryView("Documents:", getDocumentsDirectory(), documentsFiles)
+                    directoryView("Documents:", documentsFiles)
                 }
             }
         }
         .padding()
-        .onAppear(perform: loadFiles)
-    }
-
-    private func loadFiles() {
-        appGroupFiles = traverseFiles(in: getGroupContainerDirectory())
-        documentsFiles = traverseFiles(in: getDocumentsDirectory())
-    }
-
-    @ViewBuilder
-    private func directoryView(_ name: LocalizedStringKey, _ dir: URL, _ contents: [String: Int64]) -> some View {
-        Text(name).font(.headline)
-        ForEach(Array(contents), id: \.key) { (key, value) in
-            let sizeText = Text(key).bold() + Text(verbatim: "   ") + Text((ByteCountFormatter.string(fromByteCount: value, countStyle: .binary)))
-            if dir.appendingPathComponent(key).path == getTempFilesDirectory().path {
-                let stopped = m.chatRunning == false
-                HStack {
-                    sizeText
-                    Button("Delete temp data", role: .destructive, action: confirmDeleteTempFiles)
-                        .disabled(!stopped)
-                }
-                if !stopped {
-                    Text("Stop chat in Settings → Chat data → Database passphrase & export to delete temp data.")
-                        .font(.footnote)
-                        .foregroundColor(theme.colors.secondary)
-                }
-            } else {
-                sizeText
-            }
+        .onAppear {
+            appGroupFiles = traverseFiles(in: getGroupContainerDirectory())
+            documentsFiles = traverseFiles(in: getDocumentsDirectory())
         }
     }
 
-    private func confirmDeleteTempFiles() {
-        showAlert(
-            NSLocalizedString("Delete temp data?", comment: "alert title"),
-            message: NSLocalizedString("Files being sent or received will never complete. Videos in unsent drafts will be sent without the file.", comment: "alert message"),
-            actions: {[
-                UIAlertAction(title: NSLocalizedString("Delete", comment: "alert action"), style: .destructive) { _ in
-                    deleteTempFiles()
-                    loadFiles()
-                },
-                cancelAlertAction
-            ]}
-        )
+    @ViewBuilder
+    private func directoryView(_ name: LocalizedStringKey, _ contents: [String: Int64]) -> some View {
+        Text(name).font(.headline)
+        ForEach(Array(contents), id: \.key) { (key, value) in
+            Text(key).bold() + Text(verbatim: "   ") + Text((ByteCountFormatter.string(fromByteCount: value, countStyle: .binary)))
+        }
     }
 
     private func traverseFiles(in dir: URL) -> [String: Int64] {

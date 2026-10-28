@@ -143,7 +143,7 @@ external fun chatMigrateInit(dbPath: String, dbKey: String, confirm: String): Ar
 
 ### Migration Flow in `initChatController`
 
-The full initialization sequence is in [Core.kt#L62](../common/src/commonMain/kotlin/chat/simplex/common/platform/Core.kt#L62):
+The full initialization sequence is in [Core.kt#L63](../common/src/commonMain/kotlin/chat/simplex/common/platform/Core.kt#L63):
 
 1. Obtain the DB encryption key from `DatabaseUtils.useDatabaseKey()`.
 2. Determine the confirmation mode (default: `YesUp`; developer mode with confirm upgrades: `Error`).
@@ -345,7 +345,7 @@ class ArchiveConfig(
 ### Import Flow
 
 1. User selects an archive file.
-2. UI copies it into `databaseExportDir` and constructs an `ArchiveConfig`. The destination is confined to that folder: `getFileName` returns a bare file name on every platform, and `saveArchiveFromURI` checks the canonical destination before copying.
+2. UI copies it to a temp location and constructs an `ArchiveConfig`.
 3. Calls `apiImportArchive(config)` which sends `CC.ApiImportArchive` to the Haskell core.
 4. The core extracts and replaces both databases.
 5. Returns `CR.ArchiveImported` with a list of `ArchiveError` (non-fatal issues during import).

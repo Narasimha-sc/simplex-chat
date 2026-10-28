@@ -49,7 +49,7 @@ import chat.simplex.common.views.chat.item.*
 import chat.simplex.common.views.chatlist.*
 import chat.simplex.common.views.database.TtlOptions
 import chat.simplex.common.views.newchat.SimpleXLinkQRCode
-import chat.simplex.res.*
+import chat.simplex.res.MR
 import dev.icerock.moko.resources.StringResource
 import kotlinx.coroutines.*
 
@@ -123,15 +123,6 @@ fun ModalData.GroupChatInfoView(
         }
       },
       showMemberInfo = { member, groupRelay ->
-        val connStats = mutableStateOf<ConnectionStats?>(null)
-        val connectionCode = mutableStateOf<String?>(null)
-        val connectionLoaded = mutableStateOf(false)
-        ModalManager.end.showModalCloseable(showClose = true, cardScreen = true) { closeCurrent ->
-          GroupMemberInfoView(rhId, groupInfo, member, scrollToItemId, connStats, connectionCode, connectionLoaded, chatModel, openedFromSupportChat = false, groupRelay = groupRelay, close = closeCurrent) {
-            closeCurrent()
-            close()
-          }
-        }
         withBGApi {
           val r = chatModel.controller.apiGroupMemberInfo(rhId, groupInfo.groupId, member.groupMemberId)
           val stats = r?.second
@@ -141,9 +132,14 @@ fun ModalData.GroupChatInfoView(
           } else {
             member to null
           }
-          connStats.value = stats
-          connectionCode.value = code
-          connectionLoaded.value = true
+          ModalManager.end.showModalCloseable(showClose = true, cardScreen = true) { closeCurrent ->
+            remember { derivedStateOf { chatModel.getGroupMember(member.groupMemberId) } }.value?.let { mem ->
+              GroupMemberInfoView(rhId, groupInfo, mem, scrollToItemId, stats, code, chatModel, openedFromSupportChat = false, groupRelay = groupRelay, close = closeCurrent) {
+                closeCurrent()
+                close()
+              }
+            }
+          }
         }
       },
       editGroupProfile = {
@@ -651,7 +647,7 @@ fun ModalData.GroupChatInfoLayout(
               ModalManager.closeAllModalsEverywhere()
             }
           }
-          if (groupInfo.canModerate || activeSortedMembers.any { it.memberRole >= GroupMemberRole.Owner }) {
+          if (groupInfo.isOwner || activeSortedMembers.any { it.memberRole >= GroupMemberRole.Owner }) {
             anyTopSectionRowShow = true
             ChannelMembersButton(chat.remoteHostId, groupInfo, showMemberInfo)
           }
@@ -1295,7 +1291,7 @@ private fun ShareViaChatButton(onClick: () -> Unit) {
 
 @Composable
 private fun ChannelMembersButton(rhId: Long?, groupInfo: GroupInfo, showMemberInfo: (GroupMember, GroupRelay?) -> Unit) {
-  val title = if (groupInfo.canModerate) {
+  val title = if (groupInfo.isOwner) {
     stringResource(MR.strings.channel_members_title_subscribers)
   } else {
     stringResource(MR.strings.channel_members_section_owners)

@@ -33,7 +33,7 @@ import chat.simplex.common.platform.*
 import chat.simplex.common.views.chat.*
 import chat.simplex.common.views.newchat.*
 import chat.simplex.common.BuildConfigCommon
-import chat.simplex.res.*
+import chat.simplex.res.MR
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -63,7 +63,6 @@ fun UserAddressView(
           chatModel.updateUser(u)
         }
       } catch (e: Exception) {
-        shareViaProfile.value = !on
         Log.e(TAG, "UserAddressView apiSetProfileAddress: ${e.stackTraceToString()}")
       } finally {
         progressIndicator.value = false
@@ -633,16 +632,14 @@ private fun BusinessAddressToggle(addressSettingsState: MutableState<AddressSett
         businessAddress = true,
         autoAccept = true,
         autoAcceptIncognito = false,
-        autoReply = addressSettingsState.value.autoReply,
-        chatLayout = addressSettingsState.value.chatLayout
+        autoReply = addressSettingsState.value.autoReply
       )
     else
       AddressSettingsState(
         businessAddress = false,
         autoAccept = addressSettingsState.value.autoAccept,
         autoAcceptIncognito = addressSettingsState.value.autoAcceptIncognito,
-        autoReply = addressSettingsState.value.autoReply,
-        chatLayout = addressSettingsState.value.chatLayout
+        autoReply = addressSettingsState.value.autoReply
       )
     saveAddressSettings(addressSettingsState.value)
   }
@@ -661,16 +658,14 @@ private fun AutoAcceptToggle(addressSettingsState: MutableState<AddressSettingsS
         businessAddress = addressSettingsState.value.businessAddress,
         autoAccept = true,
         autoAcceptIncognito = false,
-        autoReply = "",
-        chatLayout = addressSettingsState.value.chatLayout
+        autoReply = ""
       )
     else
       AddressSettingsState(
         businessAddress = false,
         autoAccept = false,
         autoAcceptIncognito = false,
-        autoReply = "",
-        chatLayout = addressSettingsState.value.chatLayout
+        autoReply = ""
       )
     saveAddressSettings(addressSettingsState.value)
   }
@@ -696,15 +691,12 @@ private class AddressSettingsState {
     private set
   var autoReply: String = ""
     private set
-  var chatLayout: ChatLayoutMode? = null
-    private set
 
-  constructor(businessAddress: Boolean = false, autoAccept: Boolean = false, autoAcceptIncognito: Boolean = false, autoReply: String = "", chatLayout: ChatLayoutMode? = null) {
+  constructor(businessAddress: Boolean = false, autoAccept: Boolean = false, autoAcceptIncognito: Boolean = false, autoReply: String = "") {
     this.businessAddress = businessAddress
     this.autoAccept = autoAccept
     this.autoAcceptIncognito = autoAcceptIncognito
     this.autoReply = autoReply
-    this.chatLayout = chatLayout
   }
 
   constructor(settings: AddressSettings) {
@@ -712,7 +704,6 @@ private class AddressSettingsState {
     this.autoAccept = settings.autoAccept != null
     this.autoAcceptIncognito = settings.autoAccept?.acceptIncognito == true
     this.autoReply = settings.autoReply?.text ?: ""
-    this.chatLayout = settings.chatLayout
   }
 
   val addressSettings: AddressSettings
@@ -720,8 +711,7 @@ private class AddressSettingsState {
       return AddressSettings(
         businessAddress = this.businessAddress,
         autoAccept = if (this.autoAccept) AutoAccept(acceptIncognito = this.autoAcceptIncognito) else null,
-        autoReply = if (this.autoReply.isEmpty()) null else MsgContent.MCText(this.autoReply),
-        chatLayout = this.chatLayout
+        autoReply = if (this.autoReply.isEmpty()) null else MsgContent.MCText(this.autoReply)
       )
     }
 
@@ -732,7 +722,6 @@ private class AddressSettingsState {
             && this.autoAccept == other.autoAccept
             && this.autoAcceptIncognito == other.autoAcceptIncognito
             && this.autoReply == other.autoReply
-            && this.chatLayout == other.chatLayout
     )
   }
 
@@ -741,7 +730,6 @@ private class AddressSettingsState {
     result = 31 * result + autoAccept.hashCode()
     result = 31 * result + autoAcceptIncognito.hashCode()
     result = 31 * result + autoReply.hashCode()
-    result = 31 * result + chatLayout.hashCode()
     return result
   }
 }
@@ -758,8 +746,7 @@ private fun AcceptIncognitoToggle(addressSettingsState: MutableState<AddressSett
       businessAddress = addressSettingsState.value.businessAddress,
       autoAccept = addressSettingsState.value.autoAccept,
       autoAcceptIncognito = incognitoToggle,
-      autoReply = addressSettingsState.value.autoReply,
-      chatLayout = addressSettingsState.value.chatLayout
+      autoReply = addressSettingsState.value.autoReply
     )
   }
 }
@@ -780,8 +767,7 @@ private fun AutoReplyEditor(addressSettingsState: MutableState<AddressSettingsSt
         businessAddress = addressSettingsState.value.businessAddress,
         autoAccept = addressSettingsState.value.autoAccept,
         autoAcceptIncognito = addressSettingsState.value.autoAcceptIncognito,
-        autoReply = autoReply.value,
-        chatLayout = addressSettingsState.value.chatLayout
+        autoReply = autoReply.value
       )
     }
   }

@@ -41,8 +41,6 @@ struct NewChatSheet: View {
     @State private var searchText = ""
     @State private var searchShowingSimplexLink = false
     @State private var searchChatFilteredBySimplexLink: String? = nil
-    // when the search text is a SimpleX name, the string to connect to (with @/# preserved); nil otherwise
-    @State private var connectNameCandidate: String? = nil
     @State private var alert: SomeAlert?
 
     // Sheet height management
@@ -83,25 +81,15 @@ struct NewChatSheet: View {
 
     private func viewBody(_ showArchive: Bool) -> some View {
         List {
-            VStack(spacing: 12) {
+            HStack {
                 ContactsListSearchBar(
                     searchMode: $searchMode,
                     searchFocussed: $searchFocussed,
                     searchText: $searchText,
                     searchShowingSimplexLink: $searchShowingSimplexLink,
-                    searchChatFilteredBySimplexLink: $searchChatFilteredBySimplexLink,
-                    connectNameCandidate: $connectNameCandidate
+                    searchChatFilteredBySimplexLink: $searchChatFilteredBySimplexLink
                 )
                 .frame(maxWidth: .infinity)
-                if let candidate = connectNameCandidate {
-                    ConnectByNameRow(
-                        name: candidate,
-                        searchText: $searchText,
-                        connectNameCandidate: $connectNameCandidate,
-                        searchFocussed: $searchFocussed,
-                        dismiss: true
-                    )
-                }
             }
             .listRowSeparator(.hidden)
             .listRowBackground(Color.clear)
@@ -339,7 +327,6 @@ struct ContactsListSearchBar: View {
     @Binding var searchText: String
     @Binding var searchShowingSimplexLink: Bool
     @Binding var searchChatFilteredBySimplexLink: String?
-    @Binding var connectNameCandidate: String?
     @State private var ignoreSearchTextChange = false
     @AppStorage(DEFAULT_SHOW_UNREAD_AND_FAVORITES) private var showUnreadAndFavorites = false
 
@@ -394,32 +381,33 @@ struct ContactsListSearchBar: View {
             if ignoreSearchTextChange {
                 ignoreSearchTextChange = false
             } else {
-                let s = t.trimmingCharacters(in: .whitespaces)
-                switch strConnectTarget(s) {
+                switch strConnectTarget(t.trimmingCharacters(in: .whitespaces)) {
                 case let .link(text, _, linkText):
                     searchFocussed = false
                     ignoreSearchTextChange = true
                     searchText = linkText
                     searchShowingSimplexLink = true
                     searchChatFilteredBySimplexLink = nil
-                    connectNameCandidate = nil
                     connect(text)
-                default:
-                    // A name is resolved only when its "Connect to …" row is tapped, not on every keystroke.
-                    // The simplex-name filter is chat-list only: this contacts/deleted view is a scoped
-                    // subset, so a resolved chat id (channel, business, unlisted or active-only contact)
-                    // may not be present in it.
-                    let candidate = nameSearchCandidate(s)
-                    connectNameCandidate = candidate
-                    if candidate == nil {
-                        if t != "" {
-                            searchFocussed = true
-                        } else {
-                            connectProgressManager.cancelConnectProgress()
+                case let .name(text, _):
+                    searchFocussed = false
+                    planAndConnect(
+                        text,
+                        theme: theme,
+                        dismiss: true,
+                        cleanup: {
+                            searchText = ""
+                            searchFocussed = false
                         }
-                        searchShowingSimplexLink = false
-                        searchChatFilteredBySimplexLink = nil
+                    )
+                case .none:
+                    if t != "" {
+                        searchFocussed = true
+                    } else {
+                        connectProgressManager.cancelConnectProgress()
                     }
+                    searchShowingSimplexLink = false
+                    searchChatFilteredBySimplexLink = nil
                 }
             }
         }
@@ -461,9 +449,7 @@ struct DeletedChats: View {
     @State private var searchText = ""
     @State private var searchShowingSimplexLink = false
     @State private var searchChatFilteredBySimplexLink: String? = nil
-    // deleted contacts are not connected to by name, so this candidate only stops per-keystroke resolution
-    @State private var connectNameCandidate: String? = nil
-
+    
     var body: some View {
         List {
             ContactsListSearchBar(
@@ -471,8 +457,7 @@ struct DeletedChats: View {
                 searchFocussed: $searchFocussed,
                 searchText: $searchText,
                 searchShowingSimplexLink: $searchShowingSimplexLink,
-                searchChatFilteredBySimplexLink: $searchChatFilteredBySimplexLink,
-                connectNameCandidate: $connectNameCandidate
+                searchChatFilteredBySimplexLink: $searchChatFilteredBySimplexLink
             )
             .listRowSeparator(.hidden)
             .listRowBackground(Color.clear)
@@ -497,8 +482,6 @@ struct DeletedChats: View {
     }
 }
 
-struct NewChatMenuButton_Previews: PreviewProvider {
-    static var previews: some View {
-        NewChatMenuButton(showNewChatSheet: Binding.constant(false))
-    }
+#Preview {
+    NewChatMenuButton(showNewChatSheet: Binding.constant(false))
 }

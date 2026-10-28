@@ -76,9 +76,7 @@ struct ContactConnectionView: View {
 
 struct ContactConnectionView_Previews: PreviewProvider {
     static var previews: some View {
-        var contactConnection = PendingContactConnection.getSampleData()
-        contactConnection.updatedAt = previewDate
-        return ContactConnectionView(chat: Chat(chatInfo: .contactConnection(contactConnection: contactConnection)))
+        ContactConnectionView(chat: Chat(chatInfo: ChatInfo.sampleData.contactConnection))
             .previewLayout(.fixed(width: 360, height: 80))
     }
 }

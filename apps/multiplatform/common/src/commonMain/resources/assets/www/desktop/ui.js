@@ -2,7 +2,7 @@
 // Override defaults to enable worker on Chrome and Safari
 useWorker = typeof window.Worker !== "undefined";
 isDesktop = true;
-// Create WebSocket connection. location.search carries the per-call ?token=... capability required by the server.
+// Create WebSocket connection.
 const socket = new WebSocket(`ws://${location.host}${location.search}`);
 socket.addEventListener("open", (_event) => {
     console.log("Opened socket");

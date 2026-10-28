@@ -26,7 +26,7 @@ import chat.simplex.common.ui.theme.*
 import chat.simplex.common.views.helpers.*
 import chat.simplex.common.views.onboarding.SelectableCard
 import chat.simplex.common.views.usersettings.SettingsActionItemWithContent
-import chat.simplex.res.*
+import chat.simplex.res.MR
 
 val SectionCardShape = RoundedCornerShape(16.dp)
 val CARD_PADDING = 18.dp

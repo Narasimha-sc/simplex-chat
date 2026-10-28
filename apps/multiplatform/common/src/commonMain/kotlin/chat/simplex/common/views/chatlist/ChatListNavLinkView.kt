@@ -25,12 +25,12 @@ import chat.simplex.common.ui.theme.*
 import chat.simplex.common.views.chat.*
 import chat.simplex.common.views.chat.group.*
 import chat.simplex.common.views.chat.item.ItemAction
-import chat.simplex.common.views.chat.item.previewDate
 import chat.simplex.common.views.contacts.onRequestAccepted
 import chat.simplex.common.views.helpers.*
 import chat.simplex.common.views.newchat.*
-import chat.simplex.res.*
+import chat.simplex.res.MR
 import kotlinx.coroutines.*
+import kotlinx.datetime.Clock
 
 // Spec: spec/client/chat-list.md#ChatListNavLinkView
 @Composable
@@ -265,13 +265,10 @@ suspend fun setGroupMembers(rhId: Long?, groupInfo: GroupInfo, chatModel: ChatMo
       newMember
     }
   }
-  withContext(Dispatchers.Main) {
-    if (chatModel.chatId.value != groupInfo.id) return@withContext
-    chatModel.groupMembersIndexes.value = emptyMap()
-    chatModel.groupMembers.value = newMembers
-    chatModel.membersLoaded.value = true
-    chatModel.populateGroupMembersIndexes()
-  }
+  chatModel.groupMembersIndexes.value = emptyMap()
+  chatModel.groupMembers.value = newMembers
+  chatModel.membersLoaded.value = true
+  chatModel.populateGroupMembersIndexes()
 }
 
 @Composable
@@ -586,7 +583,7 @@ fun ContactConnectionMenuItems(rhId: Long?, chatInfo: ChatInfo.ContactConnection
     onClick = {
       ModalManager.center.closeModals()
       ModalManager.end.closeModals()
-      ModalManager.center.showModalCloseable(settings = true, cardScreen = true) { close ->
+      ModalManager.center.showModalCloseable(settings = true, showClose = appPlatform.isAndroid, cardScreen = true) { close ->
         ContactConnectionInfoView(chatModel, rhId, chatInfo.contactConnection.connLinkInv, chatInfo.contactConnection, true, close)
       }
       showMenu.value = false
@@ -1052,7 +1049,7 @@ fun PreviewChatListNavLinkDirect() {
               ChatItem.getSampleData(
                 1,
                 CIDirection.DirectSnd(),
-                previewDate,
+                Clock.System.now(),
                 "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat."
               )
             ),
@@ -1097,7 +1094,7 @@ fun PreviewChatListNavLinkGroup() {
               ChatItem.getSampleData(
                 1,
                 CIDirection.DirectSnd(),
-                previewDate,
+                Clock.System.now(),
                 "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat."
               )
             ),
@@ -1134,7 +1131,7 @@ fun PreviewChatListNavLinkContactRequest() {
   SimpleXTheme {
     ChatListNavLinkLayout(
       chatLinkPreview = {
-        ContactRequestView(ChatInfo.ContactRequest(UserContactRequest.sampleData.run { UserContactRequest(contactRequestId, cReqChatVRange, localDisplayName, profile, createdAt = previewDate, updatedAt = previewDate) }))
+        ContactRequestView(ChatInfo.ContactRequest.sampleData)
       },
       click = {},
       dropdownMenuItems = null,

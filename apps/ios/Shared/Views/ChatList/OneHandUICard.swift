@@ -81,8 +81,6 @@ struct OneHandUICard: View {
     }
 }
 
-struct OneHandUICard_Previews: PreviewProvider {
-    static var previews: some View {
-        OneHandUICard()
-    }
+#Preview {
+    OneHandUICard()
 }

@@ -132,16 +132,13 @@ fun PlainTextEditor(
 
 @Serializable
 data class ParsedFormattedText(
-  val formattedText: List<FormattedText>? = null,
-  val markdownBlocks: List<MarkdownBlock>? = null
+  val formattedText: List<FormattedText>? = null
 )
 
-fun parseToMarkdown(text: String): List<FormattedText>? = parseToMarkdownText(text)?.formattedText
-
-fun parseToMarkdownText(text: String): ParsedFormattedText? {
+fun parseToMarkdown(text: String): List<FormattedText>? {
   val formatted = chatParseMarkdown(text)
   return try {
-    json.decodeFromString(ParsedFormattedText.serializer(), formatted)
+    json.decodeFromString(ParsedFormattedText.serializer(), formatted).formattedText
   } catch (e: Exception) {
     Log.e(TAG, "Failed to parse into markdown: " + e.stackTraceToString())
     null

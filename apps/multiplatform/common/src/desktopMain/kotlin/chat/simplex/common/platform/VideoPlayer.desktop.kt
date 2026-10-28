@@ -4,13 +4,14 @@ import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.graphics.*
 import chat.simplex.common.views.helpers.*
-import chat.simplex.res.*
+import chat.simplex.res.MR
 import kotlinx.coroutines.*
 import org.jetbrains.compose.videoplayer.SkiaBitmapVideoSurface
 import uk.co.caprica.vlcj.media.Media
 import uk.co.caprica.vlcj.media.MediaEventAdapter
 import uk.co.caprica.vlcj.media.MediaParsedStatus
 import uk.co.caprica.vlcj.media.ParseFlag
+import uk.co.caprica.vlcj.media.VideoOrientation
 import uk.co.caprica.vlcj.player.base.*
 import uk.co.caprica.vlcj.player.component.CallbackMediaPlayerComponent
 import uk.co.caprica.vlcj.player.component.EmbeddedMediaPlayerComponent
@@ -230,19 +231,14 @@ actual class VideoPlayer actual constructor(
       player.videoSurface().set(surface)
       player.media().startPaused(uri.toFile().absolutePath)
       val snap = withTimeoutOrNull(1500L) {
-        while (surface.bitmap.value == null) delay(50)
-        // The render callback installs pixels into the surface bitmap on the event thread, so read it
-        // there too - converting off that thread races a resize on format renegotiation and segfaults
-        // inside skia while reading pixels of the previous, smaller buffer
-        val holder = java.util.concurrent.atomic.AtomicReference<BufferedImage?>(null)
-        // invokeAndWait rethrows whatever the conversion threw, wrapped, and the callers of this have
-        // no handler; a frame that cannot be converted is a missing preview, not a failed send
-        try {
-          javax.swing.SwingUtilities.invokeAndWait { holder.set(surface.bitmap.value?.toAwtImage()) }
-        } catch (e: Exception) {
-          Log.e(TAG, "getBitmapFromVideo snapshot failed: ${e.stackTraceToString()}")
+        // A frame of its own: the playing surface reuses one bitmap, and reading that here races the
+        // decoder replacing its pixels.
+        var frame = surface.snapshot()
+        while (frame == null) {
+          delay(50)
+          frame = surface.snapshot()
         }
-        holder.get()
+        frame.toAwtImage()
       }
       val orientation = player.media().info().videoTracks().firstOrNull()?.orientation()
       if (orientation == null) {
@@ -252,9 +248,17 @@ actual class VideoPlayer actual constructor(
 
         return@withContext VideoPlayerInterface.PreviewAndDuration(preview = defaultPreview, timestamp = 0L, duration = 0L)
       }
-      // vlc applies the display matrix before the frame reaches the video surface, so the snapshot
-      // arrives upright; orienting it again here would undo that
-      val preview: ImageBitmap? = snap?.toComposeImageBitmap()
+      val preview: ImageBitmap? = when (orientation) {
+        VideoOrientation.TOP_LEFT -> snap
+        VideoOrientation.TOP_RIGHT -> snap?.flip(false, true)
+        VideoOrientation.BOTTOM_LEFT -> snap?.flip(true, false)
+        VideoOrientation.BOTTOM_RIGHT -> snap?.rotate(180.0)
+        VideoOrientation.LEFT_TOP -> snap  /* Transposed */
+        VideoOrientation.LEFT_BOTTOM -> snap?.rotate(-90.0)
+        VideoOrientation.RIGHT_TOP -> snap?.rotate(90.0)
+        VideoOrientation.RIGHT_BOTTOM -> snap /* Anti-transposed */
+        else -> snap
+      }?.toComposeImageBitmap()
       val duration = player.duration.toLong()
       player.stop()
       putHelperPlayer(mediaComponent)

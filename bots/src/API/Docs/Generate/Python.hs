@@ -60,7 +60,10 @@ commandsCodeText =
             <> respAliasLine
           where
             constrName = T.pack $ fstToUpper tag
-            classDef = typedDictCode constrName (fieldsCodePy "T." params) <> "\n"
+            classDef =
+              ("class " <> constrName <> "(TypedDict):\n")
+                <> bodyOrPass (fieldsCodePy "    " "T." params)
+                <> "\n"
             cmdStringFunc =
               ("\ndef " <> constrName <> "_cmd_string(self: " <> constrName <> ") -> str:\n")
                 <> "    return " <> pySelfSyntaxText "T." (fstToUpper tag, params) syntax <> "\n"
@@ -140,7 +143,9 @@ typesCodeText =
           "FileProtocol" -> map toUpper m
           _ -> m
         typeDefCode = case typeDef of
-          ATDRecord fields -> "\n" <> typedDictCode name' (fieldsCodePy "" fields)
+          ATDRecord fields ->
+            ("\nclass " <> name' <> "(TypedDict):\n")
+              <> bodyOrPass (fieldsCodePy "    " "" fields)
           ATDEnum cs ->
             "\n" <> name' <> " = Literal["
               <> T.intercalate ", " (map (\m -> "\"" <> T.pack (enumValue m) <> "\"") $ L.toList cs)
@@ -226,7 +231,9 @@ unionTypeCodePy memberName typesNamespace name cs =
     constrTypeRef (ATUnionMember tag _) = memberName name tag
     tagLiterals = T.intercalate ", " $ map (\(ATUnionMember tag _) -> "\"" <> T.pack tag <> "\"") $ L.toList cs
     memberClass (ATUnionMember tag fields) =
-      "\n" <> typedDictCode (memberName name tag) (("type", "Literal[\"" <> T.pack tag <> "\"]", "") : fieldsCodePy typesNamespace fields)
+      ("\nclass " <> memberName name tag <> "(TypedDict):\n")
+        <> ("    type: Literal[\"" <> T.pack tag <> "\"]\n")
+        <> fieldsCodePy "    " typesNamespace fields
 
 -- | Render the right-hand side of a union alias: either inline (one line) or
 -- multi-line wrapped in parentheses with `|` separators between alternatives.
@@ -241,27 +248,21 @@ unionAliasRhs lhs constr cs
       (h : t) -> h : map ("| " <>) t
     cs' = map constr cs
 
-typedDictCode :: Text -> [(Text, Text, Text)] -> Text
-typedDictCode name fields
-  | any (\(field, _, _) -> field `elem` pyKeywords) fields =
-      (name <> " = TypedDict(\"" <> name <> "\", {\n")
-        <> foldMap (\(field, t, comment) -> "    \"" <> field <> "\": " <> t <> "," <> comment <> "\n") fields
-        <> "})\n"
-  | null fields = "class " <> name <> "(TypedDict):\n    pass\n"
-  | otherwise =
-      ("class " <> name <> "(TypedDict):\n")
-        <> foldMap (\(field, t, comment) -> "    " <> field <> ": " <> t <> comment <> "\n") fields
+-- | Emit a body of `pass` if there are no fields, otherwise the rendered
+-- fields as-is.
+bodyOrPass :: Text -> Text
+bodyOrPass body
+  | T.null body = "    pass\n"
+  | otherwise = body
 
-pyKeywords :: [Text]
-pyKeywords =
-  ["False", "None", "True", "and", "as", "assert", "async", "await", "break", "class", "continue", "def", "del", "elif", "else", "except", "finally", "for", "from", "global", "if", "import", "in", "is", "lambda", "nonlocal", "not", "or", "pass", "raise", "return", "try", "while", "with", "yield"]
-
--- | Render record fields for a TypedDict as name, type and comment.
--- Optional fields wrap the type in `NotRequired[...]`.
-fieldsCodePy :: Text -> [APIRecordField] -> [(Text, Text, Text)]
-fieldsCodePy namespace = map render
+-- | Render record fields for a TypedDict body. Each field becomes
+-- `<indent><name>: <type>[  # <comment>]`. Optional fields wrap the type in
+-- `NotRequired[...]`.
+fieldsCodePy :: Text -> Text -> [APIRecordField] -> Text
+fieldsCodePy indent namespace = foldMap render
   where
-    render (APIRecordField name t) = (T.pack name, wrapOptional t (typeText t), typeComment t)
+    render (APIRecordField name t) =
+      indent <> T.pack name <> ": " <> wrapOptional t (typeText t) <> typeComment t <> "\n"
     wrapOptional t inner = case t of
       ATOptional _ -> "NotRequired[" <> inner <> "]"
       _ -> inner

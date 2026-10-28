@@ -25,13 +25,7 @@ module Simplex.Chat.Badges
     BBSPublicKeyStr (..),
     localBadgeInfo,
     localBadgeStatus,
-    FileSizeLimits (..),
-    defaultFileSizeLimits,
     maxXFTPFileSize,
-    maxSndXFTPFileSize,
-    badgeGraceInterval,
-    badgeSndGraceInterval,
-    badgeServerCredential,
     maxFileSizeSupporter,
     maxFileSizeLegend,
     ProofPresHeaderTag (..),
@@ -48,18 +42,9 @@ module Simplex.Chat.Badges
     generateBadgeProof,
     badgeProof,
     verifyBadge,
-    acceptedProof,
-    acceptedBadge,
-    sameBadgeProof,
-    unboundProof,
+    verifyBadge_,
     mkBadgeStatus,
     BadgeRow,
-    BadgeProofKind (..),
-    BadgeProofRow,
-    badgeProofToRow,
-    rowToBadgeProof,
-    MaybeBadgeProofRow,
-    maybeRowToBadgeProof,
     badgeToRow,
     localBadgeToRow,
     rowToBadge,
@@ -80,13 +65,10 @@ import Data.String
 import Data.Text (Text)
 import Data.Text.Encoding (encodeUtf8)
 import Data.Time.Clock (NominalDiffTime, UTCTime, addUTCTime, nominalDay)
-import Data.Time.Clock.System (systemToUTCTime, utcToSystemTime)
 import Simplex.FileTransfer.Description (gb, maxFileSize)
-import Simplex.Messaging.Agent.Store.DB (Binary (..), BoolInt (..), blobFieldDecoder, fromTextField_)
+import Simplex.Messaging.Agent.Store.DB (Binary (..), BoolInt (..), fromTextField_)
 import qualified Simplex.Messaging.Crypto as C
 import Simplex.Messaging.Crypto.BBS
-import Simplex.Messaging.Crypto.Entitlement (Entitlement (Entitlement), EntitlementCredential (EntitlementCredential), MasterKey (MasterKey), entitlementBBSHeader)
-import Simplex.Messaging.Encoding (Encoding (..))
 import Simplex.Messaging.Encoding.String
 import Simplex.Messaging.Parsers (defaultJSON, dropPrefix, enumJSON)
 #if defined(dbPostgres)
@@ -130,62 +112,30 @@ instance FromJSON BadgeType where
 data BadgeStatus = BSActive | BSExpired | BSExpiredOld | BSFailed | BSUnknownKey
   deriving (Eq, Show)
 
-instance TextEncoding BadgeStatus where
-  textEncode = \case
-    BSActive -> "active"
-    BSExpired -> "expired"
-    BSExpiredOld -> "expired_old"
-    BSFailed -> "failed"
-    BSUnknownKey -> "unknown_key"
-  textDecode = \case
-    "active" -> Just BSActive
-    "expired" -> Just BSExpired
-    "expired_old" -> Just BSExpiredOld
-    "failed" -> Just BSFailed
-    "unknown_key" -> Just BSUnknownKey
-    _ -> Nothing
-
--- Badge proof kind - a file has at most one proof of each kind
-
-data BadgeProofKind = BPKInvitation | BPKDescription
-  deriving (Eq, Show)
-
-instance TextEncoding BadgeProofKind where
-  textEncode = \case
-    BPKInvitation -> "inv"
-    BPKDescription -> "descr"
-  textDecode = \case
-    "inv" -> Just BPKInvitation
-    "descr" -> Just BPKDescription
-    _ -> Nothing
-
 -- Disclosed badge content (BBS messages 1, 2, 3)
 
 data BadgeInfo = BadgeInfo
   { badgeType :: BadgeType,
-    badgeExpiry :: UTCTime,
+    badgeExpiry :: Maybe UTCTime,
     badgeExtra :: Text
   }
   deriving (Eq, Show)
 
--- a badge stays active for this long after its expiry, to allow for a delayed renewal
-badgeGraceInterval :: NominalDiffTime
-badgeGraceInterval = 7 * nominalDay
-
 -- a badge expired longer than this ago is BSExpiredOld and is not shown in the UI
 badgeOldInterval :: NominalDiffTime
-badgeOldInterval = badgeGraceInterval + 31 * nominalDay
+badgeOldInterval = 31 * nominalDay
 
 -- the verification outcome of a received proof: Just True = verified, Just False = failed,
 -- Nothing = the proof's key index is not among this app version's configured keys (BSUnknownKey).
 mkBadgeStatus :: UTCTime -> Maybe Bool -> BadgeInfo -> BadgeStatus
-mkBadgeStatus now verified BadgeInfo {badgeExpiry = e} = case verified of
+mkBadgeStatus now verified BadgeInfo {badgeExpiry} = case verified of
   Nothing -> BSUnknownKey
   Just False -> BSFailed
-  Just True
-    | addUTCTime badgeOldInterval e < now -> BSExpiredOld
-    | addUTCTime badgeGraceInterval e < now -> BSExpired
-    | otherwise -> BSActive
+  Just True -> case badgeExpiry of
+    Just e
+      | addUTCTime badgeOldInterval e < now -> BSExpiredOld
+      | e < now -> BSExpired
+    _ -> BSActive
 
 -- A badge credential (own, secret) and a proof (a presentation) are independent records.
 -- badgeKeyIdx is the issuer key index: it tells verifiers which configured key to use.
@@ -231,137 +181,55 @@ localBadgeStatus = \case
   ShownBadge _ st -> st
 
 -- XFTP file size limit raised by an active badge: a legend badge to 5GB, any other to 2GB, otherwise the default.
-maxFileSizeSupporter :: Integer
+maxFileSizeSupporter :: Int64
 maxFileSizeSupporter = gb 2
 
-maxFileSizeLegend :: Integer
+maxFileSizeLegend :: Int64
 maxFileSizeLegend = gb 5
 
-badgeServerCredential :: Maybe LocalBadge -> Maybe EntitlementCredential
-badgeServerCredential = \case
-  Just (OwnBadge (BadgeCredential idx (BadgeMasterKey mk) sig BadgeInfo {badgeType, badgeExpiry, badgeExtra}) _) ->
-    Just $ EntitlementCredential (fromIntegral idx) (MasterKey mk) (Entitlement badgeExpiry (textEncode badgeType) badgeExtra) sig
-  _ -> Nothing
-
-data FileSizeLimits = FileSizeLimits
-  { noBadge :: Integer,
-    supporter :: Integer,
-    legend :: Integer
-  }
-  deriving (Eq, Show)
-
-defaultFileSizeLimits :: FileSizeLimits
-defaultFileSizeLimits = FileSizeLimits {noBadge = toInteger maxFileSize, supporter = maxFileSizeSupporter, legend = maxFileSizeLegend}
-
--- a badge raises the size limit at send for this long after its expiry, shorter than badgeGraceInterval so the receiver still accepts the size
-badgeSndGraceInterval :: NominalDiffTime
-badgeSndGraceInterval = nominalDay
-
-badgeFileSize :: FileSizeLimits -> LocalBadge -> Integer
-badgeFileSize FileSizeLimits {supporter, legend} b = case badgeType (localBadgeInfo b) of
-  BTLegend -> legend
-  _ -> supporter
-
-maxXFTPFileSize :: FileSizeLimits -> Maybe LocalBadge -> Integer
-maxXFTPFileSize lims = \case
-  Just b | localBadgeStatus b == BSActive -> badgeFileSize lims b
-  _ -> noBadge lims
-
-maxSndXFTPFileSize :: FileSizeLimits -> UTCTime -> Maybe LocalBadge -> Integer
-maxSndXFTPFileSize lims now = \case
-  Just b | localBadgeStatus b == BSActive && addUTCTime badgeSndGraceInterval (badgeExpiry (localBadgeInfo b)) >= now -> badgeFileSize lims b
-  _ -> noBadge lims
+maxXFTPFileSize :: Maybe LocalBadge -> Int64
+maxXFTPFileSize = \case
+  Just b | localBadgeStatus b == BSActive -> case badgeType (localBadgeInfo b) of
+    BTLegend -> maxFileSizeLegend
+    _ -> maxFileSizeSupporter
+  _ -> maxFileSize
 
 -- Presentation header: a tag char + payload. PHTest is unbound - a fresh random nonce per
--- presentation, not bound to any context.
+-- presentation, not bound to any context; the 'T' tag marks it so master rejects it.
 -- PHUnknown is the forward-compat catch-all for tags this version does not interpret.
 
-data ProofPresHeaderTag
-  = PHTestTag -- random nonce: released clients
-  | PHChatTag -- direct chat ratchet, group member key
-  | PHFileInvTag -- file invitation
-  | PHFileDescrTag -- file description
-  | PHRequestTag -- request to address without ratchet keys
-  | PHLinkTag -- invitation and address link data
-  | PHUnknownTag Char -- tags of newer versions
+data ProofPresHeaderTag = PHTestTag | PHUnknownTag Char
 
 instance StrEncoding ProofPresHeaderTag where
   strEncode = B.singleton . \case
     PHTestTag -> 'T'
-    PHChatTag -> 'C'
-    PHFileInvTag -> 'F'
-    PHFileDescrTag -> 'D'
-    PHRequestTag -> 'R'
-    PHLinkTag -> 'L'
     PHUnknownTag c -> c
   strP = tag <$> A.anyChar
     where
       tag = \case
         'T' -> PHTestTag
-        'C' -> PHChatTag
-        'F' -> PHFileInvTag
-        'D' -> PHFileDescrTag
-        'R' -> PHRequestTag
-        'L' -> PHLinkTag
         c -> PHUnknownTag c
 
 data ProofPresHeader
   = PHTest ByteString
-  | PHChat ByteString
-  | PHFileInv {chatBinding :: ByteString, fileSize :: Int64}
-  | PHFileDescr {chatBinding :: ByteString, fileSize :: Int64, descrHash :: ByteString, fileExpires :: Maybe UTCTime}
-  | PHRequest ByteString
-  | PHLink ByteString
   | PHUnknown Char ByteString
   deriving (Eq, Show)
-
-instance ToJSON ProofPresHeader where
-  toJSON = toJSON . BBSPresHeader . strEncode
-  toEncoding = toEncoding . BBSPresHeader . strEncode
-
-instance FromJSON ProofPresHeader where
-  parseJSON v = parseJSON v >>= \(BBSPresHeader ph) -> either fail pure $ strDecode ph
+  deriving (ToJSON, FromJSON) via (StrJSON "ProofPresHeader" ProofPresHeader)
 
 instance StrEncoding ProofPresHeader where
   strEncode = \case
     PHTest nonce -> strEncode PHTestTag <> nonce
-    PHChat binding -> strEncode PHChatTag <> binding
-    PHFileInv {chatBinding, fileSize} ->
-      strEncode PHFileInvTag <> smpEncode (chatBinding, fileSize)
-    PHFileDescr {chatBinding, fileSize, descrHash, fileExpires} ->
-      strEncode PHFileDescrTag <> smpEncode (chatBinding, fileSize, descrHash, utcToSystemTime <$> fileExpires)
-    PHRequest code -> strEncode PHRequestTag <> code
-    PHLink linkKey -> strEncode PHLinkTag <> linkKey
     PHUnknown c b -> strEncode (PHUnknownTag c) <> b
   strP =
     strP >>= \case
       PHTestTag -> PHTest <$> A.takeByteString
-      PHChatTag -> PHChat <$> A.takeByteString
-      PHFileInvTag -> do
-        (chatBinding, fileSize) <- smpP
-        pure PHFileInv {chatBinding, fileSize}
-      PHFileDescrTag -> do
-        (chatBinding, fileSize, descrHash, expires_) <- smpP
-        pure PHFileDescr {chatBinding, fileSize, descrHash, fileExpires = systemToUTCTime <$> expires_}
-      PHRequestTag -> PHRequest <$> A.takeByteString
-      PHLinkTag -> PHLink <$> A.takeByteString
       PHUnknownTag c -> PHUnknown c <$> A.takeByteString
 
-acceptedProof :: Maybe ProofPresHeader -> BadgeProof -> Bool
-acceptedProof expected_ b@BadgeProof {presHeader = BBSPresHeader ph} = unboundProof b || any ((ph ==) . strEncode) expected_
-
-acceptedBadge :: Maybe ProofPresHeader -> Maybe BadgeProof -> Maybe BadgeProof -> Maybe BadgeProof
-acceptedBadge expected_ stored_ received_ = if all (acceptedProof expected_) received_ then received_ else stored_
-
-sameBadgeProof :: Maybe BadgeProof -> Maybe BadgeProof -> Bool
-sameBadgeProof b_ b_' = (proofContent <$> b_) == (proofContent <$> b_')
-  where
-    proofContent b@BadgeProof {presHeader, badgeInfo} = (if unboundProof b then Nothing else Just presHeader, badgeInfo)
-
-unboundProof :: BadgeProof -> Bool
-unboundProof BadgeProof {presHeader = BBSPresHeader ph} = case strDecode ph of
-  Right (PHTest _) -> True
-  _ -> False
+-- v6.5.x accepts both; v7 will reject PHTest/PHUnknown
+proofPresHeaderAccepted :: ProofPresHeader -> Bool
+proofPresHeaderAccepted = \case
+  PHTest _ -> True
+  PHUnknown _ _ -> True
 
 -- Payment proof
 
@@ -401,7 +269,7 @@ newtype VerifiedBadgeRequest = VerifiedBadgeRequest BadgeRequest
 -- Constants
 
 bbsBadgeHeader :: BBSHeader
-bbsBadgeHeader = entitlementBBSHeader
+bbsBadgeHeader = BBSHeader "SimpleX badges v1"
 
 bbsBadgeMessageCount :: Int
 bbsBadgeMessageCount = 4
@@ -411,12 +279,15 @@ bbsBadgeDisclosedIndexes = [1, 2, 3]
 
 -- Message encoding
 
+encodeExpiry :: Maybe UTCTime -> ByteString
+encodeExpiry = maybe "lifetime" strEncode
+
 badgeMessages :: BadgeMasterKey -> BadgeInfo -> [ByteString]
 badgeMessages (BadgeMasterKey ms) info = ms : badgeInfoMessages info
 
 badgeInfoMessages :: BadgeInfo -> [ByteString]
 badgeInfoMessages BadgeInfo {badgeType, badgeExpiry, badgeExtra} =
-  [strEncode badgeExpiry, encodeUtf8 (textEncode badgeType), encodeUtf8 badgeExtra]
+  [encodeExpiry badgeExpiry, encodeUtf8 (textEncode badgeType), encodeUtf8 badgeExtra]
 
 -- Payment verification (stub - always passes)
 
@@ -455,44 +326,19 @@ verifyBadge keys b@(BadgeProof keyIdx _ _ _) = case M.lookup keyIdx keys of
   Just pk -> Just <$> verifyBadgeWith pk b
 
 verifyBadgeWith :: BBSPublicKey -> BadgeProof -> IO Bool
-verifyBadgeWith pk (BadgeProof _ ph proof badgeInfo) =
-  bbsProofVerify pk proof bbsBadgeHeader ph bbsBadgeDisclosedIndexes bbsBadgeMessageCount (badgeInfoMessages badgeInfo)
+verifyBadgeWith pk (BadgeProof _ ph@(BBSPresHeader phBytes) proof badgeInfo)
+  | either (const False) proofPresHeaderAccepted (strDecode phBytes) =
+      bbsProofVerify pk proof bbsBadgeHeader ph bbsBadgeDisclosedIndexes bbsBadgeMessageCount (badgeInfoMessages badgeInfo)
+  | otherwise = pure False
+
+verifyBadge_ :: Map Int BBSPublicKey -> Maybe BadgeProof -> IO (Maybe Bool)
+verifyBadge_ keys = maybe (pure (Just False)) (verifyBadge keys)
 
 -- DB
-
-instance FromField ProofPresHeader where fromField = blobFieldDecoder strDecode
-
-instance ToField ProofPresHeader where toField = toField . Binary . strEncode
 
 instance FromField BadgeType where fromField = fromTextField_ textDecode
 
 instance ToField BadgeType where toField = toField . textEncode
-
-instance FromField BadgeStatus where fromField = fromTextField_ textDecode
-
-instance ToField BadgeStatus where toField = toField . textEncode
-
-instance FromField BadgeProofKind where fromField = fromTextField_ textDecode
-
-instance ToField BadgeProofKind where toField = toField . textEncode
-
--- (proof, pres_header, key_idx, type, expiry, extra) - the fields of BadgeProof as stored in file_badge_proofs
-type BadgeProofRow = (Binary ByteString, Binary ByteString, Int, Text, UTCTime, Text)
-
-badgeProofToRow :: BadgeProof -> BadgeProofRow
-badgeProofToRow (BadgeProof idx (BBSPresHeader ph) (BBSProof p) BadgeInfo {badgeType, badgeExpiry, badgeExtra}) =
-  (Binary p, Binary ph, idx, textEncode badgeType, badgeExpiry, badgeExtra)
-
-rowToBadgeProof :: BadgeProofRow -> Maybe BadgeProof
-rowToBadgeProof (Binary p, Binary ph, idx, type_, badgeExpiry, badgeExtra) = do
-  badgeType <- textDecode type_
-  pure $ BadgeProof idx (BBSPresHeader ph) (BBSProof p) BadgeInfo {badgeType, badgeExpiry, badgeExtra}
-
-type MaybeBadgeProofRow = (Maybe (Binary ByteString), Maybe (Binary ByteString), Maybe Int, Maybe Text, Maybe UTCTime, Maybe Text)
-
-maybeRowToBadgeProof :: MaybeBadgeProofRow -> Maybe BadgeProof
-maybeRowToBadgeProof (p_, ph_, idx_, type_, expiry_, extra_) =
-  rowToBadgeProof =<< (,,,,,) <$> p_ <*> ph_ <*> idx_ <*> type_ <*> expiry_ <*> extra_
 
 -- (proof, pres_header, expiry, type, verified, extra, master_key, signature, key_idx) - binary columns wrapped in Binary (BLOB/bytea)
 type BadgeRow = (Maybe (Binary ByteString), Maybe (Binary ByteString), Maybe UTCTime, Maybe Text, Maybe BoolInt, Maybe Text, Maybe (Binary ByteString), Maybe (Binary ByteString), Maybe Int)
@@ -510,11 +356,11 @@ badgeToRow badge verified = localBadgeToRow $ (`PeerBadge` st) <$> badge
 localBadgeToRow :: Maybe LocalBadge -> BadgeRow
 localBadgeToRow (Just lb) = case lb of
   OwnBadge (BadgeCredential idx (BadgeMasterKey mk) (BBSSignature sg) BadgeInfo {badgeType, badgeExpiry, badgeExtra}) st ->
-    (Nothing, Nothing, Just badgeExpiry, Just (textEncode badgeType), verifiedField st, Just badgeExtra, Just (Binary mk), Just (Binary sg), Just idx)
+    (Nothing, Nothing, badgeExpiry, Just (textEncode badgeType), verifiedField st, Just badgeExtra, Just (Binary mk), Just (Binary sg), Just idx)
   PeerBadge (BadgeProof idx (BBSPresHeader ph) (BBSProof p) BadgeInfo {badgeType, badgeExpiry, badgeExtra}) st ->
-    (Just (Binary p), Just (Binary ph), Just badgeExpiry, Just (textEncode badgeType), verifiedField st, Just badgeExtra, Nothing, Nothing, Just idx)
+    (Just (Binary p), Just (Binary ph), badgeExpiry, Just (textEncode badgeType), verifiedField st, Just badgeExtra, Nothing, Nothing, Just idx)
   ShownBadge BadgeInfo {badgeType, badgeExpiry, badgeExtra} st ->
-    (Nothing, Nothing, Just badgeExpiry, Just (textEncode badgeType), verifiedField st, Just badgeExtra, Nothing, Nothing, Nothing)
+    (Nothing, Nothing, badgeExpiry, Just (textEncode badgeType), verifiedField st, Just badgeExtra, Nothing, Nothing, Nothing)
   where
     verifiedField st = case st of
       BSFailed -> Just (BI False)
@@ -523,10 +369,9 @@ localBadgeToRow (Just lb) = case lb of
 localBadgeToRow Nothing = (Nothing, Nothing, Nothing, Nothing, Just (BI False), Nothing, Nothing, Nothing, Nothing)
 
 rowToBadge :: UTCTime -> BadgeRow -> Maybe LocalBadge
-rowToBadge now (p_, ph_, expiry_, type_, verified_, extra_, mk_, sg_, idx_) = do
+rowToBadge now (p_, ph_, badgeExpiry, type_, verified_, extra_, mk_, sg_, idx_) = do
   btText <- type_
   bt <- textDecode btText
-  badgeExpiry <- expiry_
   let info = BadgeInfo {badgeType = bt, badgeExpiry, badgeExtra = maybe "" id extra_}
       -- NULL badge_verified means the key index was unknown when stored (Nothing)
       st = mkBadgeStatus now (unBI <$> verified_) info

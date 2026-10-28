@@ -3,6 +3,8 @@ package chat.simplex.common.views.chat
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import chat.simplex.common.model.*
 import chat.simplex.common.platform.chatModel
+import chat.simplex.common.platform.Log
+import chat.simplex.common.platform.TAG
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.datetime.Instant
@@ -33,6 +35,11 @@ suspend fun apiLoadMessages(
   visibleItemIndexesNonReversed: () -> IntRange = { 0 .. 0 }
 ) = coroutineScope {
   val (chat, navInfo) = chatModel.controller.apiGetChat(rhId, chatType, apiId, chatsCtx.groupScopeInfo?.toChatScope(), contentTag ?: chatsCtx.contentTag, pagination, search) ?: return@coroutineScope
+  // REPRO PATCH - TEMPORARY, REMOVE BEFORE COMMIT: widens the race window between loading and applying items
+  if (pagination is ChatPagination.Last) {
+    Log.e(TAG, "REPRO: loaded .last for ${chat.id} (${chat.chatItems.size} items), sleeping 3s before applying")
+    delay(3000)
+  }
   // For .initial allow the chatItems to be empty, as well as for .last that is used for searching
   val allowEmptyItems = pagination is ChatPagination.Initial || pagination is ChatPagination.Last || openAroundItemId != null
   if (chatWasSwitched(chat, pagination, openAroundItemId)
@@ -44,9 +51,13 @@ suspend fun apiLoadMessages(
 /** .initial pagination and opening around item set [ChatModel.chatId] themselves after the items are loaded.
  * In other cases the chat could be switched while the items were loading, and the items of the previously opened chat
  * must not be added to the items of the currently opened one */
-private fun chatWasSwitched(chat: Chat, pagination: ChatPagination, openAroundItemId: Long?): Boolean =
-  pagination !is ChatPagination.Initial && openAroundItemId == null &&
+private fun chatWasSwitched(chat: Chat, pagination: ChatPagination, openAroundItemId: Long?): Boolean {
+  val switched = pagination !is ChatPagination.Initial && openAroundItemId == null &&
       (chatModel.chatId.value != chat.id || chatModel.remoteHostId() != chat.remoteHostId)
+  // REPRO PATCH - TEMPORARY, REMOVE BEFORE COMMIT
+  if (switched) Log.e(TAG, "REPRO: dropping stale pagination (${pagination.cmdString}) of ${chat.chatItems.size} items loaded for ${chat.id}, open chat is ${chatModel.chatId.value}")
+  return switched
+}
 
 suspend fun processLoadedChat(
   chatsCtx: ChatModel.ChatsContext,
@@ -87,6 +98,7 @@ suspend fun processLoadedChat(
         unreadTotal.value = chat.chatStats.unreadCount
         unreadAfter.value = navInfo.afterUnread
         unreadAfterNewestLoaded.value = navInfo.afterUnread
+        chatState.openAtItemId.value = navInfo.openAtItemId
       }
     }
     is ChatPagination.Before -> {

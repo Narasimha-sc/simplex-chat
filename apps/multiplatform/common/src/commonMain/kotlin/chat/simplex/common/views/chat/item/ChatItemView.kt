@@ -34,10 +34,10 @@ import chat.simplex.common.ui.theme.*
 import chat.simplex.common.views.chat.*
 import chat.simplex.common.views.chatlist.openChat
 import chat.simplex.common.views.helpers.*
-import chat.simplex.res.*
+import chat.simplex.res.MR
 import dev.icerock.moko.resources.ImageResource
 import dev.icerock.moko.resources.StringResource
-import kotlinx.datetime.Instant
+import kotlinx.datetime.Clock
 import kotlin.math.*
 
 // TODO refactor so that FramedItemView can show all CIContent items if they're deleted (see Swift code)
@@ -50,12 +50,12 @@ private val msgTailMaxHeightDp = msgTailWidthDp * 1.732f // 60deg
 
 val chatEventStyle = SpanStyle(fontSize = 12.sp, fontWeight = FontWeight.Light, color = CurrentColors.value.colors.secondary)
 
-fun chatEventText(ci: ChatItem, isChannel: Boolean = false, ts: AnnotatedString): AnnotatedString =
-  chatEventText(ci.content.text(isChannel), ts)
+fun chatEventText(ci: ChatItem, isChannel: Boolean = false): AnnotatedString =
+  chatEventText(ci.content.text(isChannel), ci.timestampText)
 
-fun chatEventText(eventText: String, ts: AnnotatedString): AnnotatedString =
+fun chatEventText(eventText: String, ts: String): AnnotatedString =
   buildAnnotatedString {
-    withStyle(chatEventStyle) { append(eventText); append(ts) }
+    withStyle(chatEventStyle) { append("$eventText  $ts") }
   }
 
 data class ChatItemReactionMenuItem (
@@ -63,9 +63,6 @@ data class ChatItemReactionMenuItem (
   val image: String?,
   val onClick: (() -> Unit)?
 )
-
-private val REACTION_SPACING = 5.dp
-private val REACTION_PADDING = 2.dp
 
 // Spec: spec/client/chat-view.md#ChatItemView
 @Composable
@@ -116,14 +113,11 @@ fun ChatItemView(
   itemSeparation: ItemSeparation,
   preview: Boolean = false,
   swipeOffset: Float = 0f,
-  bubbleInteractionSource: MutableInteractionSource = remember { MutableInteractionSource() },
 ) {
   val cInfo = chat.chatInfo
   val uriHandler = LocalUriHandler.current
   val sent = cItem.chatDir.sent
-  val terminal = LocalTerminalLayout.current
-  val alignEnd = sent && !terminal
-  val alignment = if (alignEnd) Alignment.CenterEnd else Alignment.CenterStart
+  val alignment = if (sent) Alignment.CenterEnd else Alignment.CenterStart
   val showMenu = remember { mutableStateOf(false) }
   val fullDeleteAllowed = remember(cInfo) { cInfo.featureEnabled(ChatFeature.FullDelete) }
   val onLinkLongClick = { _: String -> showMenu.value = true }
@@ -145,7 +139,7 @@ fun ChatItemView(
 
     @Composable
     fun ChatItemReactions() {
-      Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.chatItemOffset(cItem, itemSeparation.largeGap, inverted = true, revealed = true).padding(start = if (terminal) CHAT_ITEM_TEXT_PADDING - REACTION_SPACING - REACTION_PADDING else 0.dp)) {
+      Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.chatItemOffset(cItem, itemSeparation.largeGap, inverted = true, revealed = true)) {
         cItem.reactions.forEach { r ->
           val showReactionMenu = remember { mutableStateOf(false) }
           val reactionMenuItems = remember { mutableStateOf(emptyList<ChatItemReactionMenuItem>()) }
@@ -159,7 +153,7 @@ fun ChatItemView(
             }
           }
 
-          var modifier = Modifier.padding(horizontal = REACTION_SPACING, vertical = 2.dp).clip(RoundedCornerShape(8.dp))
+          var modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp).clip(RoundedCornerShape(8.dp))
           if (cInfo.featureEnabled(ChatFeature.Reactions)) {
             fun showReactionsMenu() {
               when (cInfo) {
@@ -212,7 +206,7 @@ fun ChatItemView(
               )
               .onRightClick { showReactionsMenu() }
           }
-          Row(modifier.padding(REACTION_PADDING), verticalAlignment = Alignment.CenterVertically) {
+          Row(modifier.padding(2.dp), verticalAlignment = Alignment.CenterVertically) {
             ReactionIcon(r.reaction.text, fontSize = 12.sp)
             DefaultDropdownMenu(showMenu = showReactionMenu) {
               reactionMenuItems.value.forEach { m ->
@@ -307,20 +301,20 @@ fun ChatItemView(
       }
     }
 
-    Column(horizontalAlignment = if (alignEnd) Alignment.End else Alignment.Start) {
+    Column(horizontalAlignment = if (cItem.chatDir.sent) Alignment.End else Alignment.Start) {
       val canReply = (cItem.content is CIContent.SndMsgContent || cItem.content is CIContent.RcvMsgContent) &&
           cInfo !is ChatInfo.Local && !cItem.isReport && !cItem.meta.isLive && cItem.meta.itemDeleted == null
       Box {
         Row(verticalAlignment = Alignment.CenterVertically) {
+          val bubbleInteractionSource = remember { MutableInteractionSource() }
         val bubbleHovered = bubbleInteractionSource.collectIsHoveredAsState()
-        val markedDeleted = cItem.meta.itemDeleted != null && (!revealed.value || cItem.isDeletedContent)
-        if (alignEnd) {
+        if (cItem.chatDir.sent) {
           GoToItemButton(true, bubbleHovered)
         }
         Column(Modifier.weight(1f, fill = false)) {
           val enterInteraction = remember { HoverInteraction.Enter() }
           LaunchedEffect(highlighted.value, hoveredItemId.value) {
-            if ((highlighted.value && !terminal) || hoveredItemId.value == cItem.id) {
+            if (highlighted.value || hoveredItemId.value == cItem.id) {
               bubbleInteractionSource.emit(enterInteraction)
             } else {
               bubbleInteractionSource.emit(HoverInteraction.Exit(enterInteraction))
@@ -328,7 +322,7 @@ fun ChatItemView(
           }
           Column(
             Modifier
-              .then(if (terminal) Modifier else Modifier.clipChatItem(cItem, itemSeparation.largeGap, revealed.value))
+              .clipChatItem(cItem, itemSeparation.largeGap, revealed.value)
               .hoverable(bubbleInteractionSource)
               .combinedClickable(
                 onLongClick = { showMenu.value = true },
@@ -337,12 +331,12 @@ fun ChatItemView(
                     hoveredItemId.value = if (hoveredItemId.value == cItem.id) null else cItem.id
                   }
                   onClick()
-                }, interactionSource = bubbleInteractionSource, indication = if (terminal) null else LocalIndication.current)
+                }, interactionSource = bubbleInteractionSource, indication = LocalIndication.current)
               .onRightClick { showMenu.value = true },
           ) {
             @Composable
             fun framedItemView() {
-              FramedItemView(chatsCtx, chat, cItem, uriHandler, imageProvider, linkMode = linkMode, showViaProxy = showViaProxy, showMenu, showTimestamp = showTimestamp, tailVisible = itemSeparation.largeGap, receiveFile, onLinkLongClick, scrollToItem, scrollToItemId, scrollToQuotedItemFromItem, endButton = if (terminal && !searchIsNotBlank.value && cItem.meta.itemForwarded?.chatTypeApiIdMsgId != null) { { GoToItemButton(false, bubbleHovered) } } else null)
+              FramedItemView(chatsCtx, chat, cItem, uriHandler, imageProvider, linkMode = linkMode, showViaProxy = showViaProxy, showMenu, showTimestamp = showTimestamp, tailVisible = itemSeparation.largeGap, receiveFile, onLinkLongClick, scrollToItem, scrollToItemId, scrollToQuotedItemFromItem)
             }
 
             fun deleteMessageQuestionText(): String {
@@ -455,7 +449,7 @@ fun ChatItemView(
                     }
                     if (cItem.file != null && (getLoadedFilePath(cItem.file) != null || (chatModel.connectedToRemote() && cachedRemoteReqs[cItem.file.fileSource] != false && cItem.file.loaded))) {
                       SaveContentItemAction(cItem, saveFileLauncher, showMenu)
-                    } else if (cItem.file != null && cItem.file.fileStatus is CIFileStatus.RcvInvitation && fileSizeValid(cItem.file)) {
+                    } else if (cItem.file != null && cItem.file.fileStatus is CIFileStatus.RcvInvitation && fileSizeValid(cItem.file, ciSenderProfile(cItem, chat.chatInfo))) {
                       ItemAction(stringResource(MR.strings.download_file), painterResource(MR.images.ic_arrow_downward), onClick = {
                         withBGApi {
                           Log.d(TAG, "ChatItemView downloadFileAction")
@@ -577,7 +571,7 @@ fun ChatItemView(
             @Composable
             fun ContentItem() {
               val mc = cItem.content.msgContent
-              if (!cItem.hasQuoteOrHeader) {
+              if (cItem.quotedItem == null && cItem.meta.itemForwarded == null && cItem.meta.itemDeleted == null && !cItem.meta.isLive) {
                 if (mc is MsgContent.MCText && isShortEmoji(cItem.content.text)) {
                   EmojiItemView(cItem, cInfo.timedMessagesTTL, showViaProxy = showViaProxy, showTimestamp = showTimestamp)
                 } else if (mc is MsgContent.MCVoice && cItem.content.text.isEmpty()) {
@@ -628,26 +622,24 @@ fun ChatItemView(
               }
             }
 
-            fun eventItemViewText(reversedChatItems: List<ChatItem>, ts: AnnotatedString): AnnotatedString {
+            fun eventItemViewText(reversedChatItems: List<ChatItem>): AnnotatedString {
               val memberDisplayName = cItem.memberDisplayName
               val t = mergedGroupEventText(cItem, reversedChatItems)
               return if (!revealed.value && t != null) {
-                chatEventText(t, ts)
+                chatEventText(t, cItem.timestampText)
               } else if (memberDisplayName != null) {
                 buildAnnotatedString {
                   withStyle(chatEventStyle) { append(memberDisplayName) }
                   append(" ")
-                }.plus(chatEventText(cItem, cInfo.isChannel, ts))
+                }.plus(chatEventText(cItem, cInfo.isChannel))
               } else {
-                chatEventText(cItem, cInfo.isChannel, ts)
+                chatEventText(cItem, cInfo.isChannel)
               }
             }
 
             @Composable fun EventItemView() {
               val reversedChatItems = chatsCtx.chatItems.value.asReversed()
-              ChatEventWithMeta(cItem) { separator, ts ->
-                CIEventView(eventItemViewText(reversedChatItems, separator + ts))
-              }
+              CIEventView(eventItemViewText(reversedChatItems))
             }
 
             @Composable fun PendingReviewEventItemView() {
@@ -655,8 +647,7 @@ fun ChatItemView(
                 buildAnnotatedString {
                   withStyle(chatEventStyle.copy(fontWeight = FontWeight.Bold)) { append(cItem.content.text(cInfo.isChannel)) }
                 },
-                Modifier.padding(chatEventPadding()),
-                style = chatEventTextStyle()
+                Modifier.padding(horizontal = 6.dp, vertical = 6.dp)
               )
             }
 
@@ -686,8 +677,7 @@ fun ChatItemView(
                 buildAnnotatedString {
                   withStyle(chatEventStyle) { append(annotatedStringResource(sId)) }
                 },
-                Modifier.padding(chatEventPadding()),
-                style = chatEventTextStyle()
+                Modifier.padding(horizontal = 6.dp, vertical = 6.dp)
               )
             }
 
@@ -705,7 +695,7 @@ fun ChatItemView(
               e2eeInfoText(if (e2EEInfo.public == true) MR.strings.e2ee_info_no_e2ee else MR.strings.e2ee_info_no_pq)
             }
 
-            if (markedDeleted) {
+            if (cItem.meta.itemDeleted != null && (!revealed.value || cItem.isDeletedContent)) {
               MarkedDeletedItemView(chatsCtx, cItem, cInfo, cInfo.timedMessagesTTL, revealed, showViaProxy = showViaProxy, showTimestamp = showTimestamp)
               MarkedDeletedItemDropdownMenu()
             } else {
@@ -730,11 +720,11 @@ fun ChatItemView(
                   DeleteItemMenu()
                 }
                 is CIContent.RcvGroupInvitation -> {
-                  CIGroupInvitationView(cItem, c.groupInvitation, c.memberRole, joinGroup = joinGroup, chatIncognito = cInfo.incognito, groupChat = cInfo is ChatInfo.Group, showTimestamp = showTimestamp, timedMessagesTTL = cInfo.timedMessagesTTL)
+                  CIGroupInvitationView(cItem, c.groupInvitation, c.memberRole, joinGroup = joinGroup, chatIncognito = cInfo.incognito, showTimestamp = showTimestamp, timedMessagesTTL = cInfo.timedMessagesTTL)
                   DeleteItemMenu()
                 }
                 is CIContent.SndGroupInvitation -> {
-                  CIGroupInvitationView(cItem, c.groupInvitation, c.memberRole, joinGroup = joinGroup, chatIncognito = cInfo.incognito, groupChat = cInfo is ChatInfo.Group, showTimestamp = showTimestamp, timedMessagesTTL = cInfo.timedMessagesTTL)
+                  CIGroupInvitationView(cItem, c.groupInvitation, c.memberRole, joinGroup = joinGroup, chatIncognito = cInfo.incognito, showTimestamp = showTimestamp, timedMessagesTTL = cInfo.timedMessagesTTL)
                   DeleteItemMenu()
                 }
                 is CIContent.RcvDirectEventContent -> {
@@ -813,7 +803,7 @@ fun ChatItemView(
             }
           }
         }
-        if (!alignEnd && (!terminal || searchIsNotBlank.value || markedDeleted)) {
+        if (!cItem.chatDir.sent) {
           GoToItemButton(false, bubbleHovered)
         }
         }
@@ -832,9 +822,6 @@ fun ChatItemView(
     }
   }
 }
-
-val ChatItem.hasQuoteOrHeader: Boolean get() =
-  quotedItem != null || meta.itemForwarded != null || meta.itemDeleted != null || meta.isLive || isReport
 
 @Composable
 expect fun ReactionIcon(text: String, fontSize: TextUnit = TextUnit.Unspecified)
@@ -1217,11 +1204,9 @@ fun ItemAction(text: String, color: Color = Color.Unspecified, onClick: () -> Un
 }
 
 @Composable
-fun chatItemTailEnabled(): Boolean = remember { appPreferences.chatItemTail.state }.value && !LocalTerminalLayout.current
-
-@Composable
 fun Modifier.chatItemOffset(cItem: ChatItem, tailVisible: Boolean, inverted: Boolean = false, revealed: Boolean): Modifier {
-  val style = shapeStyle(cItem, chatItemTailEnabled(), tailVisible, revealed)
+  val chatItemTail = remember { appPreferences.chatItemTail.state }
+  val style = shapeStyle(cItem, chatItemTail.value, tailVisible, revealed)
 
   val offset = if (style is ShapeStyle.Bubble) {
     if (style.tailVisible) {
@@ -1237,7 +1222,8 @@ fun Modifier.chatItemOffset(cItem: ChatItem, tailVisible: Boolean, inverted: Boo
 @Composable
 fun Modifier.clipChatItem(chatItem: ChatItem? = null, tailVisible: Boolean = false, revealed: Boolean = false): Modifier {
   val chatItemRoundness = remember { appPreferences.chatItemRoundness.state }
-  val style = shapeStyle(chatItem, chatItemTailEnabled(), tailVisible, revealed)
+  val chatItemTail = remember { appPreferences.chatItemTail.state }
+  val style = shapeStyle(chatItem, chatItemTail.value, tailVisible, revealed)
   val cornerRoundness = chatItemRoundness.value.coerceIn(0f, 1f)
 
   return when (style) {
@@ -1496,15 +1482,10 @@ fun moderateMessagesAlertDialog(itemIds: List<Long>, questionText: String, delet
 
 expect fun copyItemToClipboard(cItem: ChatItem, clipboard: ClipboardManager)
 
-val previewDate = Instant.fromEpochSeconds(1_736_936_100)
-
-fun previewDated(chatItem: ChatItem): ChatItem =
-  chatItem.copy(meta = chatItem.meta.copy(itemTs = previewDate, createdAt = previewDate, updatedAt = previewDate))
-
 @Preview
 @Composable
 fun PreviewChatItemView(
-  chatItem: ChatItem = ChatItem.getSampleData(1, CIDirection.DirectSnd(), previewDate, "hello")
+  chatItem: ChatItem = ChatItem.getSampleData(1, CIDirection.DirectSnd(), Clock.System.now(), "hello")
 ) {
   ChatItemView(
     chatsCtx = ChatModel.ChatsContext(secondaryContextFilter = null),
@@ -1561,7 +1542,7 @@ fun PreviewChatItemViewDeletedContent() {
       chatsCtx = ChatModel.ChatsContext(secondaryContextFilter = null),
       rhId = null,
       Chat.sampleData,
-      ChatItem.getDeletedContentSampleData(ts = previewDate),
+      ChatItem.getDeletedContentSampleData(),
       useLinkPreviews = true,
       linkMode = SimplexLinkMode.DESCRIPTION,
       composeState = remember { mutableStateOf(ComposeState(useLinkPreviews = true)) },

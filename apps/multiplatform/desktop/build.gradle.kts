@@ -85,18 +85,6 @@ compose {
             extraKeysRawXml = """
               <key>NSMicrophoneUsageDescription</key>
               <string>SimpleX needs microphone access to record voice messages</string>
-              <key>CFBundleURLTypes</key>
-              <array>
-                <dict>
-                  <key>CFBundleURLName</key>
-                  <string>$bundleID</string>
-                  <key>CFBundleURLSchemes</key>
-                  <array>
-                    <string>simplexchat</string>
-                    <string>simplex</string>
-                  </array>
-                </dict>
-              </array>
             """
           }
           val identity = rootProject.extra["desktop.mac.signing.identity"] as String?

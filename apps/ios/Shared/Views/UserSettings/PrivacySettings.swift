@@ -119,17 +119,26 @@ struct PrivacySettings: View {
                 }
 
                 Section {
-                    settingsRow("person", color: theme.colors.secondary) {
-                        Toggle("Contact requests in groups", isOn: $autoAcceptMemberContacts)
-                    }
-                    settingsRow("person.2", color: theme.colors.secondary) {
-                        Toggle("Group invitations", isOn: $autoAcceptGroupInvitations)
+                    settingsRow("checkmark", color: theme.colors.secondary) {
+                        Toggle("Auto-accept", isOn: $autoAcceptMemberContacts)
                     }
                 } header: {
-                    Text("Auto-accept")
+                    Text("Contact requests from groups")
                         .foregroundColor(theme.colors.secondary)
                 } footer: {
-                    Text("These settings are for your current profile **\(m.currentUser?.displayName ?? "")**.")
+                    Text("This setting is for your current profile **\(m.currentUser?.displayName ?? "")**.")
+                        .foregroundColor(theme.colors.secondary)
+                }
+
+                Section {
+                    settingsRow("checkmark", color: theme.colors.secondary) {
+                        Toggle("Auto-accept", isOn: $autoAcceptGroupInvitations)
+                    }
+                } header: {
+                    Text("Group invitations")
+                        .foregroundColor(theme.colors.secondary)
+                } footer: {
+                    Text("This setting is for your current profile **\(m.currentUser?.displayName ?? "")**.")
                         .foregroundColor(theme.colors.secondary)
                 }
 
@@ -140,11 +149,25 @@ struct PrivacySettings: View {
                 }
             }
         }
+        .onChange(of: contactReceipts) { _ in
+            if contactReceiptsReset {
+                contactReceiptsReset = false
+            } else {
+                setOrAskSendReceiptsContacts(contactReceipts)
+            }
+        }
+        .onChange(of: groupReceipts) { _ in
+            if groupReceiptsReset {
+                groupReceiptsReset = false
+            } else {
+                setOrAskSendReceiptsGroups(groupReceipts)
+            }
+        }
         .onChange(of: autoAcceptMemberContacts) { _ in
             if autoAcceptMemberContactsReset {
                 autoAcceptMemberContactsReset = false
             } else {
-                setAutoAcceptMemberContacts(autoAcceptMemberContacts)
+                setAutoAcceptGrpDirectInvs(autoAcceptMemberContacts)
             }
         }
         .onChange(of: autoAcceptGroupInvitations) { _ in
@@ -156,6 +179,14 @@ struct PrivacySettings: View {
         }
         .onAppear {
             if let u = m.currentUser {
+                if contactReceipts != u.sendRcptsContacts {
+                    contactReceiptsReset = true
+                    contactReceipts = u.sendRcptsContacts
+                }
+                if groupReceipts != u.sendRcptsSmallGroups {
+                    groupReceiptsReset = true
+                    groupReceipts = u.sendRcptsSmallGroups
+                }
                 if autoAcceptMemberContacts != u.autoAcceptMemberContacts {
                     autoAcceptMemberContactsReset = true
                     autoAcceptMemberContacts = u.autoAcceptMemberContacts
@@ -306,32 +337,6 @@ struct PrivacySettings: View {
                 }
             }
         }
-        .onChange(of: contactReceipts) { _ in
-            if contactReceiptsReset {
-                contactReceiptsReset = false
-            } else {
-                setOrAskSendReceiptsContacts(contactReceipts)
-            }
-        }
-        .onChange(of: groupReceipts) { _ in
-            if groupReceiptsReset {
-                groupReceiptsReset = false
-            } else {
-                setOrAskSendReceiptsGroups(groupReceipts)
-            }
-        }
-        .onAppear {
-            if let u = m.currentUser {
-                if contactReceipts != u.sendRcptsContacts {
-                    contactReceiptsReset = true
-                    contactReceipts = u.sendRcptsContacts
-                }
-                if groupReceipts != u.sendRcptsSmallGroups {
-                    groupReceiptsReset = true
-                    groupReceipts = u.sendRcptsSmallGroups
-                }
-            }
-        }
         .navigationTitle("More privacy")
         .modifier(ThemedBackground(grouped: true))
     }
@@ -442,7 +447,7 @@ struct PrivacySettings: View {
         }
     }
 
-    private func setAutoAcceptMemberContacts(_ enable: Bool) {
+    private func setAutoAcceptGrpDirectInvs(_ enable: Bool) {
         Task {
             do {
                 if let currentUser = m.currentUser {

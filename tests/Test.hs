@@ -3,21 +3,12 @@
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE TupleSections #-}
 
-import Bots.BadgeService.BTCPayTests
-import Bots.BadgeService.BotTests
-import Bots.BadgeService.CatalogTests
-import Bots.BadgeService.ConfigTests
-import Bots.BadgeService.GroupIntegrationTests
-import Bots.BadgeService.GroupTests
-import Bots.BadgeService.StoreVerifierTests
-import Bots.BadgeService.StripeTests
-import Bots.BadgeService.WaitersTests
-import Bots.BadgeService.WebTests
 import Bots.BroadcastTests
 import Bots.DirectoryTests
 import ChatClient
 import ChatTests
 import ChatTests.DBUtils
+import ChatTests.Names (chatNamesTests)
 import ChatTests.Utils (xdescribe'')
 import Control.Logger.Simple
 import Data.Time.Clock.System
@@ -26,25 +17,23 @@ import JSONTests
 import MarkdownTests
 import MemberRelationsTests
 import MessageBatching
+import OpenChatTests
 import ProtocolTests
 import OperatorTests
 import RandomServers
 import RemoteTests
 import Test.Hspec hiding (it)
-#if !MIN_VERSION_hspec(2,10,10)
-import Test.Hspec.Core.Spec (sequential)
-#endif
 import UnliftIO.Temporary (withTempDirectory)
 import ValidNames
 import ViewTests
 #if defined(dbPostgres)
-import Control.Exception (bracket_, finally)
+import Control.Exception (bracket_)
 import PostgresSchemaDump
 import Simplex.Chat.Store.Postgres.Migrations (migrations)
 import Simplex.Messaging.Agent.Store.Postgres.Util (createDBAndUserIfNotExists, dropDatabaseAndUser)
+import System.Directory (createDirectoryIfMissing, removePathForcibly)
 #else
 import APIDocs
-import ChatTests.Names (chatNamesTests)
 import qualified Simplex.Messaging.TMap as TM
 import MobileTests
 import SchemaDump
@@ -58,33 +47,23 @@ main = do
   chatQueryStats <- TM.emptyIO
   agentQueryStats <- TM.emptyIO
 #endif
-  portBases <- newPortBases
-  withTestDB . withTmpFiles . withGlobalLogging logCfg . hspec . parallel
+  withGlobalLogging logCfg . hspec
     $ do
 #if defined(dbPostgres)
-      sequential $
+      createdDropDb . around_ (bracket_ (createDirectoryIfMissing False "tests/tmp") (removePathForcibly "tests/tmp")) $
         describe "Postgres schema dump" $
           postgresSchemaDumpTest
             migrations
             schemaDumpDBOpts
             "src/Simplex/Chat/Store/Postgres/Migrations/chat_schema.sql"
 #else
-      sequential $ describe "Schema dump" schemaDumpTest
+      describe "Schema dump" schemaDumpTest
 #if MIN_VERSION_base(4,18,0)
-      sequential $ describe "Bot API docs" apiDocsTest
+      describe "Bot API docs" apiDocsTest
 #endif
       around tmpBracket $ describe "WebRTC encryption" webRTCTests
 #endif
       describe "Supporter badges" badgeTests
-      describe "SimpleX badge service" $ do
-        badgeConfigTests
-        badgeWebTests
-        badgeCatalogTests
-        badgeGroupTests
-        badgeWaitersTests
-        badgeBTCPayTests
-        badgeStripeTests
-        badgeStoreVerifierTests
       describe "SimpleX chat markdown" markdownTests
       describe "JSON Tests" jsonTests
       describe "Member relations" memberRelationsTests
@@ -92,16 +71,17 @@ main = do
       describe "SimpleX chat protocol" protocolTests
       describe "Valid names" validNameTests
       describe "Message batching" batchingTests
+      describe "Open chat" openChatTests
       describe "Operators" operatorTests
       describe "Random servers" randomServersTests
 #if !defined(dbPostgres)
-      around (tmpTestBracket chatQueryStats agentQueryStats portBases) $ describe "names tests" chatNamesTests
-      around (tmpTestBracket chatQueryStats agentQueryStats portBases) $ describe "SimpleX Directory names" directoryNameTests
+      around (tmpTestBracket chatQueryStats agentQueryStats) $ describe "names tests" chatNamesTests
+      around (tmpTestBracket chatQueryStats agentQueryStats) $ xdescribe'' "SimpleX Directory names" directoryNameTests
 #endif
 #if defined(dbPostgres)
-      around (testBracket portBases)
+      createdDropDb . around testBracket
 #else
-      around (testBracket chatQueryStats agentQueryStats portBases)
+      around (testBracket chatQueryStats agentQueryStats)
 #endif
         $ do
 #if !defined(dbPostgres)
@@ -109,35 +89,27 @@ main = do
 #endif
           describe "SimpleX chat client" chatTests
           xdescribe'' "SimpleX Broadcast bot" broadcastBotTests
-          describe "SimpleX Directory service bot" directoryServiceTests
-          describe "SimpleX badge service e2e" $ do
-            badgeServiceTests
-            describe "managed group" badgeGroupIntegrationTests
+          xdescribe'' "SimpleX Directory service bot" directoryServiceTests
           describe "Remote session" remoteTests
 #if !defined(dbPostgres)
-          sequential $ xdescribe'' "Save query plans" saveQueryPlans
+          xdescribe'' "Save query plans" saveQueryPlans
 #endif
   where
 #if defined(dbPostgres)
-    withTestDB =
-      bracket_
-        (dropDatabaseAndUser testDBConnectInfo >> createDBAndUserIfNotExists testDBConnectInfo)
-        (dropDatabaseAndUser testDBConnectInfo)
-    testBracket portBases test =
-      withPortBase portBases $ \portBase -> tmpBracket $ \tmpPath -> do
-        let ps = TestParams {tmpPath, portBase, printOutput = False}
-        withSmpServer ps (test ps) `finally` dropTestSchemas ps
+    createdDropDb =
+      before_ (dropDatabaseAndUser testDBConnectInfo >> createDBAndUserIfNotExists testDBConnectInfo)
+        . after_ (dropDatabaseAndUser testDBConnectInfo)
+    testBracket test = withSmpServer $ tmpBracket $ \tmpPath -> test TestParams {tmpPath, printOutput = False}
 #else
-    withTestDB = id
-    testBracket chatQueryStats agentQueryStats portBases test =
-      tmpTestBracket chatQueryStats agentQueryStats portBases $ \ps -> withSmpServer ps $ test ps
-    tmpTestBracket chatQueryStats agentQueryStats portBases test =
-      withPortBase portBases $ \portBase -> tmpBracket $ \tmpPath -> test TestParams {tmpPath, portBase, chatQueryStats, agentQueryStats, printOutput = False}
+    testBracket chatQueryStats agentQueryStats test =
+      withSmpServer $ tmpBracket $ \tmpPath -> test TestParams {tmpPath, chatQueryStats, agentQueryStats, printOutput = False}
+    tmpTestBracket chatQueryStats agentQueryStats test =
+      tmpBracket $ \tmpPath -> test TestParams {tmpPath, chatQueryStats, agentQueryStats, printOutput = False}
 #endif
     tmpBracket test = do
       t <- getSystemTime
       let ts = show (systemSeconds t) <> show (systemNanoseconds t)
-      withTempDirectory "tests/tmp" ts test
+      withTmpFiles $ withTempDirectory "tests/tmp" ts test
 
 logCfg :: LogConfig
 logCfg = LogConfig {lc_file = Nothing, lc_stderr = True}

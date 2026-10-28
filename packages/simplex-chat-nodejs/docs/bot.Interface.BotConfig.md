@@ -6,7 +6,7 @@
 
 # Interface: BotConfig
 
-Defined in: [src/bot.ts:36](../bot.ts#L36)
+Defined in: [src/bot.ts:35](../src/bot.ts#L35)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [src/bot.ts:36](../bot.ts#L36)
 
 > **dbOpts**: [`BotDbOpts`](bot.TypeAlias.BotDbOpts.md)
 
-Defined in: [src/bot.ts:39](../bot.ts#L39)
+Defined in: [src/bot.ts:37](../src/bot.ts#L37)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [src/bot.ts:39](../bot.ts#L39)
 
 > `optional` **events?**: [`EventSubscribers`](api.TypeAlias.EventSubscribers.md)
 
-Defined in: [src/bot.ts:46](../bot.ts#L46)
+Defined in: [src/bot.ts:44](../src/bot.ts#L44)
 
 ***
 
@@ -30,19 +30,19 @@ Defined in: [src/bot.ts:46](../bot.ts#L46)
 
 > `optional` **onCommands?**: `object`
 
-Defined in: [src/bot.ts:43](../bot.ts#L43)
+Defined in: [src/bot.ts:41](../src/bot.ts#L41)
 
 #### Index Signature
 
-\[`key`: `string`\]: ((`chatItem`, `command`, `chat`) => `void` \| `Promise`\<`void`\>) \| `undefined`
+\[`key`: `string`\]: ((`chatItem`, `command`) => `void` \| `Promise`\<`void`\>) \| `undefined`
 
 ***
 
 ### onMessage?
 
-> `optional` **onMessage?**: (`chatItem`, `content`, `chat`) => `void` \| `Promise`\<`void`\>
+> `optional` **onMessage?**: (`chatItem`, `content`) => `void` \| `Promise`\<`void`\>
 
-Defined in: [src/bot.ts:41](../bot.ts#L41)
+Defined in: [src/bot.ts:39](../src/bot.ts#L39)
 
 #### Parameters
 
@@ -54,10 +54,6 @@ Defined in: [src/bot.ts:41](../bot.ts#L41)
 
 `MsgContent`
 
-##### chat
-
-[`ChatApi`](api.Class.ChatApi.md)
-
 #### Returns
 
 `void` \| `Promise`\<`void`\>
@@ -68,7 +64,7 @@ Defined in: [src/bot.ts:41](../bot.ts#L41)
 
 > **options**: [`BotOptions`](bot.Interface.BotOptions.md)
 
-Defined in: [src/bot.ts:40](../bot.ts#L40)
+Defined in: [src/bot.ts:38](../src/bot.ts#L38)
 
 ***
 
@@ -76,12 +72,4 @@ Defined in: [src/bot.ts:40](../bot.ts#L40)
 
 > **profile**: `Profile`
 
-Defined in: [src/bot.ts:37](../bot.ts#L37)
-
-***
-
-### simplexDomain?
-
-> `optional` **simplexDomain?**: `string` \| `null`
-
-Defined in: [src/bot.ts:38](../bot.ts#L38)
+Defined in: [src/bot.ts:36](../src/bot.ts#L36)

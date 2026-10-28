@@ -39,13 +39,6 @@ struct CIGroupInvitationView: View {
 
                     Divider().frame(width: frameWidth)
 
-                    if chat.chatInfo.groupInfo != nil {
-                        Text(chatItem.chatDir.sent ? String.localizedStringWithFormat(NSLocalizedString("For %@ only", comment: ""), groupInvitation.localDisplayName) : NSLocalizedString("For you only", comment: ""))
-                            .font(.caption)
-                            .foregroundColor(theme.colors.secondary)
-                            .overlay(DetermineWidth())
-                    }
-
                     if action {
                         VStack(alignment: .leading, spacing: 2) {
                             groupInvitationText()
@@ -115,7 +108,7 @@ struct CIGroupInvitationView: View {
         return HStack(alignment: .top) {
             ProfileImage(
                 imageStr: groupInvitation.groupProfile.image,
-                icon: Image(systemName: "person.2.circle.fill"),
+                iconName: "person.2.circle.fill",
                 size: 44,
                 color: color
             )
@@ -153,9 +146,8 @@ struct CIGroupInvitationView: View {
 struct CIGroupInvitationView_Previews: PreviewProvider {
     static var previews: some View {
         Group {
-            let ci = previewDated(ChatItem.getGroupInvitationSample())
-            CIGroupInvitationView(chat: Chat.sampleData, chatItem: ci, groupInvitation: CIGroupInvitation.getSample(groupProfile: GroupProfile(displayName: "team", fullName: "team")), memberRole: .admin).modifier(ChatItemClipped(ci, tailVisible: true))
-            CIGroupInvitationView(chat: Chat.sampleData, chatItem: ci, groupInvitation: CIGroupInvitation.getSample(status: .accepted), memberRole: .admin).modifier(ChatItemClipped(ci, tailVisible: true))
+            CIGroupInvitationView(chat: Chat.sampleData, chatItem: ChatItem.getGroupInvitationSample(), groupInvitation: CIGroupInvitation.getSample(groupProfile: GroupProfile(displayName: "team", fullName: "team")), memberRole: .admin)
+            CIGroupInvitationView(chat: Chat.sampleData, chatItem: ChatItem.getGroupInvitationSample(), groupInvitation: CIGroupInvitation.getSample(status: .accepted), memberRole: .admin)
         }
     }
 }

@@ -104,32 +104,18 @@ export class ChatClient {
   }
 
   async enableAddressAutoAccept(userId: number, autoReply?: T.MsgContent, businessAddress = false): Promise<void> {
-    const settings = await this.apiGetAddressSettings(userId)
-    await this.apiSetAddressSettings(userId, {...settings, businessAddress, autoAccept: {acceptIncognito: false}, autoReply})
-  }
-
-  async disableAddressAutoAccept(userId: number, businessAddress = false): Promise<void> {
-    const settings = await this.apiGetAddressSettings(userId)
-    await this.apiSetAddressSettings(userId, {...settings, businessAddress, autoAccept: undefined, autoReply: undefined})
-  }
-
-  async apiGetAddressSettings(userId: number): Promise<T.AddressSettings | undefined> {
-    const r = await this.sendChatCmd(CC.APIShowMyAddress.cmdString({userId}))
-    switch (r.type) {
-      case "userContactLink":
-        return r.contactLink.addressSettings
-      default:
-        if (r.type === "chatCmdError" && r.chatError.type === "errorStore" && r.chatError.storeError.type === "userContactLinkNotFound") {
-          return undefined
-        }
-        throw new ChatCommandError("error loading user address", r)
+    const r = await this.sendChatCmd(
+      CC.APISetAddressSettings.cmdString({userId, settings: {businessAddress, autoAccept: {acceptIncognito: false}, autoReply}})
+    )
+    if (r.type !== "userContactLinkUpdated") {
+      throw new ChatCommandError("error changing user contact address mode", r)
     }
   }
 
-  async apiSetAddressSettings(userId: number, settings: T.AddressSettings): Promise<void> {
-    const r = await this.sendChatCmd(CC.APISetAddressSettings.cmdString({userId, settings}))
+  async disableAddressAutoAccept(userId: number, businessAddress = false): Promise<void> {
+    const r = await this.sendChatCmd(CC.APISetAddressSettings.cmdString({userId, settings: {businessAddress}}))
     if (r.type !== "userContactLinkUpdated") {
-      throw new ChatCommandError("error changing user contact address settings", r)
+      throw new ChatCommandError("error changing user contact address mode", r)
     }
   }
 
@@ -272,12 +258,6 @@ export class ChatClient {
   async apiAddMember(groupId: number, contactId: number, memberRole: T.GroupMemberRole): Promise<T.GroupMember> {
     const r = await this.sendChatCmd(CC.APIAddMember.cmdString({groupId, contactId, memberRole}))
     if (r.type === "sentGroupInvitation") return r.member
-    throw new ChatCommandError("error adding member", r)
-  }
-
-  async apiAddMemberViaGroup(groupId: number, viaGroupId: number, groupMemberId: number, memberRole: T.GroupMemberRole): Promise<T.GroupMember> {
-    const r = await this.sendChatCmd(CC.APIAddMemberViaGroup.cmdString({groupId, viaGroupId, groupMemberId, memberRole}))
-    if (r.type === "sentGroupInvitationViaGroup") return r.member
     throw new ChatCommandError("error adding member", r)
   }
 

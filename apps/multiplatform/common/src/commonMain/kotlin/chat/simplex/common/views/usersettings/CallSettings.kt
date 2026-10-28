@@ -18,7 +18,7 @@ import chat.simplex.common.views.helpers.*
 import chat.simplex.common.model.*
 import chat.simplex.common.platform.ColumnWithScrollBar
 import chat.simplex.common.platform.appPlatform
-import chat.simplex.res.*
+import chat.simplex.res.MR
 
 @Composable
 fun CallSettingsView(m: ChatModel,

@@ -90,10 +90,8 @@ struct ContextContactRequestActionsView: View {
     }
 }
 
-struct ContextContactRequestActionsView_Previews: PreviewProvider {
-    static var previews: some View {
-        ContextContactRequestActionsView(
-            contactRequestId: 1
-        )
-    }
+#Preview {
+    ContextContactRequestActionsView(
+        contactRequestId: 1
+    )
 }

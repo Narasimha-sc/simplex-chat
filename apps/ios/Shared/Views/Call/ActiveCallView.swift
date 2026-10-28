@@ -161,10 +161,10 @@ struct ActiveCallView: View {
                         CallSoundsPlayer.shared.stop()
                     }
                 }
-            case let .ice(iceCandidates, session):
+            case let .ice(iceCandidates):
                 Task {
                     do {
-                        try await apiSendCallExtraInfo(call.contact, session, iceCandidates)
+                        try await apiSendCallExtraInfo(call.contact, iceCandidates)
                     } catch {
                         logger.error("apiSendCallExtraInfo \(responseError(error))")
                     }
@@ -172,24 +172,15 @@ struct ActiveCallView: View {
             case let .connection(state):
                 if let callStatus = WebRTCCallStatus.init(rawValue: state.connectionState),
                    case .connected = callStatus {
-                    // connectedAt is kept on reconnection, so that call duration is not reset
-                    if call.connectedAt == nil {
-                        call.direction == .outgoing
-                        ? CallController.shared.reportOutgoingCall(call: call, connectedAt: nil)
-                        : CallController.shared.reportIncomingCall(call: call, connectedAt: nil)
-                        call.connectedAt = .now
-                    }
+                    call.direction == .outgoing
+                    ? CallController.shared.reportOutgoingCall(call: call, connectedAt: nil)
+                    : CallController.shared.reportIncomingCall(call: call, connectedAt: nil)
                     call.callState = .connected
-                    CallSoundsPlayer.shared.stop()
+                    call.connectedAt = .now
                     if !wasConnected {
                         CallSoundsPlayer.shared.vibrate(long: false)
                         wasConnected = true
                     }
-                } else if state.connectionState == "reconnecting" {
-                    if call.callState != .reconnecting {
-                        CallSoundsPlayer.shared.startConnectingCallSound()
-                    }
-                    call.callState = .reconnecting
                 }
                 if state.connectionState == "closed" {
                     closeCallView(client)
@@ -199,22 +190,17 @@ struct ActiveCallView: View {
                     m.activeCall = nil
                     m.activeCallViewIsCollapsed = false
                 }
-                // "reconnecting" is not a core call status
-                if state.connectionState != "reconnecting" {
-                    Task {
-                        do {
-                            try await apiCallStatus(call.contact, state.connectionState)
-                        } catch {
-                            logger.error("apiCallStatus \(responseError(error))")
-                        }
+                Task {
+                    do {
+                        try await apiCallStatus(call.contact, state.connectionState)
+                    } catch {
+                        logger.error("apiCallStatus \(responseError(error))")
                     }
                 }
             case let .connected(connectionInfo):
                 call.callState = .connected
                 call.connectionInfo = connectionInfo
-                if call.connectedAt == nil {
-                    call.connectedAt = .now
-                }
+                call.connectedAt = .now
                 if !wasConnected {
                     CallSoundsPlayer.shared.vibrate(long: false)
                     wasConnected = true
@@ -533,9 +519,9 @@ struct ActiveCallOverlay: View {
 struct ActiveCallOverlay_Previews: PreviewProvider {
     static var previews: some View {
         Group{
-            ActiveCallOverlay(call: Call(direction: .incoming, contact: Contact.sampleData, callUUID: "00000000-0000-0000-0000-000000000001", callState: .offerSent, initialCallType: .video), client: WebRTCClient({ _ in }, Binding.constant(nil)))
+            ActiveCallOverlay(call: Call(direction: .incoming, contact: Contact.sampleData, callUUID: UUID().uuidString.lowercased(), callState: .offerSent, initialCallType: .video), client: WebRTCClient({ _ in }, Binding.constant(nil)))
                 .background(.black)
-            ActiveCallOverlay(call: Call(direction: .incoming, contact: Contact.sampleData, callUUID: "00000000-0000-0000-0000-000000000002", callState: .offerSent, initialCallType: .audio), client: WebRTCClient({ _ in }, Binding.constant(nil)))
+            ActiveCallOverlay(call: Call(direction: .incoming, contact: Contact.sampleData, callUUID: UUID().uuidString.lowercased(), callState: .offerSent, initialCallType: .audio), client: WebRTCClient({ _ in }, Binding.constant(nil)))
                 .background(.black)
         }
     }

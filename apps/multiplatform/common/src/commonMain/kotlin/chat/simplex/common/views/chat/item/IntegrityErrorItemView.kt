@@ -21,7 +21,7 @@ import chat.simplex.common.model.RcvMsgError
 import chat.simplex.common.ui.theme.*
 import chat.simplex.common.views.helpers.AlertManager
 import chat.simplex.common.views.helpers.generalGetString
-import chat.simplex.res.*
+import chat.simplex.res.MR
 
 @Composable
 fun IntegrityErrorItemView(msgError: MsgErrorType, ci: ChatItem, showTimestamp: Boolean, timedMessagesTTL: Int?) {
@@ -52,26 +52,24 @@ fun IntegrityErrorItemView(msgError: MsgErrorType, ci: ChatItem, showTimestamp: 
 @Composable
 fun CIMsgError(ci: ChatItem, showTimestamp: Boolean, timedMessagesTTL: Int?, onClick: () -> Unit) {
   val receivedColor = MaterialTheme.appColors.receivedMessage
-  ItemWithMeta(meta = { CIMetaView(ci, timedMessagesTTL, showViaProxy = false, showTimestamp = showTimestamp) }) { inlineMeta ->
-    Surface(
-      Modifier.clickable(onClick = onClick),
-      shape = RoundedCornerShape(18.dp),
-      color = receivedColor,
-      contentColor = LocalContentColor.current
+  Surface(
+    Modifier.clickable(onClick = onClick),
+    shape = RoundedCornerShape(18.dp),
+    color = receivedColor,
+    contentColor = LocalContentColor.current
+  ) {
+    Row(
+      Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+      verticalAlignment = Alignment.Bottom
     ) {
-      Row(
-        Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.Bottom
-      ) {
-        Text(
-          buildAnnotatedString {
-            withStyle(SpanStyle(fontStyle = FontStyle.Italic, color = Color.Red)) { append(ci.content.text) }
-          },
-          style = MaterialTheme.typography.body1.copy(lineHeight = 22.sp),
-          modifier = Modifier.padding(end = if (inlineMeta != null) 8.dp else 0.dp)
-        )
-        inlineMeta?.invoke()
-      }
+      Text(
+        buildAnnotatedString {
+          withStyle(SpanStyle(fontStyle = FontStyle.Italic, color = Color.Red)) { append(ci.content.text) }
+        },
+        style = MaterialTheme.typography.body1.copy(lineHeight = 22.sp),
+        modifier = Modifier.padding(end = 8.dp)
+      )
+      CIMetaView(ci, timedMessagesTTL, showViaProxy = false, showTimestamp = showTimestamp)
     }
   }
 }
@@ -98,7 +96,7 @@ fun IntegrityErrorItemViewPreview() {
   SimpleXTheme {
     IntegrityErrorItemView(
       MsgErrorType.MsgBadHash(),
-      ChatItem.getDeletedContentSampleData(ts = previewDate),
+      ChatItem.getDeletedContentSampleData(),
       showTimestamp = true,
       null,
     )

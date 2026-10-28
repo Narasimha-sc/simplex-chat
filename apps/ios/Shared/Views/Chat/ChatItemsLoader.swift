@@ -62,6 +62,7 @@ func apiLoadMessages(
             im.chatState.unreadTotal = chat.chatStats.unreadCount
             im.chatState.unreadAfter = navInfo.afterUnread
             im.chatState.unreadAfterNewestLoaded = navInfo.afterUnread
+            im.chatState.openAtItemId = navInfo.openAtItemId
 
             im.preloadState.clear()
         }

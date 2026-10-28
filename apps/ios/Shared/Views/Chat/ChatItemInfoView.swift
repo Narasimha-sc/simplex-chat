@@ -162,18 +162,6 @@ struct ChatItemInfoView: View {
             if let deleteAt = meta.itemTimed?.deleteAt {
                 infoRow("Disappears at", localTimestamp(deleteAt))
             }
-            if let file = ci.file, let fileExpires = file.fileExpires {
-                infoRow(file.expired ? "File was available until" : "File available until", localTimestamp(fileExpires))
-                if noShownBadge() {
-                    Button {
-                        openBadgesView()
-                    } label: {
-                        Text("Support SimpleX to send larger files that stay available longer")
-                            .multilineTextAlignment(.leading)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                }
-            }
             if meta.msgVerified?.verified == true {
                 let signedText: LocalizedStringKey = ci.chatDir.sent ? "Signed" : "Signed & verified"
                 HStack {
@@ -228,9 +216,6 @@ struct ChatItemInfoView: View {
                     }
                 }
             }
-            if ci.file != nil, let servers = chatItemInfo?.fileXftpServers, !servers.isEmpty {
-                infoRow("File servers", servers.map(serverHostname).joined(separator: "\n"))
-            }
         }
     }
 
@@ -267,7 +252,7 @@ struct ChatItemInfoView: View {
     private func itemVersionView(_ itemVersion: ChatItemVersion, _ maxWidth: CGFloat, current: Bool) -> some View {
         let backgroundColor = chatItemFrameColor(ci, theme)
         return VStack(alignment: .leading, spacing: 4) {
-            textBubble(itemVersion.msgContent.text, itemVersion.formattedText, itemVersion.markdownBlocks, nil, backgroundColor: backgroundColor)
+            textBubble(itemVersion.msgContent.text, itemVersion.formattedText, nil, backgroundColor: backgroundColor)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
                 .background(backgroundColor)
@@ -295,12 +280,9 @@ struct ChatItemInfoView: View {
         .frame(maxWidth: maxWidth, alignment: .leading)
     }
 
-    @ViewBuilder private func textBubble(_ text: String, _ formattedText: [FormattedText]?, _ markdownBlocks: [MarkdownBlock]?, _ sender: String? = nil, backgroundColor: Color) -> some View {
+    @ViewBuilder private func textBubble(_ text: String, _ formattedText: [FormattedText]?, _ sender: String? = nil, backgroundColor: Color) -> some View {
         if text != "" {
-            TextBubble(
-                text: text, formattedText: formattedText, markdownBlocks: markdownBlocks, sender: sender, mentions: ci.mentions, userMemberId: userMemberId,
-                backgroundColor: backgroundColor, cardColor: ci.chatDir.sent ? theme.appColors.sentQuote : theme.appColors.receivedQuote
-            )
+            TextBubble(text: text, formattedText: formattedText, sender: sender, mentions: ci.mentions, userMemberId: userMemberId, backgroundColor: backgroundColor)
         } else {
             Text("no text")
                 .italic()
@@ -312,19 +294,15 @@ struct ChatItemInfoView: View {
         @EnvironmentObject var theme: AppTheme
         var text: String
         var formattedText: [FormattedText]?
-        var markdownBlocks: [MarkdownBlock]?
         var sender: String? = nil
         var mentions: [String: CIMention]?
         var userMemberId: String?
         var backgroundColor: Color
-        var cardColor: Color
         @State private var showSecrets: Set<Int> = []
 
         var body: some View {
-            MarkdownView(
-                text: text, formattedText: formattedText, markdownBlocks: markdownBlocks, sender: sender, mentions: mentions, userMemberId: userMemberId,
-                backgroundColor: backgroundColor, cardColor: cardColor, showSecrets: $showSecrets
-            )
+            let r = messageText(text, formattedText, sender: sender, mentions: mentions, userMemberId: userMemberId, showSecrets: showSecrets, backgroundColor: UIColor(backgroundColor))
+            return msgTextResultView(r, Text(AttributedString(r.string)), showSecrets: $showSecrets)
         }
     }
 
@@ -349,7 +327,7 @@ struct ChatItemInfoView: View {
     private func quotedMsgView(_ qi: CIQuote, _ maxWidth: CGFloat) -> some View {
         let backgroundColor = quotedMsgFrameColor(qi, theme)
         return VStack(alignment: .leading, spacing: 4) {
-            textBubble(qi.text, qi.formattedText, qi.markdownBlocks, qi.getSender(nil), backgroundColor: backgroundColor)
+            textBubble(qi.text, qi.formattedText, qi.getSender(nil), backgroundColor: backgroundColor)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
                 .background(quotedMsgFrameColor(qi, theme))
@@ -567,9 +545,6 @@ struct ChatItemInfoView: View {
                 shareText += [String.localizedStringWithFormat(NSLocalizedString("File status: %@", comment: "copied message info"), file.fileStatus.id)]
             }
         }
-        if ci.file != nil, let servers = chatItemInfo?.fileXftpServers, !servers.isEmpty {
-            shareText += [String.localizedStringWithFormat(NSLocalizedString("File servers: %@", comment: "copied message info"), servers.map(serverHostname).joined(separator: ", "))]
-        }
         if let qi = ci.quotedItem {
             shareText += ["", NSLocalizedString("## In reply to", comment: "copied message info")]
             let t = qi.text
@@ -618,6 +593,6 @@ func localTimestamp(_ date: Date) -> String {
 
 struct ChatItemInfoView_Previews: PreviewProvider {
     static var previews: some View {
-        ChatItemInfoView(ci: ChatItem.getSample(1, .directSnd, previewDate, "hello"), userMemberId: Chat.sampleData.chatInfo.groupInfo?.membership.memberId, chatItemInfo: Binding.constant(nil))
+        ChatItemInfoView(ci: ChatItem.getSample(1, .directSnd, .now, "hello"), userMemberId: Chat.sampleData.chatInfo.groupInfo?.membership.memberId, chatItemInfo: Binding.constant(nil))
     }
 }

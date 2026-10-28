@@ -684,13 +684,19 @@ private struct ConnectView: View {
     private func processQRCode(_ resp: Result<ScanResult, ScanError>) {
         switch resp {
         case let .success(r):
-            let link = r.string
-            if strIsSimplexLink(r.string) {
-                connect(link)
-            } else {
+            let trimmed = r.string.trimmingCharacters(in: .whitespacesAndNewlines)
+            switch checkLink(trimmed) {
+            case .some(.connection):
+                connect(trimmed)
+            case nil:
                 alert = .newChatSomeAlert(alert: SomeAlert(
                     alert: mkAlert(title: "Invalid QR code", message: "The code you scanned is not a SimpleX link QR code."),
                     id: "processQRCode: code is not a SimpleX link"
+                ))
+            case let type?:
+                alert = .newChatSomeAlert(alert: SomeAlert(
+                    alert: wrongQRCodeAlert(wrongQRCodeMessage(type)),
+                    id: "processQRCode: wrong QR code type"
                 ))
             }
         case let .failure(e):
@@ -739,7 +745,6 @@ struct ScannerInView: View {
     let processQRCode: (_ resp: Result<ScanResult, ScanError>) -> Void
     @State private var cameraAuthorizationStatus: AVAuthorizationStatus?
     var scanMode: ScanMode = .continuous
-    var placeholderBackground = Color(uiColor: .secondarySystemGroupedBackground)
 
     var body: some View {
         Group {
@@ -778,7 +783,7 @@ struct ScannerInView: View {
                 .padding()
                 .background(
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(placeholderBackground)
+                        .fill(Color(uiColor: .secondarySystemGroupedBackground))
                 )
                 .padding(.horizontal)
                 .listRowBackground(Color.clear)
@@ -842,16 +847,6 @@ struct InfoSheetButton<Content: View>: View {
     }
 }
 
-func strIsSimplexLink(_ str: String) -> Bool {
-    if let parsedMd = parseSimpleXMarkdown(str),
-       parsedMd.count == 1,
-       case .simplexLink = parsedMd[0].format {
-        return true
-    } else {
-        return false
-    }
-}
-
 enum ConnectTarget {
     case link(text: String, linkType: SimplexLinkType, linkText: String)
     case name(text: String, nameInfo: SimplexNameInfo)
@@ -860,6 +855,8 @@ enum ConnectTarget {
 func strConnectTarget(_ str: String) -> ConnectTarget? {
     let parsedMd = parseSimpleXMarkdown(str)
     let links = parsedMd?.filter { $0.format?.isSimplexLink ?? false } ?? []
+    // showText is set only for a link written as a markdown hyperlink, whose text is the whole
+    // "[label](link)" source rather than the link - connect via the parsed uri in that case
     return if links.count == 1, case let .simplexLink(showText, linkType, simplexUri, smpHosts) = links[0].format {
         .link(text: showText != nil ? simplexUri : links[0].text, linkType: linkType, linkText: simplexLinkText(linkType, smpHosts))
     } else if links.isEmpty,
@@ -1129,9 +1126,11 @@ private func showPrepareContactAlert(
         profileImage:
             ProfileImage(
                 imageStr: contactShortLinkData.profile.image,
-                icon: contactShortLinkData.business
-                            ? Image(systemName: "briefcase.circle.fill")
-                            : peerTypeIcon(contactShortLinkData.profile.peerType),
+                iconName: contactShortLinkData.business
+                            ? "briefcase.circle.fill"
+                            : contactShortLinkData.profile.peerType == .bot
+                            ? "cube.fill"
+                            : "person.crop.circle.fill",
                 size: alertProfileImageSize
             ),
         profileBadge: contactShortLinkData.localBadge,
@@ -1184,9 +1183,9 @@ private func showPrepareGroupAlert(
         profileImage:
             ProfileImage(
                 imageStr: groupShortLinkData.groupProfile.image,
-                icon: Image(systemName: isChannel
+                iconName: isChannel
                             ? "antenna.radiowaves.left.and.right.circle.fill"
-                            : "person.2.circle.fill"),
+                            : "person.2.circle.fill",
                 size: alertProfileImageSize
             ),
         theme: theme,
@@ -1194,8 +1193,8 @@ private func showPrepareGroupAlert(
         information: ownerVerificationMessage(ownerVerification),
         cancelTitle: NSLocalizedString("Cancel", comment: "new chat action"),
         confirmTitle: isChannel
-            ? NSLocalizedString("Open channel", comment: "new chat action")
-            : NSLocalizedString("Open group", comment: "new chat action"),
+            ? NSLocalizedString("Open new channel", comment: "new chat action")
+            : NSLocalizedString("Open new group", comment: "new chat action"),
         secondTitle: connectOtherButton,
         onCancel: { cleanup?() },
         onConfirm: {
@@ -1238,7 +1237,7 @@ private func showOpenKnownContactAlert(
         profileImage:
             ProfileImage(
                 imageStr: contact.profile.image,
-                icon: contact.chatIcon,
+                iconName: contact.chatIconName,
                 size: alertProfileImageSize
             ),
         profileBadge: contact.active ? contact.profile.localBadge : nil,
@@ -1258,20 +1257,6 @@ private func showOpenKnownContactAlert(
     )
 }
 
-private func memberRoleInformation(_ role: GroupMemberRole, isChannel: Bool) -> String {
-    switch role {
-    case .observer: isChannel
-        ? NSLocalizedString("You are a subscriber", comment: "new chat alert")
-        : NSLocalizedString("You are an observer", comment: "new chat alert")
-    case .moderator: NSLocalizedString("You are a moderator", comment: "new chat alert")
-    case .admin: NSLocalizedString("You are an admin", comment: "new chat alert")
-    case .owner: NSLocalizedString("You are an owner", comment: "new chat alert")
-    default: isChannel
-        ? NSLocalizedString("You are a contributor", comment: "new chat alert")
-        : NSLocalizedString("You are a member", comment: "new chat alert")
-    }
-}
-
 private func showOpenKnownGroupAlert(
     _ groupInfo: GroupInfo,
     theme: AppTheme,
@@ -1286,21 +1271,23 @@ private func showOpenKnownGroupAlert(
         profileImage:
             ProfileImage(
                 imageStr: groupInfo.groupProfile.image,
-                icon: Image(systemName: groupInfo.chatIconName),
+                iconName: groupInfo.chatIconName,
                 size: alertProfileImageSize
             ),
         theme: theme,
         subtitle: groupInfo.useRelays ? subscriberCount : nil,
-        information: groupInfo.nextConnectPrepared || groupInfo.businessChat != nil
-            ? nil
-            : memberRoleInformation(groupInfo.membership.memberRole, isChannel: groupInfo.useRelays),
-        secondaryInformation: true,
         cancelTitle: NSLocalizedString("Cancel", comment: "new chat action"),
         confirmTitle:
             groupInfo.useRelays
-            ? NSLocalizedString("Open channel", comment: "new chat action")
+            ? ( groupInfo.nextConnectPrepared
+                ? NSLocalizedString("Open new channel", comment: "new chat action")
+                : NSLocalizedString("Open channel", comment: "new chat action")
+              )
             : groupInfo.businessChat == nil
-            ? NSLocalizedString("Open group", comment: "new chat action")
+            ? ( groupInfo.nextConnectPrepared
+                ? NSLocalizedString("Open new group", comment: "new chat action")
+                : NSLocalizedString("Open group", comment: "new chat action")
+              )
             : ( groupInfo.nextConnectPrepared
                 ? NSLocalizedString("Open new chat", comment: "new chat action")
                 : NSLocalizedString("Open chat", comment: "new chat action")
@@ -1330,7 +1317,7 @@ func planAndConnect(
         if linkType == .relay {
             showAlert(
                 NSLocalizedString("Relay address", comment: "alert title"),
-                message: NSLocalizedString("This is a chat relay address, it cannot be used to connect.", comment: "alert message")
+                message: NSLocalizedString("This is a chat relay address, it cannot be used to connect. To use it, open Network & servers, Your servers, Add server, then Chat relay, paste the address, then Test relay.", comment: "alert message")
             )
             cleanup?()
             return
@@ -1603,7 +1590,7 @@ func planAndConnect(
                                     profileImage:
                                         ProfileImage(
                                             imageStr: groupSLinkData.groupProfile.image,
-                                            icon: Image(systemName: "antenna.radiowaves.left.and.right.circle.fill"),
+                                            iconName: "antenna.radiowaves.left.and.right.circle.fill",
                                             size: alertProfileImageSize
                                         ),
                                     theme: theme,
@@ -1630,7 +1617,7 @@ func planAndConnect(
                                     profileImage:
                                         ProfileImage(
                                             imageStr: groupSLinkData.groupProfile.image,
-                                            icon: Image(systemName: "person.2.circle.fill"),
+                                            iconName: "person.2.circle.fill",
                                             size: alertProfileImageSize
                                         ),
                                     theme: theme,

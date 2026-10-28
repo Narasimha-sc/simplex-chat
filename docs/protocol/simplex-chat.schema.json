@@ -25,7 +25,7 @@
           "metadata": {"comment": "profile bio (160 characters)"}
         },
         "contactLink": {"ref": "connReqUri"},
-        "peerType": {"enum": ["human", "bot", "agent"]},
+        "peerType": {"enum": ["human", "bot"]},
         "preferences": {
           "optionalProperties": {
             "commands": {
@@ -61,7 +61,6 @@
           "type": "string",
           "metadata": {"comment": "group purpose / short description (160 characters)"}
         },
-        "chatLayout": {"enum": ["classic", "terminal"]},
         "groupPreferences": {
           "optionalProperties": {
             "commands": {
@@ -326,6 +325,9 @@
     "introInvitation": {
       "properties": {
         "groupConnReq": {"ref": "connReqUri"}
+      },
+      "optionalProperties": {
+        "directConnReq": {"ref": "connReqUri"}
       }
     },
     "groupMemberRole": {
@@ -336,13 +338,7 @@
         "callType": {"ref": "callType"}
       },
       "optionalProperties": {
-        "callDhPubKey": {"ref": "base64url"},
-        "callVRange": {
-          "type": "string",
-          "metadata": {
-            "format": "call version range, e.g. \"1-2\", or a single version \"1\""
-          }
-        }
+        "callDhPubKey": {"ref": "base64url"}
       }
     },
     "callOffer": {
@@ -351,8 +347,7 @@
         "rtcSession": {"ref": "webRTCSession"}
       },
       "optionalProperties": {
-        "callDhPubKey": {"ref": "base64url"},
-        "callVersion": {"type": "uint16"}
+        "callDhPubKey": {"ref": "base64url"}
       }
     },
     "callAnswer": {
@@ -365,9 +360,6 @@
         "rtcExtraInfo": {
           "properties": {
             "rtcIceCandidates": {"type": "string"}
-          },
-          "optionalProperties": {
-            "rtcSession": {"type": "string"}
           }
         }
       }
@@ -572,9 +564,6 @@
         "params": {
           "properties": {
             "memberId": {"ref": "base64url"}
-          },
-          "optionalProperties": {
-            "profile": {"ref": "profile"}
           }
         }
       }

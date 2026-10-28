@@ -37,7 +37,7 @@ import chat.simplex.common.views.localauth.VerticalDivider
 import chat.simplex.common.views.newchat.*
 import chat.simplex.common.views.onboarding.*
 import chat.simplex.common.views.usersettings.*
-import chat.simplex.res.*
+import chat.simplex.res.MR
 import dev.icerock.moko.resources.compose.painterResource
 import dev.icerock.moko.resources.compose.stringResource
 import kotlinx.coroutines.*
@@ -163,6 +163,7 @@ fun MainScreen() {
               userPickerState.value = AnimatedViewState.VISIBLE
             }
           }
+          SetupClipboardListener()
           if (appPlatform.isAndroid) {
             AndroidWrapInCallLayout {
               AndroidScreen(userPickerState)
@@ -207,7 +208,7 @@ fun MainScreen() {
       SwitchingUsersView()
     }
 
-    if (unauthorized.value) {
+    if (unauthorized.value && !(chatModel.activeCallViewIsVisible.value && chatModel.showCallView.value)) {
       LaunchedEffect(Unit) {
         // With these constrains when user presses back button while on ChatList, activity destroys and shows auth request
         // while the screen moves to a launcher. Detect it and prevent showing the auth
@@ -221,8 +222,7 @@ fun MainScreen() {
         SplashView(true)
         ModalManager.fullscreen.showPasscodeInView()
       }
-    }
-    if (!unauthorized.value || chatModel.activeCallViewIsVisible.value) {
+    } else {
       if (chatModel.showCallView.value) {
         if (appPlatform.isAndroid) {
           LaunchedEffect(Unit) {
@@ -236,8 +236,6 @@ fun MainScreen() {
           ActiveCallView()
         }
       }
-    }
-    if (!unauthorized.value) {
       ModalManager.fullscreen.showOneTimePasscodeInView()
       AlertManager.privacySensitive.showInView()
       if (onboarding == OnboardingStage.OnboardingComplete) {
@@ -400,11 +398,9 @@ fun CenterPartOfScreen() {
   }
   when (currentChatId.value) {
     null -> {
-      if (rememberUpdatedState(ModalManager.center.hasModalsOpen()).value) {
-        ModalManager.center.showInView()
-      } else if (shouldShowOnboarding()) {
+      if (shouldShowOnboarding()) {
         ConnectOnboardingView()
-      } else {
+      } else if (!rememberUpdatedState(ModalManager.center.hasModalsOpen()).value) {
         Box(
           Modifier
             .fillMaxSize()
@@ -413,12 +409,11 @@ fun CenterPartOfScreen() {
         ) {
           Text(stringResource(if (chatModel.desktopNoUserNoRemote) MR.strings.no_connected_mobile else MR.strings.no_selected_chat))
         }
+      } else {
+        ModalManager.center.showInView()
       }
     }
-    else -> {
-      ChatView(chatsCtx = chatModel.chatsContext, currentChatId) {}
-      ModalManager.center.showInView()
-    }
+    else -> ChatView(chatsCtx = chatModel.chatsContext, currentChatId) {}
   }
 }
 

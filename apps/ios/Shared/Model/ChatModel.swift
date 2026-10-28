@@ -359,36 +359,6 @@ class ChannelRelaysModel: ObservableObject {
     }
 }
 
-// The badge of whichever profile it was last loaded for, kept current by the badgeChanged event so
-// that a screen already open shows what the renewal worker did with no command behind it.
-class BadgeModel: ObservableObject {
-    static let shared = BadgeModel()
-    @Published private(set) var userId: Int64?
-    @Published private(set) var badgeState: BadgeState?
-    @Published private(set) var alert: BadgeAlert?
-
-    // alert follows the state: getUserBadgeState derives it on every read, so a badgeChanged is
-    // never staler than the alert it carries - the invariant a new alert kind must keep
-    func set(userId: Int64, badgeState: BadgeState?) {
-        self.userId = userId
-        self.badgeState = badgeState
-        alert = badgeState?.alert
-    }
-
-    func setAlert(userId: Int64, alert: BadgeAlert) {
-        if self.userId == userId {
-            self.alert = alert
-            badgeState?.alert = alert
-        }
-    }
-}
-
-enum ChatListBanner {
-    case badgeAlert
-    case badgePitch
-    case getStake
-}
-
 // Spec: spec/state.md#ChatModel
 final class ChatModel: ObservableObject {
     @Published var onboardingStage: OnboardingStage?
@@ -459,7 +429,6 @@ final class ChatModel: ObservableObject {
     // audio recording and playback
     @Published var stopPreviousRecPlay: URL? = nil // coordinates currently playing source
     @Published var draft: ComposeState?
-    // chat id with chat scope, see draftChatId() - group chat and its support chats have the same chat id
     @Published var draftChatId: String?
     @Published var networkInfo = UserNetworkInfo(networkType: .other, online: true)
     // usage conditions
@@ -468,31 +437,6 @@ final class ChatModel: ObservableObject {
     var messageDelivery: Dictionary<Int64, () -> Void> = [:]
 
     var filesToDelete: Set<URL> = []
-
-    // the banner kind the chat list showed this app session: it keeps the slot until restart, so dismissing it never puts
-    // another in its place; only the badge alert shows regardless. Set while rendering, so not published.
-    var chatListBanner: ChatListBanner?
-
-    var fileToOpen: (fileId: Int64, chatId: String?, open: (CIFile) -> Void)?
-
-    func bannerSlotFree(for banner: ChatListBanner) -> Bool {
-        chatListBanner == nil || chatListBanner == banner
-    }
-
-    func openWhenReceived(_ file: CIFile, open: @escaping (CIFile) -> Void) {
-        fileToOpen = (fileId: file.fileId, chatId: chatId, open: open)
-    }
-
-    func receivedFileToOpen(_ file: CIFile) -> Bool {
-        if let f = fileToOpen { f.fileId == file.fileId && f.chatId == chatId } else { false }
-    }
-
-    func openReceivedFile(_ file: CIFile) {
-        if let f = fileToOpen, receivedFileToOpen(file) {
-            fileToOpen = nil
-            f.open(file)
-        }
-    }
 
     static let shared = ChatModel()
 
@@ -622,12 +566,15 @@ final class ChatModel: ObservableObject {
     // Spec: spec/state.md#updateChatInfo
     func updateChatInfo(_ cInfo: ChatInfo) {
         if let i = getChatIndex(cInfo.id) {
+            let prevUserUnread = chats[i].userUnreadCount
             if case let .group(groupInfo, groupChatScope) = cInfo, groupChatScope != nil {
                 chats[i].chatInfo = .group(groupInfo: groupInfo, groupChatScope: nil)
             } else {
                 chats[i].chatInfo = cInfo
             }
             chats[i].created = Date.now
+            // muted chat does not count towards user unread counter, so it is updated when notifications change
+            if let user = currentUser { changeUnreadCounter(user: user, by: chats[i].userUnreadCount - prevUserUnread) }
         }
     }
 
@@ -951,8 +898,6 @@ final class ChatModel: ObservableObject {
     func updateCurrentUser(_ newProfile: Profile, _ preferences: FullPreferences? = nil) {
         if let current = currentUser {
             currentUser?.profile = toLocalProfile(current.profile.profileId, newProfile, "")
-            currentUser?.profile.localBadge = current.profile.localBadge
-            currentUser?.profile.contactDomainVerified = current.profile.contactDomainVerified
             if let preferences = preferences {
                 currentUser?.fullPreferences = preferences
             }
@@ -1016,8 +961,10 @@ final class ChatModel: ObservableObject {
     func markChatUnread(_ cInfo: ChatInfo, unreadChat: Bool = true) {
         _updateChat(cInfo.id) { chat in
             let wasUnread = chat.unreadTag
+            let prevUserUnread = chat.userUnreadCount
             chat.chatStats.unreadChat = unreadChat
             ChatTagsModel.shared.updateChatTagRead(chat, wasUnread: wasUnread)
+            self.changeUnreadCounter(user: self.currentUser!, by: chat.userUnreadCount - prevUserUnread)
         }
     }
 
@@ -1160,11 +1107,12 @@ final class ChatModel: ObservableObject {
 
     func changeUnreadCounter(_ chatIndex: Int, by count: Int, unreadMentions: Int) {
         let wasUnread = chats[chatIndex].unreadTag
+        let prevUserUnread = chats[chatIndex].userUnreadCount
         let stats = chats[chatIndex].chatStats
         chats[chatIndex].chatStats.unreadCount = stats.unreadCount + count
         chats[chatIndex].chatStats.unreadMentions = stats.unreadMentions + unreadMentions
         ChatTagsModel.shared.updateChatTagRead(chats[chatIndex], wasUnread: wasUnread)
-        changeUnreadCounter(user: currentUser!, by: count)
+        changeUnreadCounter(user: currentUser!, by: chats[chatIndex].userUnreadCount - prevUserUnread)
     }
 
     func increaseUnreadCounter(user: any UserLike) {
@@ -1172,10 +1120,7 @@ final class ChatModel: ObservableObject {
     }
 
     func decreaseUnreadCounter(user: any UserLike, chat: Chat) {
-        let by = chat.chatInfo.chatSettings?.enableNtfs == .mentions
-                ? chat.chatStats.unreadMentions
-                : chat.chatStats.unreadCount
-        decreaseUnreadCounter(user: user, by: by)
+        decreaseUnreadCounter(user: user, by: chat.userUnreadCount)
     }
 
     func decreaseUnreadCounter(user: any UserLike, by: Int = 1) {
@@ -1183,6 +1128,7 @@ final class ChatModel: ObservableObject {
     }
 
     private func changeUnreadCounter(user: any UserLike, by: Int) {
+        if by == 0 { return }
         if let i = users.firstIndex(where: { $0.user.userId == user.userId }) {
             users[i].unreadCount += by
         }
@@ -1193,11 +1139,7 @@ final class ChatModel: ObservableObject {
     func totalUnreadCountForAllUsers() -> Int {
         var unread: Int = 0
         for chat in chats {
-            switch chat.chatInfo.chatSettings?.enableNtfs {
-            case .all: unread += chat.chatStats.unreadCount
-            case .mentions: unread += chat.chatStats.unreadMentions
-            default: ()
-            }
+            unread += chat.userUnreadCount
         }
         for u in users {
             if !u.user.activeUser {
@@ -1300,15 +1242,6 @@ final class ChatModel: ObservableObject {
     private func popChat_(_ i: Int, to position: Int = 0) {
         let chat = chats.remove(at: i)
         chats.insert(chat, at: position)
-    }
-
-    func replaceConnReqView(_ id: String, _ withId: ChatId) {
-        if id == showingInvitation?.pcc.id {
-            markShowingInvitationUsed()
-            dismissAllSheets(animated: true) {
-                ItemsModel.shared.loadOpenChat(withId)
-            }
-        }
     }
 
     func dismissConnReqView(_ id: String) {
@@ -1445,6 +1378,15 @@ final class Chat: ObservableObject, Identifiable, ChatLike {
         case .all: chatStats.unreadChat || chatStats.unreadCount > 0
         case .mentions: chatStats.unreadChat || chatStats.unreadMentions > 0
         default: chatStats.unreadChat
+        }
+    }
+
+    // what this chat adds to unread counter of its user profile - has to match getUsersInfo in Profiles.hs
+    var userUnreadCount: Int {
+        switch chatInfo.chatSettings?.enableNtfs {
+        case .all: chatStats.unreadCount > 0 ? chatStats.unreadCount : (chatStats.unreadChat ? 1 : 0)
+        case .mentions: chatStats.unreadMentions > 0 ? chatStats.unreadMentions : (chatStats.unreadChat ? 1 : 0)
+        default: 0
         }
     }
 

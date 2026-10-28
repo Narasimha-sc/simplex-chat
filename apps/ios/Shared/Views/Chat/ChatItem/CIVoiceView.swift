@@ -178,7 +178,7 @@ struct VoiceMessagePlayer: View {
                         .simultaneousGesture(TapGesture().onEnded {
                             showFileErrorAlert(sndFileError, temporary: true)
                         })
-                case .rcvInvitation: downloadButton(recordingFile, recordingFile.expired ? "multiply" : "play.fill")
+                case .rcvInvitation: downloadButton(recordingFile, "play.fill")
                 case .rcvAccepted: loadingIcon()
                 case .rcvTransfer: loadingIcon()
                 case .rcvAborted: downloadButton(recordingFile, "exclamationmark.arrow.circlepath")
@@ -187,7 +187,7 @@ struct VoiceMessagePlayer: View {
                 case let .rcvError(rcvFileError):
                     fileStatusIcon("multiply", 14)
                         .simultaneousGesture(TapGesture().onEnded {
-                            showFileErrorAlert(rcvFileError, recordingFile)
+                            showFileErrorAlert(rcvFileError)
                         })
                 case let .rcvWarning(rcvFileError):
                     fileStatusIcon("exclamationmark.triangle.fill", 16)
@@ -303,11 +303,6 @@ struct VoiceMessagePlayer: View {
     private func downloadButton(_ recordingFile: CIFile, _ icon: String) -> some View {
         playPauseIcon(icon, theme.colors.primary)
             .simultaneousGesture(TapGesture().onEnded {
-                chatModel.openWhenReceived(recordingFile) { file in
-                    if let recordingSource = getLoadedFileSource(file) {
-                        startPlayback(recordingSource)
-                    }
-                }
                 Task {
                     if let user = chatModel.currentUser {
                         await receiveFile(user: user, fileId: recordingFile.fileId)
@@ -445,34 +440,30 @@ struct CIVoiceView_Previews: PreviewProvider {
         let im = ItemsModel.shared
         let sentVoiceMessage: ChatItem = ChatItem(
             chatDir: .directSnd,
-            meta: CIMeta.getSample(1, previewDate, "", .sndSent(sndProgress: .complete), itemEdited: true),
+            meta: CIMeta.getSample(1, .now, "", .sndSent(sndProgress: .complete), itemEdited: true),
             content: .sndMsgContent(msgContent: .voice(text: "", duration: 30)),
             quotedItem: nil,
             file: CIFile.getSample(fileStatus: .sndComplete)
         )
         let voiceMessageWtFile = ChatItem(
             chatDir: .directRcv,
-            meta: CIMeta.getSample(1, previewDate, "", .rcvRead),
+            meta: CIMeta.getSample(1, .now, "", .rcvRead),
             content: .rcvMsgContent(msgContent: .voice(text: "", duration: 30)),
             quotedItem: nil,
             file: nil
         )
         Group {
-            let ci1 = previewDated(ChatItem.getVoiceMsgContentSample())
             CIVoiceView(
                 chat: Chat.sampleData,
-                chatItem: ci1,
+                chatItem: ChatItem.getVoiceMsgContentSample(),
                 recordingFile: CIFile.getSample(fileName: "voice.m4a", fileSize: 65536, fileStatus: .rcvComplete),
                 duration: 30,
                 allowMenu: Binding.constant(true)
             )
-            .modifier(ChatItemClipped(ci1, tailVisible: true))
-            ChatItemView(chat: Chat.sampleData, im: im, chatItem: sentVoiceMessage, scrollToItem: { _ in }, scrollToItemId: Binding.constant(nil), allowMenu: .constant(true)).modifier(ChatItemClipped(sentVoiceMessage, tailVisible: true))
-            let ci2 = previewDated(ChatItem.getVoiceMsgContentSample())
-            ChatItemView(chat: Chat.sampleData, im: im, chatItem: ci2, scrollToItem: { _ in }, scrollToItemId: Binding.constant(nil), allowMenu: .constant(true)).modifier(ChatItemClipped(ci2, tailVisible: true))
-            let ci3 = previewDated(ChatItem.getVoiceMsgContentSample(fileStatus: .rcvTransfer(rcvProgress: 7, rcvTotal: 10)))
-            ChatItemView(chat: Chat.sampleData, im: im, chatItem: ci3, scrollToItem: { _ in }, scrollToItemId: Binding.constant(nil), allowMenu: .constant(true)).modifier(ChatItemClipped(ci3, tailVisible: true))
-            ChatItemView(chat: Chat.sampleData, im: im, chatItem: voiceMessageWtFile, scrollToItem: { _ in }, scrollToItemId: Binding.constant(nil), allowMenu: .constant(true)).modifier(ChatItemClipped(voiceMessageWtFile, tailVisible: true))
+            ChatItemView(chat: Chat.sampleData, im: im, chatItem: sentVoiceMessage, scrollToItem: { _ in }, scrollToItemId: Binding.constant(nil), allowMenu: .constant(true))
+            ChatItemView(chat: Chat.sampleData, im: im, chatItem: ChatItem.getVoiceMsgContentSample(), scrollToItem: { _ in }, scrollToItemId: Binding.constant(nil), allowMenu: .constant(true))
+            ChatItemView(chat: Chat.sampleData, im: im, chatItem: ChatItem.getVoiceMsgContentSample(fileStatus: .rcvTransfer(rcvProgress: 7, rcvTotal: 10)), scrollToItem: { _ in }, scrollToItemId: Binding.constant(nil), allowMenu: .constant(true))
+            ChatItemView(chat: Chat.sampleData, im: im, chatItem: voiceMessageWtFile, scrollToItem: { _ in }, scrollToItemId: Binding.constant(nil), allowMenu: .constant(true))
         }
         .previewLayout(.fixed(width: 360, height: 360))
     }

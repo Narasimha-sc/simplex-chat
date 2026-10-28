@@ -15,28 +15,27 @@ import chat.simplex.common.model.*
 import chat.simplex.common.model.ChatModel.getChatItemIndexOrNull
 import chat.simplex.common.ui.theme.*
 import chat.simplex.common.views.helpers.generalGetString
-import chat.simplex.res.*
+import chat.simplex.res.MR
 import dev.icerock.moko.resources.compose.stringResource
+import kotlinx.datetime.Clock
 
 @Composable
 fun MarkedDeletedItemView(chatsCtx: ChatModel.ChatsContext, ci: ChatItem, chatInfo: ChatInfo, timedMessagesTTL: Int?, revealed: State<Boolean>, showViaProxy: Boolean, showTimestamp: Boolean) {
   val sentColor = MaterialTheme.appColors.sentMessage
   val receivedColor = MaterialTheme.appColors.receivedMessage
-  ItemWithMeta(meta = { CIMetaView(ci, timedMessagesTTL, showViaProxy = showViaProxy, showTimestamp = showTimestamp) }) { inlineMeta ->
-    Surface(
-      shape = RoundedCornerShape(18.dp),
-      color = if (ci.chatDir.sent) sentColor else receivedColor,
-      contentColor = LocalContentColor.current
+  Surface(
+    shape = RoundedCornerShape(18.dp),
+    color = if (ci.chatDir.sent) sentColor else receivedColor,
+    contentColor = LocalContentColor.current
+  ) {
+    Row(
+      Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+      verticalAlignment = Alignment.CenterVertically
     ) {
-      Row(
-        Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically
-      ) {
-        Box(Modifier.weight(1f, false)) {
-          MergedMarkedDeletedText(chatsCtx, ci, chatInfo, revealed)
-        }
-        inlineMeta?.invoke()
+      Box(Modifier.weight(1f, false)) {
+        MergedMarkedDeletedText(chatsCtx, ci, chatInfo, revealed)
       }
+      CIMetaView(ci, timedMessagesTTL, showViaProxy = showViaProxy, showTimestamp = showTimestamp)
     }
   }
 }
@@ -119,7 +118,7 @@ fun markedDeletedText(cItem: ChatItem, chatInfo: ChatInfo): String =
 fun PreviewMarkedDeletedItemView() {
   SimpleXTheme {
     DeletedItemView(
-      ChatItem.getSampleData(ts = previewDate, itemDeleted = CIDeleted.Deleted(previewDate)),
+      ChatItem.getSampleData(itemDeleted = CIDeleted.Deleted(Clock.System.now())),
       null,
       showViaProxy = false,
       showTimestamp = true

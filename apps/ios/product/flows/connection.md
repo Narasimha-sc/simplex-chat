@@ -104,7 +104,7 @@ Establishing contact between two SimpleX Chat users. SimpleX uses no user identi
 ### 7a. Relay Link Rejection
 
 1. User scans, pastes, or opens a relay address link (URL path `/r` or `SimplexLinkType.relay`).
-2. In `ContentView.connectViaUrl_()`: early return with alert "Relay address" / "This is a chat relay address, it cannot be used to connect."
+2. In `ContentView.connectViaUrl_()`: intercepted with alert "Relay address" / "This is a chat relay address, it cannot be used to connect. To use it, open Network & servers, Your servers, Add server, then Chat relay, paste the address, then Test relay."
 3. In `NewChatView.planAndConnect()`: `.simplexLink(_, .relay, _, _)` pattern triggers the same alert.
 4. The link is NOT processed further. No connection is attempted.
 
@@ -113,7 +113,7 @@ Establishing contact between two SimpleX Chat users. SimpleX uses no user identi
 1. When connecting to a channel link (`GroupShortLinkInfo.direct == false`):
 2. `apiPrepareGroup(connLink:directLink:groupShortLinkData:)` is called with `directLink: false`, preparing the channel locally.
 3. `groupShortLinkInfo.groupRelays` (hostnames) stored in `ChatModel.shared.channelRelayHostnames[groupId]`.
-4. Pre-join UI shows channel icon and "Open channel" (not "Open group").
+4. Pre-join UI shows channel icon and "Open new channel" (not "Open new group").
 5. `apiConnectPreparedGroup(groupId:incognito:msg:)` returns `(GroupInfo, [RelayConnectionResult])`.
 6. `RelayConnectionResult` contains `relayMember: GroupMember` and optional `relayError: ChatError?` per relay.
 7. Relay members are upserted to `chatModel.groupMembers`; `channelRelayHostnames` entry is cleared.

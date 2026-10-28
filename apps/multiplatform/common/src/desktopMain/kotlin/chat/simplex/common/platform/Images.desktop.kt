@@ -5,8 +5,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import boofcv.io.image.ConvertBufferedImage
 import boofcv.struct.image.GrayU8
-import chat.simplex.common.views.helpers.decodeBoundedBufferedImage
-import chat.simplex.res.*
+import chat.simplex.res.MR
 import org.jetbrains.skia.Image
 import java.awt.RenderingHints
 import java.awt.geom.AffineTransform
@@ -54,14 +53,6 @@ actual fun base64ToBitmap(base64ImageString: String): ImageBitmap {
     errorBitmap()
   }
 }
-
-actual fun decodeBase64Image(base64: String, width: Int): ImageBitmap? =
-  try {
-    decodeBoundedBufferedImage(Base64.getMimeDecoder().decode(base64), width).toComposeImageBitmap()
-  } catch (e: Throwable) {
-    Log.e(TAG, "decodeBase64Image error: $e")
-    null
-  }
 
 actual fun resizeImageToStrSize(image: ImageBitmap, maxDataSize: Long): String {
   var img = image

@@ -30,7 +30,7 @@ import chat.simplex.common.views.helpers.*
 import chat.simplex.common.views.CreateProfile
 import chat.simplex.common.views.database.*
 import chat.simplex.common.views.onboarding.OnboardingStage
-import chat.simplex.res.*
+import chat.simplex.res.MR
 import dev.icerock.moko.resources.StringResource
 import kotlinx.coroutines.*
 
@@ -47,9 +47,8 @@ fun UserProfilesView(m: ChatModel, search: MutableState<String>, profileHidden: 
     showHiddenProfilesNotice = m.controller.appPrefs.showHiddenProfilesNotice,
     visibleUsersCount = visibleUsersCount(m),
     addUser = {
-      if (ModalManager.center.isTopModalOpen(ModalViewId.CREATE_PROFILE)) return@UserProfilesLayout
       withAuth {
-        ModalManager.center.showModalCloseable(id = ModalViewId.CREATE_PROFILE) { close ->
+        ModalManager.center.showModalCloseable { close ->
           CreateProfile(m, close)
         }
       }
@@ -278,7 +277,7 @@ private fun ProfileActionView(action: UserProfileAction, user: User, doAction: (
     @Composable fun PasswordAndAction(label: StringResource, color: Color = MaterialTheme.colors.primary) {
       SectionView() {
         SectionItemViewWithoutMinPadding {
-          PassphraseField(actionPassword, generalGetString(MR.strings.profile_password), isValid = { passwordValid }, showStrength = true, contentType = null)
+          PassphraseField(actionPassword, generalGetString(MR.strings.profile_password), isValid = { passwordValid }, showStrength = true)
         }
         SectionItemViewSpaceBetween({ doAction(actionPassword.value) }, disabled = !actionEnabled, minHeight = TextFieldDefaults.MinHeight) {
           Text(generalGetString(label), color = if (actionEnabled) color else MaterialTheme.colors.secondary)

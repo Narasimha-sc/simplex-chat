@@ -7,7 +7,6 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.autofill.ContentType
 import androidx.compose.ui.focus.*
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.platform.LocalFocusManager
@@ -20,7 +19,7 @@ import chat.simplex.common.platform.*
 import chat.simplex.common.ui.theme.*
 import chat.simplex.common.views.database.*
 import chat.simplex.common.views.helpers.*
-import chat.simplex.res.*
+import chat.simplex.res.MR
 import kotlinx.coroutines.delay
 
 @Composable
@@ -153,7 +152,6 @@ private fun SetupDatabasePassphraseLayout(
             showStrength = true,
             isValid = ::validKey,
             keyboardActions = KeyboardActions(onNext = { defaultKeyboardAction(ImeAction.Next) }),
-            contentType = newPasswordContentType(),
           )
 
           PassphraseField(
@@ -171,7 +169,6 @@ private fun SetupDatabasePassphraseLayout(
               },
             isValid = { confirmNewKey.value == "" || newKey.value == confirmNewKey.value },
             keyboardActions = KeyboardActions(onDone = { defaultKeyboardAction(ImeAction.Done) }),
-            contentType = newPasswordContentType(),
           )
         }
         Spacer(Modifier.weight(1f))

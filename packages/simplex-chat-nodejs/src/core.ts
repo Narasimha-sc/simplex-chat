@@ -1,36 +1,11 @@
 import {ChatEvent, ChatResponse, T} from "@simplex-chat/types"
-import * as libs from "./libs"
 import * as simplex from "./simplex"
-
-export type Backend = "sqlite" | "postgres"
-
-let loading: {backend: Backend, promise: Promise<void>} | undefined
-
-/**
- * Resolve (downloading on first use) and load libsimplex for the backend.
- * One libsimplex per process: the Haskell runtime is initialized once, and another backend is rejected.
- */
-export function loadLibrary(backend: Backend): Promise<void> {
-  if (loading) {
-    if (loading.backend === backend) return loading.promise
-    return Promise.reject(new Error(`libsimplex already loaded with backend=${loading.backend}; cannot switch to ${backend} in the same process`))
-  }
-  const promise = Promise.all([libs.resolveLibsDir(backend), libs.resolveAddonPath()])
-    .then(([dir, addon]) => simplex.load(addon, libs.libPath(dir)))
-  loading = {backend, promise}
-  // a failed download or load can be retried
-  promise.catch(() => { loading = undefined })
-  return promise
-}
 
 /**
  * Initialize chat controller
- * @param {number} [queueSize] - Size of internal queues, the core default is used when omitted.
  */
-export async function chatMigrateInit(dbPath: string, dbKey: string, confirm: MigrationConfirmation, queueSize?: number): Promise<bigint> {
-  const [ctrl, res] = queueSize === undefined
-    ? await simplex.chat_migrate_init(dbPath, dbKey, confirm)
-    : await simplex.chat_migrate_init_queue(dbPath, dbKey, confirm, queueSize)
+export async function chatMigrateInit(dbPath: string, dbKey: string, confirm: MigrationConfirmation): Promise<bigint> {
+  const [ctrl, res] = await simplex.chat_migrate_init(dbPath, dbKey, confirm)
   const json = JSON.parse(res)
   if (json.type === 'ok') return ctrl
   throw new ChatInitError("Database or migration error (see dbMigrationError property)", json as DBMigrationError)
@@ -72,7 +47,7 @@ export async function chatRecvMsgWait(ctrl: bigint, wait: number): Promise<ChatE
 /**
  * Write buffer to encrypted file
  */
-export async function chatWriteFile(ctrl: bigint, path: string, buffer: ArrayBuffer | Uint8Array): Promise<CryptoArgs> {
+export async function chatWriteFile(ctrl: bigint, path: string, buffer: ArrayBuffer): Promise<CryptoArgs> {
   const res = await simplex.chat_write_file(ctrl, path, buffer)
   return cryptoArgsResult(res)
 }
@@ -80,7 +55,7 @@ export async function chatWriteFile(ctrl: bigint, path: string, buffer: ArrayBuf
 /**
  * Read buffer from encrypted file
  */
-export async function chatReadFile(path: string, {fileKey, fileNonce}: CryptoArgs): Promise<Buffer> {
+export async function chatReadFile(path: string, {fileKey, fileNonce}: CryptoArgs): Promise<ArrayBuffer> {
   return await simplex.chat_read_file(path, fileKey, fileNonce)
 }
 
@@ -146,13 +121,12 @@ export class ChatInitError extends Error {
 
 export type DBMigrationError = 
   | DBMigrationError.InvalidConfirmation
-  | DBMigrationError.InvalidQueueSize
   | DBMigrationError.ErrorNotADatabase // invalid/corrupt database file or incorrect encryption key
   | DBMigrationError.ErrorMigration
   | DBMigrationError.ErrorSQL
 
 export namespace DBMigrationError {
-  export type Tag = "invalidConfirmation" | "invalidQueueSize" | "errorNotADatabase" | "errorMigration" | "errorSQL"
+  export type Tag = "invalidConfirmation" | "errorNotADatabase" | "errorMigration" | "errorSQL"
 
   interface Interface {
     type: Tag
@@ -160,10 +134,6 @@ export namespace DBMigrationError {
 
   export interface InvalidConfirmation extends Interface {
     type: "invalidConfirmation"
-  }
-
-  export interface InvalidQueueSize extends Interface {
-    type: "invalidQueueSize"
   }
 
   export interface ErrorNotADatabase extends Interface {
@@ -198,7 +168,7 @@ export namespace MigrationError {
 
   export interface MEUpgrade extends Interface {
     type: "upgrade"
-    upMigrations: UpMigration[]
+    upMigrations: UpMigration
   }
 
   export interface MEDowngrade extends Interface {
@@ -230,7 +200,7 @@ export namespace MTRError {
 
   export interface MTRENoDown extends Interface {
     type: "noDown"
-    dbMigrations: string[]
+    upMigrations: UpMigration
   }
 
   export interface MTREDifferent extends Interface {

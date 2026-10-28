@@ -21,7 +21,7 @@ import chat.simplex.common.ui.theme.*
 import chat.simplex.common.views.helpers.*
 import chat.simplex.common.model.*
 import chat.simplex.common.platform.*
-import chat.simplex.res.*
+import chat.simplex.res.MR
 import dev.icerock.moko.resources.ImageResource
 import kotlinx.coroutines.flow.*
 import kotlin.math.*
@@ -44,11 +44,10 @@ fun CIVoiceView(
   receiveFile: (Long) -> Unit,
 ) {
   val sizeMultiplier = if (smallView) voiceMessageSizeBasedOnSquareSize(36f) / 56f else 1f
-  val classicWithText = hasText && !LocalTerminalLayout.current
   val padding = when {
     smallView -> PaddingValues()
-    classicWithText -> PaddingValues(top = 14.sp.toDp() * sizeMultiplier, bottom = 14.sp.toDp() * sizeMultiplier, start = 6.sp.toDp() * sizeMultiplier, end = 6.sp.toDp() * sizeMultiplier)
-    else -> PaddingValues(top = 4.sp.toDp() * sizeMultiplier, bottom = 6.sp.toDp() * sizeMultiplier, start = if (LocalTerminalLayout.current) CHAT_ITEM_TEXT_PADDING else 0.dp, end = 0.dp)
+    hasText -> PaddingValues(top = 14.sp.toDp() * sizeMultiplier, bottom = 14.sp.toDp() * sizeMultiplier, start = 6.sp.toDp() * sizeMultiplier, end = 6.sp.toDp() * sizeMultiplier)
+    else -> PaddingValues(top = 4.sp.toDp() * sizeMultiplier, bottom = 6.sp.toDp() * sizeMultiplier, start = 0.dp, end = 0.dp)
   }
   Row(
     Modifier.padding(padding),
@@ -88,7 +87,7 @@ fun CIVoiceView(
           durationText(time / 1000)
         }
       }
-      VoiceLayout(file, ci, text, audioPlaying, progress, duration, brokenAudio, sent, hasText, classicWithText, timedMessagesTTL, showViaProxy, showTimestamp, sizeMultiplier, play, pause, longClick, { chatModel.openWhenReceived(file, smallView); receiveFile(it) }) {
+      VoiceLayout(file, ci, text, audioPlaying, progress, duration, brokenAudio, sent, hasText, timedMessagesTTL, showViaProxy, showTimestamp, sizeMultiplier, play, pause, longClick, receiveFile) {
         AudioPlayer.seekTo(it, progress, fileSource.value?.filePath)
       }
       if (smallView) {
@@ -96,7 +95,6 @@ fun CIVoiceView(
           AudioPlayer.stop()
         }
       }
-      OpenWhenReceivedEffect(file, smallView, play)
     } else if (smallView) {
       VoiceMsgIndicator(null, false, sent, hasText, null, null, false, sizeMultiplier, {}, {}, longClick, receiveFile)
     } else {
@@ -121,7 +119,6 @@ private fun VoiceLayout(
   brokenAudio: Boolean,
   sent: Boolean,
   hasText: Boolean,
-  classicWithText: Boolean,
   timedMessagesTTL: Int?,
   showViaProxy: Boolean,
   showTimestamp: Boolean,
@@ -184,7 +181,7 @@ private fun VoiceLayout(
         }
       }
     }
-    classicWithText -> {
+    hasText -> {
       val sentColor = MaterialTheme.appColors.sentMessage
       val receivedColor = MaterialTheme.appColors.receivedMessage
       Spacer(Modifier.width(6.sp.toDp() * sizeMultiplier))
@@ -194,7 +191,7 @@ private fun VoiceLayout(
         Slider(if (ci.chatDir.sent) sentColor else receivedColor)
       }
     }
-    sent && !LocalTerminalLayout.current -> {
+    sent -> {
       Column(horizontalAlignment = Alignment.End) {
         Row {
           Row(Modifier.weight(1f, false), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.End) {
@@ -210,25 +207,19 @@ private fun VoiceLayout(
       }
     }
     else -> {
-      @Composable
-      fun VoiceRow(inlineMeta: (@Composable () -> Unit)?) {
-        Column(horizontalAlignment = Alignment.Start) {
-          Row {
-            VoiceMsgIndicator(file, audioPlaying.value, sent, false, progress, duration, brokenAudio, 1f, play, pause, longClick, receiveFile)
-            Row(Modifier.weight(1f, false), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Start) {
-              DurationText(text, PaddingValues(start = 12.sp.toDp() * sizeMultiplier))
-              Slider(MaterialTheme.colors.background, PaddingValues(start = DEFAULT_PADDING_HALF + 3.dp))
-              Spacer(Modifier.height(56.sp.toDp() * sizeMultiplier))
-            }
-          }
-          if (inlineMeta != null) {
-            Box(Modifier.padding(top = 6.sp.toDp() * sizeMultiplier)) {
-              inlineMeta()
-            }
+      Column(horizontalAlignment = Alignment.Start) {
+        Row {
+          VoiceMsgIndicator(file, audioPlaying.value, sent, hasText, progress, duration, brokenAudio, 1f, play, pause, longClick, receiveFile)
+          Row(Modifier.weight(1f, false), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Start) {
+            DurationText(text, PaddingValues(start = 12.sp.toDp() * sizeMultiplier))
+            Slider(MaterialTheme.colors.background, PaddingValues(start = DEFAULT_PADDING_HALF + 3.dp))
+            Spacer(Modifier.height(56.sp.toDp() * sizeMultiplier))
           }
         }
+        Box(Modifier.padding(top = 6.sp.toDp() * sizeMultiplier)) {
+          CIMetaView(ci, timedMessagesTTL, showViaProxy = showViaProxy, showTimestamp = showTimestamp)
+        }
       }
-      if (hasText) VoiceRow(null) else ItemWithMeta(meta = { CIMetaView(ci, timedMessagesTTL, showViaProxy = showViaProxy, showTimestamp = showTimestamp) }) { VoiceRow(it) }
     }
   }
 }
@@ -421,7 +412,7 @@ private fun VoiceMsgIndicator(
         }
       )
     file?.fileStatus is CIFileStatus.RcvInvitation ->
-      PlayPauseButton(audioPlaying, sent, 0f, strokeWidth, strokeColor, true, error, sizeMultiplier, { receiveFile(file.fileId) }, {}, longClick = longClick, icon = if (file.expired) MR.images.ic_close else MR.images.ic_play_arrow_filled)
+      PlayPauseButton(audioPlaying, sent, 0f, strokeWidth, strokeColor, true, error, sizeMultiplier, { receiveFile(file.fileId) }, {}, longClick = longClick)
     file?.fileStatus is CIFileStatus.RcvTransfer || file?.fileStatus is CIFileStatus.RcvAccepted ->
       VoiceMsgLoadingProgressIndicator(sizeMultiplier)
     file?.fileStatus is CIFileStatus.RcvAborted ->
@@ -433,7 +424,7 @@ private fun VoiceMsgIndicator(
         sizeMultiplier,
         longClick,
         onClick = {
-          showFileErrorAlert(file.fileStatus.rcvFileError, file)
+          showFileErrorAlert(file.fileStatus.rcvFileError)
         }
       )
     file != null && file.fileStatus is CIFileStatus.RcvWarning ->

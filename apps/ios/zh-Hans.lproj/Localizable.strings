@@ -131,10 +131,10 @@
 "%@ is verified" = "%@ 已认证";
 
 /* No comment provided by engineer. */
-"%@ server" = "%@ 服务器";
+"%@ server" = "服务器";
 
 /* No comment provided by engineer. */
-"%@ servers" = "%@ 服务器";
+"%@ servers" = "服务器";
 
 /* badge alert */
 "%@ supports SimpleX Chat." = "%@ 是 SimpleX Chat 支持者。";
@@ -1680,7 +1680,7 @@ server test step */
 "Contact preferences" = "联系人偏好设置";
 
 /* No comment provided by engineer. */
-"Contact requests in groups" = "来自群的联络请求";
+"Contact requests from groups" = "来自群的联络请求";
 
 /* No comment provided by engineer. */
 "contact should accept…" = "联系人应当接受…";
@@ -2715,7 +2715,7 @@ chat item action */
 /* No comment provided by engineer. */
 "Error saving user password" = "保存用户密码时出错";
 
-/* alert message */
+/* No comment provided by engineer. */
 "Error scanning code: %@" = "扫描代码时出错：%@";
 
 /* No comment provided by engineer. */
@@ -2785,7 +2785,7 @@ chat item action */
 conn error description
 file error text
 snd error text */
-"Error: %@" = "错误：%@";
+"Error: %@" = "错误： ％@";
 
 /* relay test error
 server test error */
@@ -3405,7 +3405,7 @@ servers warning */
 /* alert title */
 "Invalid name!" = "无效名称！";
 
-/* alert title */
+/* No comment provided by engineer. */
 "Invalid QR code" = "无效的二维码";
 
 /* alert title */
@@ -3558,7 +3558,7 @@ servers warning */
 /* No comment provided by engineer. */
 "KeyChain error" = "钥匙串错误";
 
-/* file alert title */
+/* No comment provided by engineer. */
 "Large file!" = "大文件！";
 
 /* badge alert button */
@@ -4405,7 +4405,13 @@ alert button */
 "Open migration to another device" = "打开迁移到另一台设备";
 
 /* new chat action */
+"Open new channel" = "打开新频道";
+
+/* new chat action */
 "Open new chat" = "打开新聊天";
+
+/* new chat action */
+"Open new group" = "打开新群";
 
 /* No comment provided by engineer. */
 "Open Settings" = "打开设置";
@@ -5262,10 +5268,10 @@ chat item action */
 "Saved" = "已保存";
 
 /* No comment provided by engineer. */
-"saved from" = "保存自";
+"Saved from" = "保存自";
 
 /* No comment provided by engineer. */
-"Saved from" = "保存自";
+"saved from %@" = "保存自 %@";
 
 /* message info title */
 "Saved message" = "已保存的消息";
@@ -6262,6 +6268,9 @@ alert subtitle */
 "This setting applies to messages in your current chat profile **%@**." = "此设置适用于您当前聊天资料 **%@** 中的消息。";
 
 /* No comment provided by engineer. */
+"This setting is for your current profile **%@**." = "此设置用于当前个人资料 **%@**。";
+
+/* No comment provided by engineer. */
 "Time to disappear is set only for new contacts." = "只为新联系人设置了消失时间。";
 
 /* No comment provided by engineer. */
@@ -6868,15 +6877,6 @@ alert title */
 /* No comment provided by engineer. */
 "You already have a chat profile with the same display name. Please choose another name." = "您已经有一个显示名相同的聊天资料。请选择另一个名字。";
 
-/* new chat alert */
-"You are a member" = "你是成员";
-
-/* new chat alert */
-"You are a moderator" = "你是协管";
-
-/* new chat alert */
-"You are a subscriber" = "你是订阅者";
-
 /* No comment provided by engineer. */
 "You are already connected to %@." = "您已经连接到 %@。";
 
@@ -6900,15 +6900,6 @@ alert title */
 
 /* new chat sheet title */
 "You are already joining the group!\nRepeat join request?" = "您已经加入了这个群组！\n重复加入请求？";
-
-/* new chat alert */
-"You are an admin" = "你是管理员";
-
-/* new chat alert */
-"You are an observer" = "你是观察者";
-
-/* new chat alert */
-"You are an owner" = "你是群主";
 
 /* subscription status explanation */
 "You are connected to the server used to receive messages from this connection." = "你已连接到用于接收该连接消息的服务器。";
@@ -6984,6 +6975,9 @@ alert title */
 
 /* No comment provided by engineer. */
 "You can still view conversation with %@ in the list of chats." = "您仍然可以在聊天列表中查看与 %@的对话。";
+
+/* badge alert */
+"You can support SimpleX starting from v7 of the app." = "从 v7 版本起您可以支持 SimpleX。";
 
 /* No comment provided by engineer. */
 "You can turn on SimpleX Lock via Settings." = "您可以通过设置开启 SimpleX 锁定。";
@@ -7149,6 +7143,9 @@ alert title */
 
 /* No comment provided by engineer. */
 "Your contact removed this link, or it was a one-time link that was already used.\nTo connect, ask your contact to create a new link." = "除非您的联系人已删除此连接或此链接已被使用，否则它可能是一个错误——请报告。\n如果要连接，请让您的联系人创建另一个连接链接，并检查您的网络连接是否稳定。";
+
+/* No comment provided by engineer. */
+"Your contact sent a file that is larger than currently supported maximum size (%@)." = "您的联系人发送的文件大于当前支持的最大大小 (%@)。";
 
 /* No comment provided by engineer. */
 "Your contacts can allow full message deletion." = "您的联系人可以允许完全删除消息。";

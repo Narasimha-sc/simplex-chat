@@ -1,5 +1,7 @@
 package chat.simplex.common.views.helpers
 
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.res.Resources
 import android.graphics.*
 import android.graphics.Typeface
@@ -12,6 +14,7 @@ import android.text.SpannedString
 import android.text.style.*
 import android.util.Base64
 import android.view.WindowManager
+import androidx.compose.runtime.*
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.*
@@ -24,7 +27,7 @@ import androidx.core.text.HtmlCompat
 import chat.simplex.common.helpers.*
 import chat.simplex.common.model.*
 import chat.simplex.common.platform.*
-import chat.simplex.res.*
+import chat.simplex.res.MR
 import dev.icerock.moko.resources.StringResource
 import java.io.*
 import java.net.URI
@@ -51,6 +54,19 @@ fun keepScreenOn(on: Boolean) {
       window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
     } else {
       window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+    }
+  }
+}
+
+@Composable
+actual fun SetupClipboardListener() {
+  DisposableEffect(Unit) {
+    val service = androidAppContext.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+    val listener = { chatModel.clipboardHasText.value = service.hasPrimaryClip() }
+    chatModel.clipboardHasText.value = service.hasPrimaryClip()
+    service.addPrimaryClipChangedListener(listener)
+    onDispose {
+      service.removePrimaryClipChangedListener(listener)
     }
   }
 }
@@ -194,12 +210,11 @@ actual suspend fun getLoadedImage(file: CIFile?): Pair<ImageBitmap, ByteArray>? 
 }
 
 // https://developer.android.com/topic/performance/graphics/load-bitmap#load-bitmap
-internal fun decodeSampledBitmapFromByteArray(data: ByteArray, reqWidth: Int, reqHeight: Int, maxDimension: Int = Int.MAX_VALUE): Bitmap {
+private fun decodeSampledBitmapFromByteArray(data: ByteArray, reqWidth: Int, reqHeight: Int): Bitmap {
   // First decode with inJustDecodeBounds=true to check dimensions
   return BitmapFactory.Options().run {
     inJustDecodeBounds = true
     BitmapFactory.decodeByteArray(data, 0, data.size, this)
-    if (outWidth > maxDimension || outHeight > maxDimension) throw IOException("Image dimensions exceed limit")
     // Calculate inSampleSize
     inSampleSize = calculateInSampleSize(this, reqWidth, reqHeight)
     // Decode bitmap with inSampleSize set
@@ -234,8 +249,7 @@ actual fun getFileName(uri: URI): String? {
       val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
       cursor.moveToFirst()
       // Can make an exception
-      // the provider controls this value, and callers use it as a bare file name
-      cursor.getString(nameIndex)?.let { File(it).name }
+      cursor.getString(nameIndex)
     }
   } catch (e: Exception) {
     null

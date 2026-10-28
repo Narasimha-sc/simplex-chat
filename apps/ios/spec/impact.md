@@ -52,7 +52,6 @@
 | Shared/SimpleXApp.swift | PC1 through PC31 | High | App entry point — initialization affects everything |
 | Shared/AppDelegate.swift | PC18 | Medium | Push notification registration |
 | Shared/Views/ChatList/ChatListView.swift | PC1, PC28 | High | Main screen rendering and filtering |
-| Shared/Views/ChatList/GetStakeBanner.swift | PC1 | Low | Crowdfunding banner and shared banner card chrome |
 | Shared/Views/Chat/ChatView.swift | PC2, PC3, PC4, PC5, PC6, PC7, PC8, PC9, PC11, PC31 | High | Core conversation UI — most messaging features, channel message rendering |
 | Shared/Views/Chat/ComposeMessage/ComposeView.swift | PC4, PC6, PC9, PC11, PC31 | High | Message composition — send path for all messages, channel sendAsGroup |
 | Shared/Views/Chat/ChatItem/ | PC2, PC3, PC5, PC7, PC8, PC9, PC10, PC11 | Medium | Individual message rendering components |
@@ -65,6 +64,7 @@
 | Shared/Views/Chat/Group/GroupMemberInfoView.swift | PC3, PC14, PC16, PC30, PC31 | Medium | Member details and role management; rejected-by-operator status row for relay members |
 | Shared/Views/NewChat/NewChatView.swift | PC12, PC31 | High | New connection creation — onramp for all contacts and channels |
 | Shared/Views/NewChat/QRCode.swift | PC12 | Low | QR code display/scanning utility |
+| Shared/Views/NewChat/WrongQRCode.swift | PC12, PC13, PC25, PC26, PC27 | Low | Wrong-QR-code alert message shared by all scanners |
 | Shared/Views/Call/ActiveCallView.swift | PC17 | Medium | Call UI rendering |
 | Shared/Views/Call/CallController.swift | PC17 | High | CallKit integration — call lifecycle |
 | Shared/Views/Call/WebRTCClient.swift | PC17 | High | WebRTC session management |

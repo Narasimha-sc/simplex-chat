@@ -144,8 +144,9 @@ All JNI declarations reside in [`Core.kt`](../common/src/commonMain/kotlin/chat/
 | 16 | [`chatReadFile()`](../common/src/commonMain/kotlin/chat/simplex/common/platform/Core.kt#L38) | `external fun chatReadFile(path: String, key: String, nonce: String): Array<Any>` | 38 | Read and decrypt file |
 | 17 | [`chatEncryptFile()`](../common/src/commonMain/kotlin/chat/simplex/common/platform/Core.kt#L39) | `external fun chatEncryptFile(ctrl: ChatCtrl, fromPath: String, toPath: String): String` | 39 | Encrypt file on disk |
 | 18 | [`chatDecryptFile()`](../common/src/commonMain/kotlin/chat/simplex/common/platform/Core.kt#L40) | `external fun chatDecryptFile(fromPath: String, key: String, nonce: String, toPath: String): String` | 40 | Decrypt file on disk |
+| 19 | [`chatCheckLink()`](../common/src/commonMain/kotlin/chat/simplex/common/platform/Core.kt#L41) | `external fun chatCheckLink(link: String): String` | 41 | Classify a scanned QR code / link into its type |
 
-**Total: 18 external native functions** (the `ChatCtrl` type alias at [line 23](../common/src/commonMain/kotlin/chat/simplex/common/platform/Core.kt#L23) is `Long`, representing the Haskell-side controller pointer).
+**Total: 19 external native functions** (the `ChatCtrl` type alias at [line 23](../common/src/commonMain/kotlin/chat/simplex/common/platform/Core.kt#L23) is `Long`, representing the Haskell-side controller pointer).
 
 <a id="initChatControllerOnStart"></a>
 <a id="chatInitTemporaryDatabase"></a>
@@ -155,8 +156,8 @@ All JNI declarations reside in [`Core.kt`](../common/src/commonMain/kotlin/chat/
 
 | Function | Line | Purpose |
 |---|---|---|
-| [`initChatControllerOnStart()`](../common/src/commonMain/kotlin/chat/simplex/common/platform/Core.kt#L51) | 51 | Entry point called during app startup; launches `initChatController` in a long-running coroutine |
-| [`initChatController()`](../common/src/commonMain/kotlin/chat/simplex/common/platform/Core.kt#L62) | 62 | Main initialization: DB migration via `chatMigrateInit`, error recovery (incomplete DB removal), sets file paths, loads active user, starts chat |
+| [`initChatControllerOnStart()`](../common/src/commonMain/kotlin/chat/simplex/common/platform/Core.kt#L52) | 52 | Entry point called during app startup; launches `initChatController` in a long-running coroutine |
+| [`initChatController()`](../common/src/commonMain/kotlin/chat/simplex/common/platform/Core.kt#L63) | 63 | Main initialization: DB migration via `chatMigrateInit`, error recovery (incomplete DB removal), sets file paths, loads active user, starts chat |
 | [`chatInitTemporaryDatabase()`](../common/src/commonMain/kotlin/chat/simplex/common/platform/Core.kt#L190) | 190 | Creates a temporary database for migration scenarios |
 | [`chatInitControllerRemovingDatabases()`](../common/src/commonMain/kotlin/chat/simplex/common/platform/Core.kt#L202) | 202 | Removes existing DBs and creates fresh controller (used during re-initialization) |
 | [`showStartChatAfterRestartAlert()`](../common/src/commonMain/kotlin/chat/simplex/common/platform/Core.kt#L222) | 222 | Shows confirmation dialog when chat was stopped and DB passphrase is stored |
@@ -222,28 +223,20 @@ Lifecycle callbacks in `SimplexApp` (implements `LifecycleEventObserver`):
 
 ### Desktop
 
-Entry: [`main()`](../desktop/src/jvmMain/kotlin/chat/simplex/desktop/Main.kt#L26)
+Entry: [`main()`](../desktop/src/jvmMain/kotlin/chat/simplex/desktop/Main.kt#L21)
 
 ```
-main(args)
-  +-- linkFromArgs(args)                 // A simplexchat: or simplex: link passed by the OS
-  +-- acquireSingleInstance(link)        // Or forward the link to the running instance and exit
-  +-- appOpenUrl = link                  // Stored before the watcher can forward a newer link
-  +-- startShowFileWatcher()             // Only while holding the single-instance lock
+main()
   +-- initHaskell()                      // Load native lib from resources dir, call initHS()
   |     +-- System.load(libapp-lib.so/dll/dylib)
   |     +-- initHS()
   +-- runMigrations()
   +-- setupUpdateChecker()
   +-- initApp()                          // Set ntfManager, applyAppLocale, initChatControllerOnStart
-  +-- registerLinkSchemes()              // Background thread, per-OS registration and detection
-  +-- installOpenUriHandler()            // macOS only: links arrive as Apple Events
   +-- showApp()                          // Compose window with AppScreen()
 ```
 
 [`showApp()`](../common/src/desktopMain/kotlin/chat/simplex/common/DesktopApp.kt#L33) creates a Compose `Window` with error recovery -- if a crash occurs, it closes the offending modal/view and re-opens the window.
-
-[`showWindow()`](../common/src/desktopMain/kotlin/chat/simplex/common/DesktopApp.kt#L258) un-minimizes and raises the window when a second launch or a link reaches the running app. On Linux it also sends `_NET_ACTIVE_WINDOW` through [`requestX11Activation()`](../common/src/desktopMain/kotlin/chat/simplex/common/WindowActivation.kt#L17), because wlroots compositors such as Sway ignore the raise that AWT's `toFront()` sends under XWayland. On Windows the second process, which the browser left holding the foreground right, calls `AllowSetForegroundWindow` before it signals so that the running instance may raise its window. During a crash restart `showWindow()` skips the disposed window, so it does not come back; the new window opens visible.
 
 [`initApp()`](../common/src/desktopMain/kotlin/chat/simplex/common/platform/AppCommon.desktop.kt#L21) sets the `ntfManager` implementation (desktop notifications via `NtfManager` in `common/model/`) and calls `initChatControllerOnStart()`.
 
@@ -349,8 +342,8 @@ Examples from platform files:
 
 [`PlatformInterface`](../common/src/commonMain/kotlin/chat/simplex/common/platform/Platform.kt#L15) is an interface with default no-op implementations. It is assigned at runtime by each platform entry point:
 
-- **Android**: assigned in [`SimplexApp.initMultiplatform()`](../android/src/main/java/chat/simplex/app/SimplexApp.kt#L193)
-- **Desktop**: assigned in [`Main.kt initHaskell()`](../desktop/src/jvmMain/kotlin/chat/simplex/desktop/Main.kt#L59)
+- **Android**: assigned in [`SimplexApp.initMultiplatform()`](../android/src/main/java/chat/simplex/app/SimplexApp.kt#L187) (line 187)
+- **Desktop**: assigned in [`Main.kt initHaskell()`](../desktop/src/jvmMain/kotlin/chat/simplex/desktop/Main.kt#L50) (line 50)
 
 The global variable is declared at [`Platform.kt line 50`](../common/src/commonMain/kotlin/chat/simplex/common/platform/Platform.kt#L50):
 ```kotlin
@@ -378,8 +371,6 @@ var platform: PlatformInterface = object : PlatformInterface {}
 | `androidCreateActiveCallState()` | empty `Closeable` | Create `ActiveCallState` |
 | `androidIsXiaomiDevice()` | `false` | Check device brand |
 | `androidApiLevel` | `null` | `Build.VERSION.SDK_INT` |
-| `androidIsPlayStoreBuild` | `false` | `BuildConfig.PLAY_STORE` |
-| `androidLoadPlayStoreCountry()` | no-op | Request the Play account country (google flavor only) |
 | `androidLockPortraitOrientation()` | no-op | Lock to `SCREEN_ORIENTATION_PORTRAIT` |
 | `androidAskToAllowBackgroundCalls()` | `true` | Show battery restriction dialog |
 | `desktopShowAppUpdateNotice()` | no-op | Show update notice (Desktop only) |
@@ -425,8 +416,6 @@ var platform: PlatformInterface = object : PlatformInterface {}
 | SimplexService.kt | [`android/src/main/java/chat/simplex/app/SimplexService.kt`](../android/src/main/java/chat/simplex/app/SimplexService.kt) | Android foreground service |
 | Main.kt | [`desktop/src/jvmMain/kotlin/chat/simplex/desktop/Main.kt`](../desktop/src/jvmMain/kotlin/chat/simplex/desktop/Main.kt) | Desktop `main()` |
 | DesktopApp.kt | [`common/src/desktopMain/kotlin/chat/simplex/common/DesktopApp.kt`](../common/src/desktopMain/kotlin/chat/simplex/common/DesktopApp.kt) | `showApp()`, `SimplexWindowState` |
-| SingleInstance.kt | [`common/src/desktopMain/kotlin/chat/simplex/common/SingleInstance.kt`](../common/src/desktopMain/kotlin/chat/simplex/common/SingleInstance.kt) | `acquireSingleInstance()`, `startShowFileWatcher()`, signal file hand-over |
-| WindowActivation.kt | [`common/src/desktopMain/kotlin/chat/simplex/common/WindowActivation.kt`](../common/src/desktopMain/kotlin/chat/simplex/common/WindowActivation.kt) | `requestX11Activation()`, `sendActivation()`, `activationEvent()` |
 
 ### Theme
 

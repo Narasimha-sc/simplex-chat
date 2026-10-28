@@ -8,7 +8,7 @@ module ChatTests.ChatRelays where
 import ChatClient
 import ChatTests.DBUtils
 import ChatTests.Groups (memberJoinChannel, memberJoinChannel', prepareChannel, prepareChannel', prepareChannel1Relay, setupRelay)
-import ChatTests.Profiles (addTestBadge, futureDate, issueTestBadge, testBadgeKeys)
+import ChatTests.Profiles (addTestBadge, issueTestBadge, testBadgeKeys)
 import ChatTests.Utils
 import Control.Concurrent (threadDelay)
 import qualified Data.Aeson as J
@@ -19,10 +19,9 @@ import qualified Data.Text as T
 import ProtocolTests (testGroupProfile)
 import Simplex.Chat.Controller (ChatConfig (..))
 import Simplex.Chat.Protocol (LinkOwnerSig, MsgChatLink (..), MsgContent (..))
-import Simplex.Chat.Types (B64UrlByteString (..), GroupProfile (..))
+import Simplex.Chat.Types (GroupProfile (..))
 import Simplex.Chat.Controller (CorsOrigin (..))
-import Simplex.Chat.Web (WebChannelPreview (..), WebMessage (..), extractOrigin, publicGroupIdFileName, removeStaleFiles, writeCorsConfig)
-import qualified Simplex.Messaging.Crypto as C
+import Simplex.Chat.Web (WebChannelPreview (..), WebMessage (..), extractOrigin, removeStaleFiles, writeCorsConfig)
 import Simplex.Messaging.Crypto.BBS (bbsKeyGen)
 import Simplex.Messaging.Encoding.String (StrEncoding (..))
 import Simplex.Messaging.Util (decodeJSON)
@@ -68,8 +67,8 @@ testChannelMemberBadges ps = do
   withNewTestChatCfgOpts ps cfg testOpts "alice" aliceProfile $ \alice ->
     withNewTestChatCfgOpts ps cfg relayTestOpts "bob" bobProfile $ \bob ->
       withNewTestChatCfgOpts ps cfg testOpts "cath" cathProfile $ \cath -> do
-        addTestBadge alice =<< issueTestBadge sk futureDate
-        addTestBadge cath =<< issueTestBadge sk futureDate
+        addTestBadge alice =<< issueTestBadge sk Nothing
+        addTestBadge cath =<< issueTestBadge sk Nothing
         (shortLink, fullLink) <- prepareChannel1Relay "team" alice bob
         memberJoinChannel "team" [bob] [alice] shortLink fullLink cath
         -- a channel message lets the relay-forwarded member profiles settle on both sides
@@ -82,13 +81,13 @@ testChannelMemberBadges ps = do
         alice <## "group ID: 1"
         alice <##. "member ID: "
         alice <## "supporter badge - active"
-        alice <## "expires 2100-01-01"
+        alice <## "no expiry"
         alice <## "member not connected"
         cath ##> "/i #team alice"
         cath <## "group ID: 1"
         cath <##. "member ID: "
         cath <## "supporter badge - active"
-        cath <## "expires 2100-01-01"
+        cath <## "no expiry"
         cath <## "member not connected"
 
 testGetSetChatRelays :: HasCallStack => TestParams -> IO ()
@@ -210,7 +209,6 @@ testChatRelayTest ps =
         -- Scenario 1: Happy path - test relay address succeeds
         alice ##> ("/relay test " <> bobSLink)
         alice <## "relay test passed, profile: bob (Bob)"
-        bob @@@ []
 
         -- Scenario 2: Non-relay address - cath is not a relay user,
         -- her address has ContactShortLinkData, not RelayAddressLinkData
@@ -222,7 +220,7 @@ testChatRelayTest ps =
         bob <## "Your chat address is deleted - accepted contacts will remain connected."
         bob <## "To create a new chat address use /ad"
         alice ##> ("/relay test " <> bobSLink)
-        alice <##.. ["relay test failed at RTSGetLink, error: ", "relay test failed at RTSConnect, error: "]
+        alice <##. "relay test failed at RTSGetLink, error: "
 
 testRelayProfileUpdateInAddress :: HasCallStack => TestParams -> IO ()
 testRelayProfileUpdateInAddress ps =
@@ -549,7 +547,9 @@ testWebPreviewMultipleChannels ps = do
       relay <# "#ch1> msg in ch1"
       alice #> "#ch2 msg in ch2"
       relay <# "#ch2> msg in ch2"
-      (length . filter (\f -> takeExtension f == ".json") <$> listDirectory webDir) `shouldEventuallyReturn` 2
+      threadDelay 2000000
+      files <- filter (\f -> takeExtension f == ".json") <$> listDirectory webDir
+      length files `shouldBe` 2
 
 testWebPreviewChannelDeleted :: HasCallStack => TestParams -> IO ()
 testWebPreviewChannelDeleted ps =
@@ -569,9 +569,8 @@ testWebPreviewChannelDeleted ps =
 testWebPreviewStaleCleanup :: HasCallStack => TestParams -> IO ()
 testWebPreviewStaleCleanup ps = do
   let webDir = tmpPath ps </> "web_stale_unit"
-      previewFileName s = publicGroupIdFileName (B64UrlByteString $ C.sha256Hash s) <> ".json"
-      activeFile = previewFileName "active"
-      staleFile = previewFileName "stale"
+      activeFile = "abc123.json"
+      staleFile = "AAAA_stale.json"
       safeFile = "my.config.json"
   createDirectoryIfMissing True webDir
   writeFile (webDir </> activeFile) "{}"

@@ -1068,26 +1068,24 @@ describe("Team Member Lifecycle", () => {
     expect(chat.roleChanges.some(r => r.groupId === CUSTOMER_GROUP_ID && r.memberIds.includes(5000 + TEAM_MEMBER_1_ID) && r.role === GroupMemberRole.Owner)).toBe(true)
   })
 
-  test("/team invites team member → added directly as Owner, single invitation", async () => {
+  test("/team invites team member → apiSetMembersRole(Owner) called at invite time", async () => {
     await bot.onNewChatItems(customerMessage("/team"))
-    expect(chat.added.some(a =>
-      a.groupId === CUSTOMER_GROUP_ID
-      && a.contactId === TEAM_MEMBER_1_ID
-      && a.role === GroupMemberRole.Owner
+    expectMemberAdded(CUSTOMER_GROUP_ID, TEAM_MEMBER_1_ID)
+    expect(chat.roleChanges.some(r =>
+      r.groupId === CUSTOMER_GROUP_ID
+      && r.memberIds.includes(5000 + TEAM_MEMBER_1_ID)
+      && r.role === GroupMemberRole.Owner
     )).toBe(true)
-    // No role change — that would send a second invitation.
-    expect(chat.roleChanges.length).toBe(0)
   })
 
-  test("/join invites team member → added directly as Owner, single invitation", async () => {
+  test("/join invites team member → apiSetMembersRole(Owner) called at invite time", async () => {
     await bot.onNewChatItems(teamGroupMessage(`/join ${CUSTOMER_GROUP_ID}`))
-    expect(chat.added.some(a =>
-      a.groupId === CUSTOMER_GROUP_ID
-      && a.contactId === TEAM_MEMBER_1_ID
-      && a.role === GroupMemberRole.Owner
+    expectMemberAdded(CUSTOMER_GROUP_ID, TEAM_MEMBER_1_ID)
+    expect(chat.roleChanges.some(r =>
+      r.groupId === CUSTOMER_GROUP_ID
+      && r.memberIds.includes(5000 + TEAM_MEMBER_1_ID)
+      && r.role === GroupMemberRole.Owner
     )).toBe(true)
-    // No role change — that would send a second invitation.
-    expect(chat.roleChanges.length).toBe(0)
   })
 
   test("/team when team member already in group (any non-terminal status) → apiSetMembersRole NOT re-called", async () => {
@@ -2403,48 +2401,54 @@ describe("parseConfig Validation", () => {
       .toThrow(/--complete-hours must be a non-negative integer, got "abc"/)
   })
 
-  test("--db postgres without --pg-conn → throws", () => {
-    expect(() => parseConfig([...baseArgs, "--db", "postgres"]))
-      .toThrow(/--pg-conn is required with --db postgres/)
+  test("postgres backend without --pg-conn → throws", () => {
+    const prev = process.env.SIMPLEX_BACKEND
+    process.env.SIMPLEX_BACKEND = "postgres"
+    try {
+      expect(() => parseConfig(baseArgs))
+        .toThrow(/--pg-conn is required when backend is postgres/)
+    } finally {
+      if (prev === undefined) delete process.env.SIMPLEX_BACKEND
+      else process.env.SIMPLEX_BACKEND = prev
+    }
   })
 
-  test("--db postgres with --pg-conn → db is postgres DbConfig", () => {
-    const cfg = parseConfig([...baseArgs, "--db", "postgres", "--pg-conn", "postgres://user:pass@localhost/db"])
-    expect(cfg.db).toEqual({type: "postgres", connectionString: "postgres://user:pass@localhost/db"})
+  test("postgres backend with --pg-conn → db is postgres DbConfig", () => {
+    const prev = process.env.SIMPLEX_BACKEND
+    process.env.SIMPLEX_BACKEND = "postgres"
+    try {
+      const cfg = parseConfig([...baseArgs, "--pg-conn", "postgres://user:pass@localhost/db"])
+      expect(cfg.db).toEqual({type: "postgres", connectionString: "postgres://user:pass@localhost/db"})
+    } finally {
+      if (prev === undefined) delete process.env.SIMPLEX_BACKEND
+      else process.env.SIMPLEX_BACKEND = prev
+    }
   })
 
-  test("--db postgres with --pg-schema → DbConfig carries schemaPrefix", () => {
-    const cfg = parseConfig([...baseArgs, "--db", "postgres", "--pg-conn", "postgres://localhost/db", "--pg-schema", "bot"])
-    expect(cfg.db).toEqual({type: "postgres", connectionString: "postgres://localhost/db", schemaPrefix: "bot"})
+  test("postgres backend with --pg-schema → DbConfig carries schemaPrefix", () => {
+    const prev = process.env.SIMPLEX_BACKEND
+    process.env.SIMPLEX_BACKEND = "postgres"
+    try {
+      const cfg = parseConfig([...baseArgs, "--pg-conn", "postgres://localhost/db", "--pg-schema", "bot"])
+      expect(cfg.db).toEqual({type: "postgres", connectionString: "postgres://localhost/db", schemaPrefix: "bot"})
+    } finally {
+      if (prev === undefined) delete process.env.SIMPLEX_BACKEND
+      else process.env.SIMPLEX_BACKEND = prev
+    }
   })
 
-  test("default --db → sqlite DbConfig with default filePrefix", () => {
-    const cfg = parseConfig(baseArgs)
-    expect(cfg.db).toEqual({type: "sqlite", filePrefix: "./data/simplex"})
-  })
-
-  test("--pg-conn with sqlite → throws", () => {
-    expect(() => parseConfig([...baseArgs, "--pg-conn", "postgres://localhost/db"]))
-      .toThrow(/--pg-conn and --pg-schema require --db postgres/)
-  })
-
-  test("--pg-schema with sqlite → throws", () => {
-    expect(() => parseConfig([...baseArgs, "--pg-schema", "bot"]))
-      .toThrow(/--pg-conn and --pg-schema require --db postgres/)
-  })
-
-  test("--sqlite-key with postgres → throws", () => {
-    expect(() => parseConfig([...baseArgs, "--db", "postgres", "--pg-conn", "c", "--sqlite-key", "k"]))
-      .toThrow(/--sqlite-file-prefix and --sqlite-key require --db sqlite/)
-  })
-
-  test("--sqlite-file-prefix with postgres → throws", () => {
-    expect(() => parseConfig([...baseArgs, "--db", "postgres", "--pg-conn", "c", "--sqlite-file-prefix", "./x"]))
-      .toThrow(/--sqlite-file-prefix and --sqlite-key require --db sqlite/)
-  })
-
-  test("invalid --db → throws", () => {
-    expect(() => parseConfig([...baseArgs, "--db", "mysql"])).toThrow(/Allowed choices are sqlite, postgres/)
+  test("sqlite backend (default) → db is sqlite DbConfig with default filePrefix", () => {
+    const prevBackend = process.env.SIMPLEX_BACKEND
+    const prevNpm = process.env.npm_config_simplex_backend
+    delete process.env.SIMPLEX_BACKEND
+    delete process.env.npm_config_simplex_backend
+    try {
+      const cfg = parseConfig(baseArgs)
+      expect(cfg.db).toEqual({type: "sqlite", filePrefix: "./data/simplex"})
+    } finally {
+      if (prevBackend !== undefined) process.env.SIMPLEX_BACKEND = prevBackend
+      if (prevNpm !== undefined) process.env.npm_config_simplex_backend = prevNpm
+    }
   })
 
   test("sqlite backend with --sqlite-key → DbConfig carries encryptionKey", () => {
@@ -2460,6 +2464,18 @@ describe("parseConfig Validation", () => {
   test("missing --team-group → throws", () => {
     expect(() => parseConfig([]))
       .toThrow(/required option '--team-group/)
+  })
+
+  test("invalid SIMPLEX_BACKEND → throws", () => {
+    const prev = process.env.SIMPLEX_BACKEND
+    process.env.SIMPLEX_BACKEND = "mysql"
+    try {
+      expect(() => parseConfig(baseArgs))
+        .toThrow(/Invalid SIMPLEX_BACKEND: "mysql"/)
+    } finally {
+      if (prev === undefined) delete process.env.SIMPLEX_BACKEND
+      else process.env.SIMPLEX_BACKEND = prev
+    }
   })
 
   test("--complete-hours negative → throws", () => {

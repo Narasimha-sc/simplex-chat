@@ -26,7 +26,7 @@ import chat.simplex.common.model.ChatController.appPrefs
 import chat.simplex.common.platform.*
 import chat.simplex.common.ui.theme.DEFAULT_MAX_IMAGE_WIDTH
 import chat.simplex.common.views.chat.chatViewScrollState
-import chat.simplex.res.*
+import chat.simplex.res.MR
 import dev.icerock.moko.resources.StringResource
 import kotlinx.coroutines.*
 import kotlin.math.roundToInt
@@ -38,6 +38,7 @@ fun CIImageView(
   imageProvider: () -> ImageGalleryProvider,
   showMenu: MutableState<Boolean>,
   smallView: Boolean,
+  senderProfile: LocalProfile?,
   receiveFile: (Long) -> Unit
 ) {
   val blurred = remember { mutableStateOf(appPrefs.privacyMediaBlurRadius.get() > 0) }
@@ -82,11 +83,7 @@ fun CIImageView(
           is CIFileStatus.SndCancelled -> fileIcon(painterResource(MR.images.ic_close), MR.strings.icon_descr_file)
           is CIFileStatus.SndError -> fileIcon(painterResource(MR.images.ic_close), MR.strings.icon_descr_file)
           is CIFileStatus.SndWarning -> fileIcon(painterResource(MR.images.ic_warning_filled), MR.strings.icon_descr_file)
-          is CIFileStatus.RcvInvitation ->
-            if (file.expired && fileSizeValid(file))
-              fileIcon(painterResource(MR.images.ic_close), MR.strings.icon_descr_file)
-            else
-              fileIcon(painterResource(MR.images.ic_arrow_downward), MR.strings.icon_descr_asked_to_receive)
+          is CIFileStatus.RcvInvitation -> fileIcon(painterResource(MR.images.ic_arrow_downward), MR.strings.icon_descr_asked_to_receive)
           is CIFileStatus.RcvAccepted -> fileIcon(painterResource(MR.images.ic_more_horiz), MR.strings.icon_descr_waiting_for_image)
           is CIFileStatus.RcvTransfer -> progressIndicator()
           is CIFileStatus.RcvComplete -> {}
@@ -120,7 +117,7 @@ fun CIImageView(
   }
 
   @Composable
-  fun ImageView(painter: Painter, image: String, onClick: () -> Unit) {
+  fun ImageView(painter: Painter, image: String, fileSource: CryptoFile?, onClick: () -> Unit) {
     // On my Android device Compose fails to display 6000x6000 px WebP image with exception:
     // IllegalStateException: Recording currently in progress - missing #endRecording() call?
     // but can display 5000px image. Using even lower value here just to feel safer.
@@ -152,7 +149,11 @@ fun CIImageView(
         .privacyBlur(!smallView, previewBitmap, blurred, scrollState = chatViewScrollState.collectAsState(), onLongClick = { showMenu.value = true }),
         contentAlignment = Alignment.Center
       ) {
-        imageView(previewBitmap, onClick = onClick)
+        imageView(previewBitmap, onClick = {
+          if (fileSource != null) {
+            openFile(fileSource)
+          }
+        })
         Icon(
           painterResource(MR.images.ic_open_in_new),
           contentDescription = stringResource(MR.strings.image_descr),
@@ -173,15 +174,6 @@ fun CIImageView(
     return null
   }
 
-  val view = LocalMultiplatformView()
-  if (file != null) {
-    OpenWhenReceivedEffect(file, smallView) {
-      hideKeyboard(view)
-      ModalManager.fullscreen.showCustomModal(animated = false) { close ->
-        ImageFullScreenView(imageProvider, close)
-      }
-    }
-  }
   Box(
     Modifier.layoutId(CHAT_IMAGE_LAYOUT_ID)
       .then(
@@ -196,11 +188,13 @@ fun CIImageView(
           }
         } else Modifier
       )
-      .desktopModifyBlurredState(blurred, showMenu),
+      .desktopModifyBlurredState(!smallView, blurred, showMenu),
     contentAlignment = Alignment.TopEnd
   ) {
     val res: MutableState<Triple<ImageBitmap, ByteArray, String>?> = remember { mutableStateOf(null) }
-    // Hidden media is not worth reading, decoding at full size and caching.
+    // The blur is drawn from the preview, which is already in memory, so the file is left unread until the image
+    // is revealed. Every image scrolled past would otherwise be read, decoded at its full size and held in the
+    // image cache, to be hidden again.
     val revealed = !blurHidesMedia(!smallView, blurred)
     if (revealed) {
       if (chatModel.connectedToRemote()) {
@@ -222,17 +216,19 @@ fun CIImageView(
     val loaded = if (revealed) res.value else null
     if (loaded != null && file != null) {
       val (imageBitmap, data, _) = loaded
-      SimpleAndAnimatedImageView(data, imageBitmap, file, imageProvider, smallView, blurred, @Composable { painter, onClick -> ImageView(painter, image, onClick) })
+      SimpleAndAnimatedImageView(data, imageBitmap, file, imageProvider, smallView, blurred, @Composable { painter, onClick -> ImageView(painter, image, file.fileSource, onClick) })
     } else {
       imageView(previewBitmap, onClick = {
         if (file != null) {
           when {
             file.fileStatus is CIFileStatus.RcvInvitation || file.fileStatus is CIFileStatus.RcvAborted ->
-              if (file.fileProhibited != null) {
-                showProhibitedFileAlert(file, file.fileProhibited)
-              } else {
-                chatModel.openWhenReceived(file, smallView)
+              if (fileSizeValid(file, senderProfile)) {
                 receiveFile(file.fileId)
+              } else {
+                AlertManager.shared.showAlertMsg(
+                  generalGetString(MR.strings.large_file),
+                  String.format(generalGetString(MR.strings.contact_sent_large_file), formatBytes(getMaxFileSize(file.fileProtocol, senderProfile)))
+                )
               }
             file.fileStatus is CIFileStatus.RcvAccepted ->
               when (file.fileProtocol) {
@@ -249,7 +245,7 @@ fun CIImageView(
                 FileProtocol.LOCAL -> {}
               }
             file.fileStatus is CIFileStatus.RcvError ->
-              showFileErrorAlert(file.fileStatus.rcvFileError, file)
+              showFileErrorAlert(file.fileStatus.rcvFileError)
             file.fileStatus is CIFileStatus.RcvWarning ->
               showFileErrorAlert(file.fileStatus.rcvFileError, temporary = true)
             file.fileStatus is CIFileStatus.SndError ->

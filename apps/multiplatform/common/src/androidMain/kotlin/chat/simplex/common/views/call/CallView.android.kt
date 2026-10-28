@@ -46,13 +46,14 @@ import chat.simplex.common.model.ChatController.appPrefs
 import chat.simplex.common.platform.*
 import chat.simplex.common.ui.theme.*
 import chat.simplex.common.views.helpers.*
-import chat.simplex.res.*
+import chat.simplex.res.MR
 import com.google.accompanist.permissions.*
 import dev.icerock.moko.resources.StringResource
 import dev.icerock.moko.resources.compose.painterResource
 import dev.icerock.moko.resources.compose.stringResource
 import kotlinx.coroutines.*
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.datetime.Clock
 import kotlinx.serialization.encodeToString
 import java.io.Closeable
@@ -131,7 +132,7 @@ actual fun ActiveCallView() {
   }
   Box(Modifier.fillMaxSize()) {
     WebRTCView(chatModel.callCommand) { apiMsg ->
-      Log.d(TAG, "received from WebRTCView: ${apiMsg.resp.javaClass.simpleName}")
+      Log.d(TAG, "received from WebRTCView: $apiMsg")
       val call = chatModel.activeCall.value
       if (call != null) {
         val callState = call.androidCallState as ActiveCallState
@@ -167,24 +168,13 @@ actual fun ActiveCallView() {
             CallSoundsPlayer.stop()
           }
           is WCallResponse.Ice -> withBGApi {
-            chatModel.controller.apiSendCallExtraInfo(callRh, call.contact, r.session, r.iceCandidates)
+            chatModel.controller.apiSendCallExtraInfo(callRh, call.contact, r.iceCandidates)
           }
           is WCallResponse.Connection ->
-            // the call is restored and NOT sent to the core
-            // Makes sure the core DOES NOT record the duration wrong if a reconnect happens
-            if (r.state.connectionState == "reconnecting") {
-              if (call.callState != CallState.Reconnecting) {
-                CallSoundsPlayer.startConnectingCallSound(scope)
-              }
-              updateActiveCall(call) { it.copy(callState = CallState.Reconnecting) }
-            } else try {
+            try {
               val callStatus = json.decodeFromString<WebRTCCallStatus>("\"${r.state.connectionState}\"")
               if (callStatus == WebRTCCallStatus.Connected) {
-                if (call.callState == CallState.Reconnecting) {
-                  CallSoundsPlayer.stop()
-                }
-                // connectedAt is only set ONCE, this way call duration is NOT reset when the call is restored from reconnecting
-                updateActiveCall(call) { it.copy(callState = CallState.Connected, connectedAt = it.connectedAt ?: Clock.System.now()) }
+                updateActiveCall(call) { it.copy(callState = CallState.Connected, connectedAt = Clock.System.now()) }
               }
               withBGApi { chatModel.controller.apiCallStatus(callRh, call.contact, callStatus) }
             } catch (e: Throwable) {
@@ -715,17 +705,18 @@ fun WebRTCView(callCommand: SnapshotStateList<WCallCommand>, onResponse: (WVAPIM
   val wv = webView.value
   if (wv != null) {
     LaunchedEffect(Unit) {
-      while (isActive) {
-        // waiting for the first command would miss a command equal to the previous one
-        snapshotFlow { callCommand.isNotEmpty() }.first { it }
-        while (callCommand.isNotEmpty()) {
-          val cmd = callCommand.removeFirstOrNull()
-          Log.d(TAG, "WebRTCView LaunchedEffect executing ${cmd?.javaClass?.simpleName}")
-          if (cmd != null) {
-            processCommand(wv, cmd)
+      snapshotFlow { callCommand.firstOrNull() }
+        .distinctUntilChanged()
+        .filterNotNull()
+        .collect {
+          while (callCommand.isNotEmpty()) {
+            val cmd = callCommand.removeFirstOrNull()
+            Log.d(TAG, "WebRTCView LaunchedEffect executing $cmd")
+            if (cmd != null) {
+              processCommand(wv, cmd)
+            }
           }
         }
-      }
     }
   }
   val assetLoader = WebViewAssetLoader.Builder()
@@ -794,7 +785,7 @@ class WebRTCInterface(private val onResponse: (WVAPIMessage) -> Unit) {
       // onResponse(message)
       onResponse(json.decodeFromString(message))
     } catch (e: Exception) {
-      Log.e(TAG, "failed parsing WebView message")
+      Log.e(TAG, "failed parsing WebView message: $message")
     }
   }
 }

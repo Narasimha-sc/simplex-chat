@@ -50,21 +50,8 @@ struct GroupPreferencesView: View {
                     featureSection(.history, $preferences.history.enable)
                     featureSection(.support, $preferences.support.enable, disabled: true)
                 } else {
-                    featureSection(.signMessages, $preferences.signMessages.enable)
-                        .onChange(of: preferences.signMessages.enable) { enable in
-                            if enable == .on && currentPreferences.signMessages.enable != .on {
-                                showAlert(
-                                    NSLocalizedString("Sign messages?", comment: "alert title"),
-                                    message: NSLocalizedString("Messages sent before will show \"signature missing\" to subscribers who join later.", comment: "alert message"),
-                                    actions: {[
-                                        UIAlertAction(title: NSLocalizedString("Enable", comment: "alert button"), style: .default) { _ in },
-                                        UIAlertAction(title: NSLocalizedString("Cancel", comment: "alert button"), style: .cancel) { _ in
-                                            preferences.signMessages.enable = .off
-                                        }
-                                    ]}
-                                )
-                            }
-                        }
+                    // hidden until message signing is user-facing (recipient-only stage)
+//                    featureSection(.signMessages, $preferences.signMessages.enable)
                     featureSection(.timedMessages, $preferences.timedMessages.enable)
                     featureSection(.fullDelete, $preferences.fullDelete.enable)
                     featureSection(.reactions, $preferences.reactions.enable)

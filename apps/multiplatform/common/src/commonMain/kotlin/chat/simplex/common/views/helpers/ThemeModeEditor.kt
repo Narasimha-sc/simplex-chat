@@ -13,15 +13,13 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import chat.simplex.common.model.ChatController.appPrefs
-import chat.simplex.common.model.ChatLayoutMode
 import chat.simplex.common.model.yaml
 import chat.simplex.common.platform.*
 import chat.simplex.common.ui.theme.*
-import chat.simplex.common.views.chat.item.LocalTerminalLayout
 import chat.simplex.common.views.usersettings.*
 import chat.simplex.common.views.usersettings.AppearanceScope.WallpaperPresetSelector
 import chat.simplex.common.views.usersettings.AppearanceScope.editColor
-import chat.simplex.res.*
+import chat.simplex.res.MR
 import dev.icerock.moko.resources.compose.painterResource
 import dev.icerock.moko.resources.compose.stringResource
 import kotlinx.serialization.encodeToString
@@ -97,13 +95,11 @@ fun ModalData.UserWallpaperEditor(
       }
     }
 
-    val terminal = LocalTerminalLayout.current
     val editColor = { name: ThemeColor ->
       editColor(
         name,
         wallpaperType,
         wallpaperImage,
-        terminal,
         onColorChange = { color ->
           preApplyGlobalIfNeeded(themeModeOverride.value.type)
           ThemeManager.applyThemeColor(name, color, themeModeOverride)
@@ -239,7 +235,6 @@ fun ModalData.ChatWallpaperEditor(
   theme: ThemeModeOverride,
   applyToMode: DefaultThemeMode?,
   globalThemeUsed: MutableState<Boolean>,
-  layoutSection: @Composable () -> Unit,
   save: suspend (applyToMode: DefaultThemeMode?, ThemeModeOverride?) -> Unit
 ) {
   ColumnWithScrollBar {
@@ -253,10 +248,6 @@ fun ModalData.ChatWallpaperEditor(
     }
 
     AppBarTitle(stringResource(MR.strings.settings_section_title_chat_theme))
-
-    layoutSection()
-
-    SectionDividerSpaced()
 
     val onTypeCopyFromSameTheme: (WallpaperType?) -> Boolean = { type ->
       if (type is WallpaperType.Image && chatModel.remoteHostId() != null) {
@@ -286,7 +277,6 @@ fun ModalData.ChatWallpaperEditor(
       withBGApi { save(applyToMode.value, themeModeOverride.value) }
     }
 
-    val terminal = LocalTerminalLayout.current
     val editColor: (ThemeColor) -> Unit = { name: ThemeColor ->
       ModalManager.end.showModal {
         val currentTheme by remember(themeModeOverride.value, CurrentColors.collectAsState().value) {
@@ -310,25 +300,23 @@ fun ModalData.ChatWallpaperEditor(
           ThemeColor.RECEIVED_MESSAGE -> currentTheme.appColors.receivedMessage
           ThemeColor.RECEIVED_QUOTE -> currentTheme.appColors.receivedQuote
         }
-        CompositionLocalProvider(LocalTerminalLayout provides terminal) {
-          AppearanceScope.ColorEditor(
-            name,
-            initialColor,
-            CurrentColors.collectAsState().value.base,
-            themeModeOverride.value.type,
-            themeModeOverride.value.type?.image,
-            currentTheme.wallpaper.background,
-            currentTheme.wallpaper.tint,
-            currentColors = {
-              ThemeManager.currentColors(null, themeModeOverride.value, chatModel.currentUser.value?.uiThemes, appPreferences.themeOverrides.get())
-            },
-            onColorChange = { color ->
-              preApplyGlobalIfNeeded(themeModeOverride.value.type)
-              ThemeManager.applyThemeColor(name, color, themeModeOverride)
-              withBGApi { save(applyToMode.value, themeModeOverride.value) }
-            }
-          )
-        }
+        AppearanceScope.ColorEditor(
+          name,
+          initialColor,
+          CurrentColors.collectAsState().value.base,
+          themeModeOverride.value.type,
+          themeModeOverride.value.type?.image,
+          currentTheme.wallpaper.background,
+          currentTheme.wallpaper.tint,
+          currentColors = {
+            ThemeManager.currentColors(null, themeModeOverride.value, chatModel.currentUser.value?.uiThemes, appPreferences.themeOverrides.get())
+          },
+          onColorChange = { color ->
+            preApplyGlobalIfNeeded(themeModeOverride.value.type)
+            ThemeManager.applyThemeColor(name, color, themeModeOverride)
+            withBGApi { save(applyToMode.value, themeModeOverride.value) }
+          }
+        )
       }
     }
 
@@ -535,14 +523,6 @@ private fun SetDefaultThemeButton(onClick: () -> Unit) {
     Text(stringResource(MR.strings.chat_theme_set_default_theme), color = MaterialTheme.colors.primary)
   }
 }
-
-fun chatLayoutName(layout: ChatLayoutMode): String = when (layout) {
-  is ChatLayoutMode.Classic -> generalGetString(MR.strings.chat_layout_classic)
-  is ChatLayoutMode.Terminal -> generalGetString(MR.strings.chat_layout_terminal)
-  is ChatLayoutMode.Unknown -> layout.type
-}
-
-fun otherChatLayout(layout: ChatLayoutMode): ChatLayoutMode = if (layout == ChatLayoutMode.Terminal) ChatLayoutMode.Classic else ChatLayoutMode.Terminal
 
 @Composable
 private fun AdvancedSettingsButton(onClick: () -> Unit) {

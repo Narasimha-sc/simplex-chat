@@ -1392,7 +1392,7 @@ server test step */
 "Copy error" = "Kopieerfout";
 
 /* No comment provided by engineer. */
-"Core version: v%@" = "Core versie: v%@";
+"Core version: v%@" = "Core versie: v% @";
 
 /* No comment provided by engineer. */
 "Corner" = "Hoek";
@@ -2032,19 +2032,19 @@ chat item action */
 "encryption agreed" = "versleuteling overeengekomen";
 
 /* chat item text */
-"encryption agreed for %@" = "versleuteling overeengekomen voor %@";
+"encryption agreed for %@" = "versleuteling overeengekomen voor % @";
 
 /* chat item text */
 "encryption ok" = "versleuteling ok";
 
 /* chat item text */
-"encryption ok for %@" = "versleuteling ok voor %@";
+"encryption ok for %@" = "versleuteling ok voor % @";
 
 /* chat item text */
 "encryption re-negotiation allowed" = "versleuteling heronderhandeling toegestaan";
 
 /* chat item text */
-"encryption re-negotiation allowed for %@" = "versleuteling heronderhandeling toegestaan voor %@";
+"encryption re-negotiation allowed for %@" = "versleuteling heronderhandeling toegestaan voor % @";
 
 /* message decrypt error item */
 "Encryption re-negotiation error" = "Fout bij heronderhandeling van codering";
@@ -2056,7 +2056,7 @@ chat item action */
 "encryption re-negotiation required" = "heronderhandeling van versleuteling vereist";
 
 /* chat item text */
-"encryption re-negotiation required for %@" = "heronderhandeling van versleuteling vereist voor %@";
+"encryption re-negotiation required for %@" = "heronderhandeling van versleuteling vereist voor % @";
 
 /* No comment provided by engineer. */
 "Encryption renegotiation in progress." = "Er wordt opnieuw onderhandeld over de encryptie.";
@@ -2274,7 +2274,7 @@ chat item action */
 /* No comment provided by engineer. */
 "Error saving user password" = "Fout bij opslaan gebruikers wachtwoord";
 
-/* alert message */
+/* No comment provided by engineer. */
 "Error scanning code: %@" = "Fout bij het scannen van code: %@";
 
 /* No comment provided by engineer. */
@@ -2900,7 +2900,7 @@ servers warning */
 /* alert title */
 "Invalid name!" = "Ongeldige naam!";
 
-/* alert title */
+/* No comment provided by engineer. */
 "Invalid QR code" = "Ongeldige QR-code";
 
 /* No comment provided by engineer. */
@@ -3029,7 +3029,7 @@ servers warning */
 /* No comment provided by engineer. */
 "KeyChain error" = "Keychain fout";
 
-/* file alert title */
+/* No comment provided by engineer. */
 "Large file!" = "Groot bestand!";
 
 /* badge alert button */
@@ -4408,10 +4408,10 @@ chat item action */
 "Saved" = "Opgeslagen";
 
 /* No comment provided by engineer. */
-"saved from" = "opgeslagen van";
+"Saved from" = "Opgeslagen van";
 
 /* No comment provided by engineer. */
-"Saved from" = "Opgeslagen van";
+"saved from %@" = "opgeslagen van %@";
 
 /* message info title */
 "Saved message" = "Opgeslagen bericht";
@@ -4573,13 +4573,13 @@ chat item action */
 "Sending receipts is disabled for %lld contacts" = "Het verzenden van ontvangst bevestiging is uitgeschakeld voor %lld-contactpersonen";
 
 /* No comment provided by engineer. */
-"Sending receipts is disabled for %lld groups" = "Het verzenden van bevestigingen is uitgeschakeld voor %lld groepen";
+"Sending receipts is disabled for %lld groups" = "Het verzenden van bevestigingen is uitgeschakeld voor %LLD -groepen";
 
 /* No comment provided by engineer. */
 "Sending receipts is enabled for %lld contacts" = "Het verzenden van ontvangst bevestiging is ingeschakeld voor %lld-contactpersonen";
 
 /* No comment provided by engineer. */
-"Sending receipts is enabled for %lld groups" = "Het verzenden van bevestigingen is ingeschakeld voor %lld groepen";
+"Sending receipts is enabled for %lld groups" = "Het verzenden van bevestigingen is ingeschakeld voor %LLD -groepen";
 
 /* No comment provided by engineer. */
 "Sending via" = "Verzenden via";
@@ -5706,12 +5706,6 @@ server test failure */
 /* No comment provided by engineer. */
 "You already have a chat profile with the same display name. Please choose another name." = "Je hebt al een chatprofiel met dezelfde weergave naam. Kies een andere naam.";
 
-/* new chat alert */
-"You are a member" = "Je bent lid";
-
-/* new chat alert */
-"You are a moderator" = "Je bent moderator";
-
 /* No comment provided by engineer. */
 "You are already connected to %@." = "U bent al verbonden met %@.";
 
@@ -5735,15 +5729,6 @@ server test failure */
 
 /* new chat sheet title */
 "You are already joining the group!\nRepeat join request?" = "Je sluit je al aan bij de groep!\nDeelnameverzoek herhalen?";
-
-/* new chat alert */
-"You are an admin" = "Je bent beheerder";
-
-/* new chat alert */
-"You are an observer" = "Je bent waarnemer";
-
-/* new chat alert */
-"You are an owner" = "Je bent eigenaar";
 
 /* No comment provided by engineer. */
 "You are invited to group" = "Je bent uitgenodigd voor de groep";
@@ -5942,6 +5927,9 @@ server test failure */
 
 /* No comment provided by engineer. */
 "Your contact removed this link, or it was a one-time link that was already used.\nTo connect, ask your contact to create a new link." = "Tenzij uw contact de verbinding heeft verwijderd of deze link al is gebruikt, kan het een bug zijn. Meld het alstublieft.\nOm verbinding te maken, vraagt u uw contact om een andere verbinding link te maken en te controleren of u een stabiele netwerkverbinding heeft.";
+
+/* No comment provided by engineer. */
+"Your contact sent a file that is larger than currently supported maximum size (%@)." = "Uw contact heeft een bestand verzonden dat groter is dan de momenteel ondersteunde maximale grootte (%@).";
 
 /* No comment provided by engineer. */
 "Your contacts can allow full message deletion." = "Uw contacten kunnen volledige verwijdering van berichten toestaan.";

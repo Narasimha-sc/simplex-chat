@@ -33,16 +33,14 @@ import chat.simplex.common.model.ChatModel.controller
 import chat.simplex.common.model.ChatModel.filesToDelete
 import chat.simplex.common.platform.*
 import chat.simplex.common.ui.theme.*
-import chat.simplex.common.views.badges.openBadgesView
 import chat.simplex.common.views.chat.group.hostFromRelayLink
 import chat.simplex.common.views.chat.group.relayConnStatus
 import chat.simplex.common.views.chat.item.*
 import chat.simplex.common.views.helpers.*
 import chat.simplex.common.views.newchat.RelayProgressIndicator
 import chat.simplex.common.views.newchat.RelayStatusIndicator
-import chat.simplex.common.views.newchat.noShownBadge
 import chat.simplex.common.views.newchat.relayDisplayName
-import chat.simplex.res.*
+import chat.simplex.res.MR
 import dev.icerock.moko.resources.ImageResource
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -117,8 +115,7 @@ data class ComposeState(
   val useLinkPreviews: Boolean,
   val mentions: MentionedMembers = emptyMap(),
   // the max file size the user may attach, raised by their active badge unless the chat is incognito; kept in sync on chat switch
-  val maxFileSize: Long = getMaxFileSize(FileProtocol.XFTP),
-  val sendIncognito: Boolean = false
+  val maxFileSize: Long = getMaxFileSize(FileProtocol.XFTP)
 ) {
   constructor(editingItem: ChatItem, liveMessage: LiveMessage? = null, useLinkPreviews: Boolean): this(
     ComposeMessage(
@@ -322,24 +319,6 @@ private fun isVideoUri(uri: URI): Boolean {
 
 private fun isWebmUri(uri: URI): Boolean = getFileName(uri)?.lowercase()?.endsWith(".webm") == true
 
-// A badge only helps below the largest badge's limit, and not in incognito chats, so outside that
-// the alert is informational as before.
-fun showLargeFileAlert(fileSize: Long, incognito: Boolean, senderProfile: LocalProfile?) {
-  val title = generalGetString(MR.strings.large_file)
-  val text = largeFileMessage(fileSize, incognito, expiredBadgeReason(fileSize, senderProfile))
-  if (!incognito && fileSize <= MAX_FILE_SIZE_XFTP_LEGEND && noShownBadge()) {
-    AlertManager.shared.showAlertDialog(
-      title = title,
-      text = text,
-      confirmText = generalGetString(MR.strings.ok),
-      dismissText = generalGetString(MR.strings.badges_support_simplex_title),
-      onDismiss = { if (!appPlatform.isDesktop || !ModalManager.end.hasModalOpen(ModalViewId.BADGES)) openBadgesView() }
-    )
-  } else {
-    AlertManager.shared.showAlertMsg(title, text)
-  }
-}
-
 fun MutableState<ComposeState>.processPickedFile(uri: URI?, text: String?) {
   if (uri != null) {
     val maxFileSize = value.maxFileSize
@@ -350,7 +329,10 @@ fun MutableState<ComposeState>.processPickedFile(uri: URI?, text: String?) {
         value = value.copy(message = if (text != null) ComposeMessage(text) else value.message, preview = ComposePreview.FilePreview(fileName, uri))
       }
     } else if (fileSize != null) {
-      showLargeFileAlert(fileSize, value.sendIncognito, chatModel.currentUser.value?.profile)
+      AlertManager.shared.showAlertMsg(
+        generalGetString(MR.strings.large_file),
+        String.format(generalGetString(MR.strings.maximum_supported_file_size), formatBytes(maxFileSize))
+      )
     } else {
       showWrongUriAlert()
     }
@@ -376,7 +358,10 @@ suspend fun MutableState<ComposeState>.processPickedMedia(uris: List<URI>, text:
             UploadContent.AnimatedImage(uri)
           } else {
             bitmap = null
-            showLargeFileAlert(fileSize ?: 0, value.sendIncognito, chatModel.currentUser.value?.profile)
+            AlertManager.shared.showAlertMsg(
+              generalGetString(MR.strings.large_file),
+              String.format(generalGetString(MR.strings.maximum_supported_file_size), formatBytes(maxFileSize))
+            )
             null
           }
         } else if (bitmap != null) {
@@ -427,8 +412,6 @@ fun ComposeView(
   focusRequester: FocusRequester?,
 ) {
   val cancelledLinks = rememberSaveable { mutableSetOf<String>() }
-  val chatScope = remember(chatsCtx) { chatsCtx.groupScopeInfo?.toChatScope() }
-  val scopeChatId = remember { chat.id }
   fun isSimplexLink(link: String): Boolean =
     link.startsWith("https://simplex.chat", true) || link.startsWith("http://simplex.chat", true)
 
@@ -454,7 +437,6 @@ fun ComposeView(
   val smallFont = MaterialTheme.typography.body1.copy(color = MaterialTheme.colors.onBackground)
   val textStyle = remember(MaterialTheme.colors.isLight) { mutableStateOf(smallFont) }
   val recState: MutableState<RecordingState> = remember { mutableStateOf(RecordingState.NotStarted) }
-  val emojiPickerShown = rememberSaveable { mutableStateOf(false) }
   AttachmentSelection(composeState, attachmentOption, composeState::processPickedFile) { uris, text -> CoroutineScope(Dispatchers.IO).launch { composeState.processPickedMedia(uris, text) } }
 
   suspend fun fetchAndUpdateLinkPreview(url: String) {
@@ -525,14 +507,14 @@ fun ComposeView(
   }
 
   fun clearPrevDraft(prevChatId: String?) {
-    if (chatModel.draftChatId.value == draftChatId(prevChatId, chatScope)) {
+    if (chatModel.draftChatId.value == prevChatId) {
       chatModel.draft.value = null
       chatModel.draftChatId.value = null
     }
   }
 
-  fun clearCurrentDraft(forChat: Chat = chat) {
-    if (chatModel.draftChatId.value == draftChatId(forChat.id, chatScope)) {
+  fun clearCurrentDraft() {
+    if (chatModel.draftChatId.value == chat.id) {
       chatModel.draft.value = null
       chatModel.draftChatId.value = null
     }
@@ -599,7 +581,7 @@ fun ComposeView(
     if (!chatItems.isNullOrEmpty()) {
       chatItems.forEach { aChatItem ->
         withContext(Dispatchers.Main) {
-          chatModel.addSentChatItem(chatsCtx, chat.remoteHostId, aChatItem.chatInfo, aChatItem.chatItem)
+          chatsCtx.addChatItem(chat.remoteHostId, aChatItem.chatInfo, aChatItem.chatItem)
         }
       }
       return chatItems.first().chatItem
@@ -609,10 +591,9 @@ fun ComposeView(
   }
 
   // TODO [short links] connectCheckLinkPreview
-  // the state is passed in by a send that must not read the current one - see sendMessageAsync
-  fun checkLinkPreview(cs: ComposeState = composeState.value): MsgContent {
-    val msgText = cs.message.text
-    return when (val composePreview = cs.preview) {
+  fun checkLinkPreview(): MsgContent {
+    val msgText = composeState.value.message.text
+    return when (val composePreview = composeState.value.preview) {
       is ComposePreview.CLinkPreview -> {
         val parsedMsg = parseToMarkdown(msgText)
         val url = getMessageLinks(parsedMsg).first
@@ -632,10 +613,6 @@ fun ComposeView(
     composeState.value = composeState.value.copy(inProgress = true)
   }
 
-  // composeState and its inProgress flag are shared between the chats opened in this view, and sending is not cancelled
-  // when the chat is switched - a send may only clear or reset the state while it still holds the message that was sent
-  fun composeHasSentMessage(): Boolean = chatModel.chatId.value == chat.id && composeState.value.inProgress
-
   suspend fun sendMemberContactInvitation() {
     val mc = checkLinkPreview()
     sending()
@@ -643,10 +620,10 @@ fun ComposeView(
     if (contact != null) {
       withContext(Dispatchers.Main) {
         chatsCtx.updateContact(chat.remoteHostId, contact)
-        if (composeHasSentMessage()) clearState()
+        clearState()
       }
-    } else withContext(Dispatchers.Main) {
-      if (composeHasSentMessage()) composeState.value = composeState.value.copy(inProgress = false)
+    } else {
+      composeState.value = composeState.value.copy(inProgress = false)
     }
   }
 
@@ -663,10 +640,10 @@ fun ComposeView(
     if (contact != null) {
       withContext(Dispatchers.Main) {
         chatsCtx.updateContact(chat.remoteHostId, contact)
-        if (composeHasSentMessage()) clearState()
+        clearState()
       }
-    } else withContext(Dispatchers.Main) {
-      if (composeHasSentMessage()) composeState.value = composeState.value.copy(inProgress = false)
+    } else {
+      composeState.value = composeState.value.copy(inProgress = false)
     }
   }
 
@@ -708,19 +685,15 @@ fun ComposeView(
         chatModel.channelRelayHostnames.remove(groupInfo.groupId)
         chatModel.groupMembers.value = relayResults.map { it.relayMember }
         chatModel.populateGroupMembersIndexes()
-        if (composeHasSentMessage()) clearState()
+        clearState()
       }
-    } else withContext(Dispatchers.Main) {
-      if (composeHasSentMessage()) composeState.value = composeState.value.copy(inProgress = false)
+    } else {
+      composeState.value = composeState.value.copy(inProgress = false)
     }
   }
 
-  // toChat is the chat the message was composed in - it differs from the one this view shows only for the live message
-  // committed by a chat switch, which has no context item, so the forwarding, editing and reporting branches below
-  // cannot run with a different chat. cs is that send's state, captured before the switch replaced it.
-  suspend fun sendMessageAsync(text: String?, live: Boolean, ttl: Int?, sign: Boolean = false, toChat: Chat = chat, cs: ComposeState = composeState.value): List<ChatItem>? {
-    // a send for another chat may not write to composeState, even after that chat is opened again - it was handed over
-    fun composeIsForSend(): Boolean = toChat.id == chat.id
+  suspend fun sendMessageAsync(text: String?, live: Boolean, ttl: Int?, sign: Boolean = false): List<ChatItem>? {
+    val cs = composeState.value
     var sent: List<ChatItem>?
     var lastMessageFailedToSend: ComposeState? = null
     val msgText = text ?: cs.message.text
@@ -741,7 +714,7 @@ fun ComposeView(
 
       withContext(Dispatchers.Main) {
         chatItems?.forEach { chatItem ->
-          chatModel.addSentChatItem(chatsCtx, rhId, chat.chatInfo, chatItem)
+          chatsCtx.addChatItem(rhId, chat.chatInfo, chatItem)
         }
       }
 
@@ -770,8 +743,8 @@ fun ComposeView(
 
     fun updateMsgContent(msgContent: MsgContent): MsgContent {
       return when (msgContent) {
-        is MsgContent.MCText -> checkLinkPreview(cs)
-        is MsgContent.MCLink -> checkLinkPreview(cs)
+        is MsgContent.MCText -> checkLinkPreview()
+        is MsgContent.MCLink -> checkLinkPreview()
         is MsgContent.MCImage -> MsgContent.MCImage(msgText, image = msgContent.image)
         is MsgContent.MCVideo -> MsgContent.MCVideo(msgText, image = msgContent.image, duration = msgContent.duration)
         is MsgContent.MCVoice -> MsgContent.MCVoice(msgText, duration = msgContent.duration)
@@ -828,12 +801,12 @@ fun ComposeView(
     }
 
     val liveMessage = cs.liveMessage
-    if (!live && composeIsForSend()) {
+    if (!live) {
       if (liveMessage != null) composeState.value = cs.copy(liveMessage = null)
       sending()
     }
     if (!cs.forwarding || chatModel.draft.value?.forwarding == true) {
-      clearCurrentDraft(toChat)
+      clearCurrentDraft()
     }
 
     if (cs.contextItem is ComposeContextItem.ForwardingItems) {
@@ -844,8 +817,6 @@ fun ComposeView(
       if (cs.message.text.isNotEmpty()) {
         sent?.mapIndexed { index, message ->
           if (index == sent!!.lastIndex) {
-            // the current state, not cs: forwarding is never reached from the chat switch, and keeps what was typed
-            // while it was in flight
             send(chat, checkLinkPreview(), quoted = message.id, live = false, ttl = ttl, mentions = cs.memberMentions, sign = sign)
           } else {
             message
@@ -859,7 +830,7 @@ fun ComposeView(
       sent = if (updatedMessage != null) listOf(updatedMessage) else null
       lastMessageFailedToSend = if (updatedMessage == null) constructFailedMessage(cs) else null
     } else if (liveMessage != null && liveMessage.sent) {
-      val updatedMessage = updateMessage(liveMessage.chatItem, toChat, live)
+      val updatedMessage = updateMessage(liveMessage.chatItem, chat, live)
       sent = if (updatedMessage != null) listOf(updatedMessage) else null
     } else if (cs.contextItem is ComposeContextItem.ReportedItem) {
       sent = sendReport(cs.contextItem.reason, cs.contextItem.chatItem.id)
@@ -869,7 +840,7 @@ fun ComposeView(
       val remoteHost = chatModel.currentRemoteHost.value
       when (val preview = cs.preview) {
         ComposePreview.NoPreview -> msgs.add(MsgContent.MCText(msgText))
-        is ComposePreview.CLinkPreview -> msgs.add(checkLinkPreview(cs))
+        is ComposePreview.CLinkPreview -> msgs.add(checkLinkPreview())
         is ComposePreview.ChatLinkPreview -> {
           val linkStr = preview.chatLink.connLinkStr
           val text = if (msgText.isEmpty()) linkStr else "$msgText\n$linkStr"
@@ -960,7 +931,7 @@ fun ComposeView(
             localPath = file.filePath
           )
         }
-        val sendResult = send(toChat, content, if (index == 0) quotedItemId else null, file,
+        val sendResult = send(chat, content, if (index == 0) quotedItemId else null, file,
           live = if (content !is MsgContent.MCVoice && index == msgs.lastIndex) live else false,
           ttl = ttl,
           mentions = cs.memberMentions,
@@ -977,47 +948,23 @@ fun ComposeView(
     val wasForwarding = cs.forwarding
     val forwardingFromChatId = (cs.contextItem as? ComposeContextItem.ForwardingItems)?.fromChatInfo?.id
     val lastFailed = lastMessageFailedToSend
-    // composeState is shared between the chats opened in this view, and this runs after the send API call, so the user
-    // could have switched chats or typed another message in the meantime - only the message that was sent may be
-    // cleared or restored. On Main, so that these checks and changes are not interleaved with the user switching
-    // chats or typing.
-    withContext(Dispatchers.Main) {
-      val chatIsOpen = composeIsForSend() && chatModel.chatId.value == chat.id
-      // a live message is held in the compose state of the chat it is sent to, but only while that chat is the one open
-      val liveSend = live || cs.liveMessage != null
-      val sentMessageInCompose = chatIsOpen && (liveSend || composeState.value.inProgress)
-      if (sentMessageInCompose) {
-        if (lastFailed == null) {
-          clearState(live)
-        } else {
-          composeState.value = lastFailed
-        }
-      }
-      val draft = chatModel.draft.value
-      if (wasForwarding && chatModel.draftChatId.value == draftChatId(chat.chatInfo.id, chatScope) && forwardingFromChatId != chat.chatInfo.id && draft != null) {
-        if (sentMessageInCompose) composeState.value = draft
-      } else {
-        clearCurrentDraft(toChat)
-        // liveSend excluded: a failing keystroke send would otherwise write a draft on every attempt
-        if (!sentMessageInCompose && !liveSend && lastFailed != null) {
-          // the message was not sent, so it is restored in the chat it was composed in, or kept as its draft if another chat is open
-          if (chatIsOpen && composeState.value.empty) {
-            composeState.value = lastFailed
-          } else if (saveLastDraft) {
-            chatModel.draft.value = lastFailed
-            chatModel.draftChatId.value = draftChatId(chat.id, chatScope)
-          }
-        }
-      }
+    if (lastFailed == null) {
+      clearState(live)
+    } else {
+      composeState.value = lastFailed
+    }
+    val draft = chatModel.draft.value
+    if (wasForwarding && chatModel.draftChatId.value == chat.chatInfo.id && forwardingFromChatId != chat.chatInfo.id && draft != null) {
+      composeState.value = draft
+    } else {
+      clearCurrentDraft()
     }
     return sent
   }
 
-  // toChat and composed are for the chat switch, which hands the compose state over to the chat it opened; passing
-  // toChat without doing that leaves the sent message in the input
-  fun sendMessage(ttl: Int?, sign: Boolean = false, toChat: Chat = chat, composed: ComposeState? = null) {
+  fun sendMessage(ttl: Int?, sign: Boolean = false) {
     withLongRunningApi(slow = 120_000) {
-      sendMessageAsync(null, false, ttl, sign, toChat, composed ?: composeState.value)
+      sendMessageAsync(null, false, ttl, sign)
     }
   }
 
@@ -1279,17 +1226,6 @@ fun ComposeView(
   val userCantSendReason = rememberUpdatedState(chat.chatInfo.userCantSendReason((ownerRelayState?.noActiveRelays ?: subscriberRelayState?.noActiveRelays) == true))
   val sendMsgEnabled = rememberUpdatedState(userCantSendReason.value == null)
   val nextSendGrpInv = rememberUpdatedState(chat.nextSendGrpInv)
-  val emojiEnabled = sendMsgEnabled.value && composeState.value.preview !is ComposePreview.VoicePreview
-  LaunchedEffect(emojiEnabled) {
-    if (!emojiEnabled) emojiPickerShown.value = false
-  }
-  KeyChangeEffect(emojiPickerShown.value) {
-    if (!emojiPickerShown.value && emojiEnabled) focusRequester?.requestFocus()
-  }
-
-  fun onEmoji(emoji: String) {
-    if (!composeState.value.inProgress) onMessageChange(composeState.value.message.insertingEmoji(emoji))
-  }
 
   @Composable
   fun CommandsButton() {
@@ -1344,7 +1280,7 @@ fun ComposeView(
   }
 
   @Composable
-  fun ComposeActionButtons() {
+  fun AttachmentAndCommandsButtons() {
     val cInfo = chat.chatInfo
     Row(
       Modifier.padding(start = 3.dp, end = 1.dp, bottom = if (appPlatform.isAndroid) 2.sp.toDp() else 5.sp.toDp() * fontSizeSqrtMultiplier),
@@ -1358,7 +1294,6 @@ fun ComposeView(
       if (showAttachment) {
         AttachmentButton()
       }
-      ComposeEmojiButton(emojiPickerShown, emojiEnabled, ::onEmoji)
     }
   }
 
@@ -1391,32 +1326,23 @@ fun ComposeView(
       }
   }
 
+  LaunchedEffect(rememberUpdatedState(chat.chatInfo.sendMsgEnabled).value) {
+    if (!chat.chatInfo.sendMsgEnabled) {
+      clearCurrentDraft()
+      clearState()
+    }
+  }
+
   KeyChangeEffect(chatModel.chatId.value) { prevChatId ->
     val cs = composeState.value
     if (cs.liveMessage != null && (cs.message.text.isNotEmpty() || cs.liveMessage.sent)) {
-      // the chat is already switched, so the live message goes to the chat with the id it had before the switch
-      val liveMessageChat = if (prevChatId == null || prevChatId == chat.id) chat else chatsCtx.getChat(prevChatId)
-      // if that chat is gone there is nowhere to send it, and it must not be sent to the chat opened instead
-      // cs is captured on this thread, before the compose state is replaced below
-      if (liveMessageChat != null) sendMessage(null, toChat = liveMessageChat, composed = cs) else clearState()
+      sendMessage(null)
       resetLinkPreview()
       clearPrevDraft(prevChatId)
       deleteUnusedFiles()
-      // the sent message belongs to the chat it was composed in; the chat opened next shows its own draft
-      val draft = chatModel.draft.value
-      composeState.value = if (draft != null && chatModel.draftChatId.value == draftChatId(chatModel.chatId.value, chatScope)) draft
-        else ComposeState(useLinkPreviews = useLinkPreviews)
     } else if (cs.inProgress) {
       clearPrevDraft(prevChatId)
-      // the message being sent must not be kept in the compose state, it is shared with the chat opened next;
-      // if it fails to send it is restored in this chat or saved as its draft
-      clearState()
-      // clearState() does not load the draft of the chat opened next, and without this it is never shown and is
-      // dropped when that chat is left
-      val draft = chatModel.draft.value
-      if (draft != null && chatModel.draftChatId.value == draftChatId(chatModel.chatId.value, chatScope)) {
-        composeState.value = draft
-      }
+      composeState.value = cs.copy(inProgress = false, progressByTimeout = false)
     } else if (!cs.empty) {
       if (cs.preview is ComposePreview.VoicePreview && !cs.preview.finished) {
         recState.value = RecordingState.NotStarted
@@ -1425,10 +1351,10 @@ fun ComposeView(
       }
       if (saveLastDraft) {
         chatModel.draft.value = composeState.value
-        chatModel.draftChatId.value = draftChatId(prevChatId, chatScope)
+        chatModel.draftChatId.value = prevChatId
       }
       composeState.value = ComposeState(useLinkPreviews = useLinkPreviews)
-    } else if (chatModel.draftChatId.value == draftChatId(chatModel.chatId.value, chatScope) && chatModel.draft.value != null) {
+    } else if (chatModel.draftChatId.value == chatModel.chatId.value && chatModel.draft.value != null) {
       composeState.value = chatModel.draft.value ?: ComposeState(useLinkPreviews = useLinkPreviews)
     } else {
       clearPrevDraft(prevChatId)
@@ -1437,45 +1363,20 @@ fun ComposeView(
     chatModel.removeLiveDummy()
     CIFile.cachedRemoteFileRequests.clear()
   }
-  // Must be composed after KeyChangeEffect above (effects run in composition order),
-  // so that on chat switch the previous chat's draft is saved before it is cleared here.
-  LaunchedEffect(rememberUpdatedState(chat.chatInfo.sendMsgEnabled).value) {
-    if (!chat.chatInfo.sendMsgEnabled) {
-      clearCurrentDraft()
-      clearState()
-    }
-  }
   // keep the attach size limit in sync with the chat: the user's active badge raises it, but not in incognito chats where no badge is presented
   LaunchedEffect(chat.chatInfo) {
     val incognito = if (chat.chatInfo.profileChangeProhibited) chat.chatInfo.incognito else chatModel.controller.appPrefs.incognito.get()
-    composeState.value = composeState.value.copy(
-      maxFileSize = getMaxFileSize(FileProtocol.XFTP, if (incognito) null else chatModel.currentUser.value?.profile),
-      sendIncognito = incognito
-    )
+    composeState.value = composeState.value.copy(maxFileSize = getMaxFileSize(FileProtocol.XFTP, if (incognito) null else chatModel.currentUser.value?.profile))
   }
   if (appPlatform.isDesktop) {
-    // the same ComposeView is reused when switching chats, so `chat` captured by onDispose would be the chat opened first, not the current one
-    val currentChatId = rememberUpdatedState(chat.id)
     // Don't enable this on Android, it breaks it, This method only works on desktop. For Android there is a `KeyChangeEffect(chatModel.chatId.value)`
     DisposableEffect(Unit) {
       onDispose {
         if (chatModel.sharedContent.value is SharedContent.Forward && saveLastDraft && !composeState.value.empty) {
           chatModel.draft.value = composeState.value
-          chatModel.draftChatId.value = draftChatId(currentChatId.value, chatScope)
+          chatModel.draftChatId.value = chat.id
         }
       }
-    }
-  }
-  // support chat is closed without changing chat id, and then `KeyChangeEffect(chatModel.chatId.value)` doesn't save the draft
-  DisposableEffect(Unit) {
-    onDispose {
-      val cs = composeState.value
-      // chat change is handled by KeyChangeEffect, unfinished voice recording should not replace the saved draft
-      if (chatScope == null || chatModel.chatId.value != scopeChatId || (cs.preview is ComposePreview.VoicePreview && !cs.preview.finished)) return@onDispose
-      if (saveLastDraft && !cs.empty) {
-        chatModel.draft.value = cs
-        chatModel.draftChatId.value = draftChatId(scopeChatId, chatScope)
-      } else clearPrevDraft(scopeChatId)
     }
   }
 
@@ -1797,7 +1698,7 @@ fun ComposeView(
           ContextSendMessageToConnect(generalGetString(MR.strings.compose_send_direct_message_to_connect))
           Divider()
           Row(Modifier.padding(end = 8.dp), verticalAlignment = Alignment.Bottom) {
-            ComposeActionButtons()
+            AttachmentAndCommandsButtons()
             SendMsgView_(
               disableSendButton = disableSendButton,
               sendToConnect = { withApi { sendMemberContactInvitation() } }
@@ -1852,7 +1753,7 @@ fun ComposeView(
         )
       } else {
         Row(Modifier.padding(end = 8.dp), verticalAlignment = Alignment.Bottom) {
-          ComposeActionButtons()
+          AttachmentAndCommandsButtons()
           val broadcastPlaceholder = (chat.chatInfo as? ChatInfo.Group)?.groupInfo?.let { gi ->
             if (gi.useRelays && gi.membership.memberRole >= GroupMemberRole.Owner && chat.chatInfo.groupChatScope() == null) generalGetString(MR.strings.compose_view_broadcast)
             else null
@@ -2166,8 +2067,7 @@ private fun ownerRelayState(chat: Chat, chatModel: ChatModel): OwnerRelayState? 
   if (!gInfo.useRelays || gInfo.membership.memberRole != GroupMemberRole.Owner ||
     gInfo.membership.memberStatus in listOf(GroupMemberStatus.MemLeft, GroupMemberStatus.MemRemoved, GroupMemberStatus.MemGroupDeleted)
   ) return null
-  if (ChannelRelaysModel.groupId.value != gInfo.groupId) return null
-  val relays = ChannelRelaysModel.groupRelays.toList()
+  val relays = if (ChannelRelaysModel.groupId.value == gInfo.groupId) ChannelRelaysModel.groupRelays.toList() else emptyList()
   if (relays.isEmpty()) return OwnerRelayState(emptyList(), 0, 0, 0, true)
   val relayMembers = relays.map { relay ->
     relay to chatModel.groupMembers.value.firstOrNull { it.groupMemberId == relay.groupMemberId }
@@ -2200,7 +2100,6 @@ private fun subscriberRelayState(chat: Chat, chatModel: ChatModel): SubscriberRe
   val connectedCount = relayMembers.count { !relayMemberRemoved(it.memberStatus) && it.activeConn?.connStatus == ConnStatus.Ready && it.activeConn?.connFailedErr == null }
   val failedCount = relayMembers.count { !relayMemberRemoved(it.memberStatus) && it.activeConn?.connFailedErr != null }
   val total = if (relayMembers.isNotEmpty()) relayMembers.size else hostnames.size
-  if (total == 0 && !chatModel.membersLoaded.value) return null
   val noActiveRelays = connectedCount == 0 && (removedCount + failedCount) == total
   return SubscriberRelayState(hostnames, relayMembers, connectedCount, removedCount, failedCount, total, noActiveRelays)
 }

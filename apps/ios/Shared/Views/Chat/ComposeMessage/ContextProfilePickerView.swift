@@ -300,11 +300,9 @@ struct ContextProfilePickerView: View {
     }
 }
 
-struct ContextProfilePickerView_Previews: PreviewProvider {
-    static var previews: some View {
-        ContextProfilePickerView(
-            chat: Chat.sampleData,
-            selectedUser: User.sampleData
-        )
-    }
+#Preview {
+    ContextProfilePickerView(
+        chat: Chat.sampleData,
+        selectedUser: User.sampleData
+    )
 }

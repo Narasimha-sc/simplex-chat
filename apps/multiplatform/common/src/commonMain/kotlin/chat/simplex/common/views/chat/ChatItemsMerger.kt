@@ -111,15 +111,12 @@ data class MergedItems (
 
 sealed class MergedItem {
   abstract val startIndexInReversedItems: Int
-  abstract val revealed: Boolean
 
   // the item that is always single, cannot be grouped and always revealed
   data class Single(
     val item: ListItem,
     override val startIndexInReversedItems: Int,
-  ): MergedItem() {
-    override val revealed: Boolean get() = true
-  }
+  ): MergedItem()
 
   /** The item that can contain multiple items or just one depending on revealed state. When the whole group of merged items is revealed,
    * there will be multiple [Grouped] items with revealed flag set to true. When the whole group is collapsed, it will be just one instance
@@ -128,7 +125,7 @@ sealed class MergedItem {
   @Stable
   data class Grouped (
     val items: ArrayList<ListItem>,
-    override val revealed: Boolean,
+    val revealed: Boolean,
     // it stores ids for all consecutive revealed items from the same group in order to hide them all on user's action
     // it's the same list instance for all Grouped items within revealed group
     /** @see reveal */
@@ -206,6 +203,8 @@ data class ActiveChatState (
   val unreadAfter: MutableStateFlow<Int> = MutableStateFlow(0),
   // exclusive
   val unreadAfterNewestLoaded: MutableStateFlow<Int> = MutableStateFlow(0),
+  // item to open the chat at, set on initial load, null to open at the last item
+  val openAtItemId: MutableStateFlow<Long?> = MutableStateFlow(null),
   @Volatile var selectionActive: Boolean = false
 ) {
   fun moveUnreadAfterItem(toItemId: Long?, nonReversedItems: List<ChatItem>) {
@@ -240,6 +239,7 @@ data class ActiveChatState (
     unreadTotal.value = 0
     unreadAfter.value = 0
     unreadAfterNewestLoaded.value = 0
+    openAtItemId.value = null
   }
 
   fun itemsRead(itemIds: Set<Long>?, newItems: List<ChatItem>) {

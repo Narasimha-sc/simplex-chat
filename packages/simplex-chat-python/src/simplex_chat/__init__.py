@@ -1,6 +1,5 @@
 """SimpleX Chat — Python client library for chat bots."""
 
-from . import util as util  # re-export the util namespace
 from ._version import __version__
 from .api import (
     ChatApi,
@@ -33,16 +32,17 @@ from .bot import (
     VideoMessage,
     VoiceMessage,
 )
-from .core import ChatAPIError, ChatError, ChatInitError, CryptoArgs, MigrationConfirmation
+from .core import ChatAPIError, ChatInitError, CryptoArgs, MigrationConfirmation
+from . import util as util  # re-export the util namespace
 
 __all__ = [
+    "__version__",
     "Bot",
     "BotCommand",
     "BotProfile",
     "ChatAPIError",
     "ChatApi",
     "ChatCommandError",
-    "ChatError",
     "ChatInitError",
     "ChatMessage",
     "Client",
@@ -68,6 +68,5 @@ __all__ = [
     "UnknownMessage",
     "VideoMessage",
     "VoiceMessage",
-    "__version__",
     "util",
 ]

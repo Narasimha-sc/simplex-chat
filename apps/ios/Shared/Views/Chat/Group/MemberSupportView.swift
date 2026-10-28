@@ -291,11 +291,9 @@ func deleteMemberSupportChat(_ groupInfo: GroupInfo, _ member: GroupMember) {
     }
 }
 
-struct MemberSupportView_Previews: PreviewProvider {
-    static var previews: some View {
-        MemberSupportView(
-            groupInfo: GroupInfo.sampleData,
-            scrollToItemId: Binding.constant(nil)
-        )
-    }
+#Preview {
+    MemberSupportView(
+        groupInfo: GroupInfo.sampleData,
+        scrollToItemId: Binding.constant(nil)
+    )
 }

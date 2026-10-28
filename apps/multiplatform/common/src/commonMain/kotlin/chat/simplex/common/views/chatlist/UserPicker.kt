@@ -34,7 +34,7 @@ import chat.simplex.common.views.localauth.VerticalDivider
 import chat.simplex.common.views.remote.*
 import chat.simplex.common.views.usersettings.*
 import chat.simplex.common.views.usersettings.AppearanceScope.ColorModeSwitcher
-import chat.simplex.res.*
+import chat.simplex.res.MR
 import dev.icerock.moko.resources.compose.stringResource
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
@@ -217,43 +217,23 @@ fun UserPicker(
 
     @Composable
     fun SecondSection() {
-      if (!chatModel.desktopNoUserNoRemote) {
-        UserPickerOptionRow(
-          painterResource(MR.images.ic_qr_code),
-          if (chatModel.userAddress.value != null) generalGetString(MR.strings.your_simplex_contact_address) else generalGetString(MR.strings.create_simplex_address),
-          showCustomModal { it, close ->
-            val user = it.currentUser.value
-            if (user != null) {
-              UserAddressView(it, shareViaProfile = user.addressShared, close = close)
-            } else {
-              val modal = this
-              LaunchedEffect(modal, ModalManager.start.modalCount.value) {
-                if (ModalManager.start.isLastModal(modal)) close()
-              }
-            }
-          }, disabled = stopped
-        )
-        UserPickerOptionRow(
-          painterResource(MR.images.ic_toggle_on),
-          stringResource(MR.strings.chat_preferences),
-          click = if (stopped) null else ({
-            showCustomModal { m, close ->
-              val user = m.currentUser.value
-              if (user != null) {
-                PreferencesView(m, user, close)
-              } else {
-                val modal = this
-                LaunchedEffect(modal, ModalManager.start.modalCount.value) {
-                  if (ModalManager.start.isLastModal(modal)) close()
-                }
-              }
-            }()
-          }),
-          disabled = stopped
-        )
-      }
+      UserPickerOptionRow(
+        painterResource(MR.images.ic_qr_code),
+        if (chatModel.userAddress.value != null) generalGetString(MR.strings.your_simplex_contact_address) else generalGetString(MR.strings.create_simplex_address),
+        showCustomModal { it, close -> UserAddressView(it, shareViaProfile = it.currentUser.value!!.addressShared, close = close) }, disabled = stopped
+      )
+      UserPickerOptionRow(
+        painterResource(MR.images.ic_toggle_on),
+        stringResource(MR.strings.chat_preferences),
+        click = if (stopped) null else ({
+          showCustomModal { m, close ->
+            PreferencesView(m, m.currentUser.value ?: return@showCustomModal, close)
+          }()
+        }),
+        disabled = stopped
+      )
       if (appPlatform.isDesktop) {
-        if (!chatModel.desktopNoUserNoRemote) Divider(Modifier.padding(DEFAULT_PADDING))
+        Divider(Modifier.padding(DEFAULT_PADDING))
 
         val inactiveUsers = users.filter { !it.user.activeUser }
 
@@ -274,12 +254,8 @@ fun UserPicker(
           painterResource(MR.images.ic_manage_accounts),
           generalGetString(MR.strings.create_chat_profile),
           {
-            if (ModalManager.center.isTopModalOpen(ModalViewId.CREATE_PROFILE)) {
-              userPickerState.value = AnimatedViewState.HIDING
-              return@UserPickerOptionRow
-            }
             doWithAuth(generalGetString(MR.strings.auth_open_chat_profiles), generalGetString(MR.strings.auth_log_in_using_credential)) {
-              ModalManager.center.showModalCloseable(id = ModalViewId.CREATE_PROFILE) { close ->
+              ModalManager.center.showModalCloseable { close ->
                 LaunchedEffect(Unit) {
                   userPickerState.value = AnimatedViewState.HIDING
                 }

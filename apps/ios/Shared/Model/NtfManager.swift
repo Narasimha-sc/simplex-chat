@@ -212,18 +212,16 @@ class NtfManager: NSObject, UNUserNotificationCenterDelegate, ObservableObject {
     }
 
     // Spec: spec/services/notifications.md#requestAuthorization
-    func requestAuthorization(onDeny denied: (()-> Void)? = nil, onAuthorized authorized: (()-> Void)? = nil, whenDone: (() -> Void)? = nil) {
+    func requestAuthorization(onDeny denied: (()-> Void)? = nil, onAuthorized authorized: (()-> Void)? = nil) {
         logger.debug("NtfManager.requestAuthorization")
         let center = UNUserNotificationCenter.current()
         center.getNotificationSettings { settings in
             switch settings.authorizationStatus {
             case .denied:
                 denied?()
-                whenDone?()
             case .authorized:
                 self.granted = true
                 authorized?()
-                whenDone?()
             default:
                 center.requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
                     if let error = error {
@@ -232,7 +230,6 @@ class NtfManager: NSObject, UNUserNotificationCenterDelegate, ObservableObject {
                         self.granted = granted
                         authorized?()
                     }
-                    whenDone?()
                 }
             }
         }

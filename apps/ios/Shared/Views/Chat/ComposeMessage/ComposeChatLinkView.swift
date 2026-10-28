@@ -11,7 +11,7 @@ struct ComposeChatLinkView: View {
         HStack(alignment: .center, spacing: 8) {
             ProfileImage(
                 imageStr: chatLink.image,
-                icon: Image(systemName: chatLink.iconName),
+                iconName: chatLink.iconName,
                 size: 44
             )
             .padding(.leading, 12)

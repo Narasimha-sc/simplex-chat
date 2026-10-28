@@ -1,6 +1,8 @@
 package chat.simplex.common.views.helpers
 
+import androidx.compose.runtime.*
 import androidx.compose.ui.graphics.*
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.*
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -10,6 +12,7 @@ import chat.simplex.common.model.CIFile
 import chat.simplex.common.model.readCryptoFile
 import chat.simplex.common.platform.*
 import chat.simplex.common.simplexWindowState
+import kotlinx.coroutines.delay
 import java.awt.image.BufferedImage
 import java.io.ByteArrayInputStream
 import java.io.File
@@ -114,6 +117,18 @@ actual fun escapedHtmlToAnnotatedString(text: String, density: Density): Annotat
   }
 } catch (e: Exception) {
   AnnotatedString(text)
+}
+
+@Composable
+actual fun SetupClipboardListener() {
+  val clipboard = LocalClipboardManager.current
+  chatModel.clipboardHasText.value = clipboard.hasText()
+  LaunchedEffect(Unit) {
+    while (true) {
+      delay(1000)
+      chatModel.clipboardHasText.value = clipboard.hasText()
+    }
+  }
 }
 
 actual fun getAppFileUri(fileName: String): URI {

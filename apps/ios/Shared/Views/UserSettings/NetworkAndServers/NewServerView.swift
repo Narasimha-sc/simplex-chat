@@ -151,12 +151,10 @@ func addServer(
     }
 }
 
-struct NewServerView_Previews: PreviewProvider {
-    static var previews: some View {
-        NewServerView(
-            userServers: Binding.constant([UserOperatorServers.sampleDataNilOperator]),
-            serverErrors: Binding.constant([]),
-            serverWarnings: Binding.constant([])
-        )
-    }
+#Preview {
+    NewServerView(
+        userServers: Binding.constant([UserOperatorServers.sampleDataNilOperator]),
+        serverErrors: Binding.constant([]),
+        serverWarnings: Binding.constant([])
+    )
 }

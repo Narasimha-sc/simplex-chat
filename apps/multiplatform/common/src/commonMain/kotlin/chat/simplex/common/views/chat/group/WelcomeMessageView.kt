@@ -28,7 +28,7 @@ import chat.simplex.common.views.helpers.*
 import chat.simplex.common.model.ChatModel
 import chat.simplex.common.model.GroupInfo
 import chat.simplex.common.platform.*
-import chat.simplex.res.*
+import chat.simplex.res.MR
 import kotlinx.coroutines.*
 
 private const val maxByteCount = 1200
@@ -146,16 +146,13 @@ private fun TextPreview(text: String, linkMode: SimplexLinkMode, markdown: Boole
   val uriHandler = LocalUriHandler.current
   Column {
     SelectionContainer(Modifier.fillMaxWidth()) {
-      val parsed = if (markdown) remember(text) { parseToMarkdownText(text) } else null
       MarkdownText(
         text,
-        formattedText = parsed?.formattedText,
-        markdownBlocks = parsed?.markdownBlocks,
+        formattedText = if (markdown) remember(text) { parseToMarkdown(text) } else null,
         toggleSecrets = false,
         modifier = Modifier.fillMaxHeight().padding(horizontal = DEFAULT_PADDING),
         linkMode = linkMode, uriHandler = uriHandler,
-        style = MaterialTheme.typography.body1.copy(color = MaterialTheme.colors.onBackground, lineHeight = 22.sp),
-        blockLayout = true
+        style = MaterialTheme.typography.body1.copy(color = MaterialTheme.colors.onBackground, lineHeight = 22.sp)
       )
     }
   }

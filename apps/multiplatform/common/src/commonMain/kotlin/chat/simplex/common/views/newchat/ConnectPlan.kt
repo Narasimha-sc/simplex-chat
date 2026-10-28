@@ -14,7 +14,7 @@ import chat.simplex.common.platform.*
 import chat.simplex.common.views.chat.subscriberCountStr
 import chat.simplex.common.views.chatlist.*
 import chat.simplex.common.views.helpers.*
-import chat.simplex.res.*
+import chat.simplex.res.MR
 import kotlinx.coroutines.*
 
 enum class ConnectionLinkType {
@@ -656,24 +656,11 @@ private fun showOpenKnownGroupAlert(chatModel: ChatModel, rhId: Long?, close: ((
     },
     nameCaption = planSimplexName?.shortStr,
     subtitle = subscriberCount,
-    information = if (groupInfo.nextConnectPrepared || groupInfo.businessChat != null) {
-      null
-    } else {
-      val isChannel = groupInfo.useRelays
-      generalGetString(when (groupInfo.membership.memberRole) {
-        GroupMemberRole.Observer -> if (isChannel) MR.strings.connect_plan_you_are_subscriber else MR.strings.connect_plan_you_are_observer
-        GroupMemberRole.Moderator -> MR.strings.connect_plan_you_are_moderator
-        GroupMemberRole.Admin -> MR.strings.connect_plan_you_are_admin
-        GroupMemberRole.Owner -> MR.strings.connect_plan_you_are_owner
-        else -> if (isChannel) MR.strings.connect_plan_you_are_contributor else MR.strings.connect_plan_you_are_member
-      })
-    },
-    secondaryInformation = true,
     confirmText = generalGetString(
       if (groupInfo.useRelays) {
-        MR.strings.connect_plan_open_channel
+        if (groupInfo.nextConnectPrepared) MR.strings.connect_plan_open_new_channel else MR.strings.connect_plan_open_channel
       } else if (groupInfo.businessChat == null) {
-        MR.strings.connect_plan_open_group
+        if (groupInfo.nextConnectPrepared) MR.strings.connect_plan_open_new_group else MR.strings.connect_plan_open_group
       } else {
         if (groupInfo.nextConnectPrepared) MR.strings.connect_plan_open_new_chat else MR.strings.connect_plan_open_chat
       }
@@ -717,7 +704,8 @@ fun showPrepareContactAlert(
         image = contactShortLinkData.profile.image,
         icon =
           if (contactShortLinkData.business) MR.images.ic_work_filled_padded
-          else peerTypeIcon(contactShortLinkData.profile.peerType)
+          else if (contactShortLinkData.profile.peerType == ChatPeerType.Bot) MR.images.ic_cube
+          else MR.images.ic_account_circle_filled
       )
     },
     profileBadge = if (contactShortLinkData.localBadge?.status == BadgeStatus.ExpiredOld) null else contactShortLinkData.localBadge,
@@ -773,7 +761,7 @@ fun showPrepareGroupAlert(
     nameCaption = planSimplexName?.shortStr,
     subtitle = subscriberCount,
     information = ownerVerificationMessage(ownerVerification),
-    confirmText = generalGetString(if (isChannel) MR.strings.connect_plan_open_channel else MR.strings.connect_plan_open_group),
+    confirmText = generalGetString(if (isChannel) MR.strings.connect_plan_open_new_channel else MR.strings.connect_plan_open_new_group),
     onConfirm = {
       AlertManager.privacySensitive.hideAlert()
       withBGApi {
