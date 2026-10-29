@@ -225,7 +225,8 @@ else
 fi
 
 # Settings → app version → Developer → Chat console
-tap_match '^Image "Account"' || fail "no profile image in the toolbar"
+# chat rows show contacts' images under the same label: the toolbar one is at the bottom (y 804 in the smoke test)
+tap_match '^Image "Account" .* at [0-9]+,(7[5-9][0-9]|8[0-9][0-9]) ' || fail "no profile image in the toolbar"
 "$ui" tap Settings || fail "no Settings in the user picker"
 "$ui" wait "Migrate to another device" 30 || fail "Settings did not open"
 for _ in 1 2 3 4 5 6 7 8; do
