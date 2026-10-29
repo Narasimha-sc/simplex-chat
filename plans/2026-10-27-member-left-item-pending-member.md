@@ -19,7 +19,7 @@
 ## Fix
 - `updateMemberRecordDeleted` also returns the updated member; `xGrpLeave` uses it for `mkGroupChatScope`
   (item in the main chat) and `CEvtLeftMember` (no status override). `xGrpMemDel` keeps only `GroupInfo`.
-- `mkGetMessageChatScope` checks `memberCurrentOrPending` on the referred member (`Library/Internal.hs:2006`)
+- `mkGetMessageChatScope` rejects a referred member with `memberRemoved` (`Library/Internal.hs:2006`)
   with the send side's error; `isReport` and own support chat unchanged. INFERENCE: CLI shows it, apps log it.
   Left, removed, rejected or deleted members get no item or counters.
 - Pending and current members are unchanged. A client that processed the leave no longer forwards the late
