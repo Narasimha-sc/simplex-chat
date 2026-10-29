@@ -24,8 +24,8 @@
   Left, removed, rejected or deleted members get no item or counters.
 - Pending and current members are unchanged. A client that processed the leave no longer forwards the late
   message; one that has not deletes that support chat on the leave.
-- Non-active user: `LeftMember`, `DeletedMember` reload users like `groupChatItemsDeleted` (repeated, not
-  extracted; `SimpleXAPI.kt:3244`, `:3264`, `SimpleXAPI.swift:2812`, `:2831`): one `listUsers` per event.
+- Non-active user: `LeftMember`, `DeletedMember` reload users like `groupChatItemsDeleted`, only for the
+  current remote host (repeated, not extracted; `SimpleXAPI.kt:3244`, `:3264`, `SimpleXAPI.swift:2812`, `:2831`): one `listUsers` per event.
 
 ## Approaches considered
 - Re-read the member after the update: one more query for a value the function already holds.
@@ -37,7 +37,7 @@
 - Change `getUsersInfo`: it counts only existing items, correct once the items are not created.
 - Refresh only on `LeftMember`: `DeletedMember` has the same cause.
 - Shared reload helper: a structure-only change. Badge recomputed in the UI: the UI has no such count.
-- Chosen: return the updated member; check like the send side; reload users like `groupChatItemsDeleted`.
+- Chosen: return the updated member; reject removed members (the send side also rejects unknown and invited); reload users as above.
 
 ## Tests
 - Added `testGLinkPendingApprovalMemberLeaves`: the admin's last main chat item is "left (signed)";
