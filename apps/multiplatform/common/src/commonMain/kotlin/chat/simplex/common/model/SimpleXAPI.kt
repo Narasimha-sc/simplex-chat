@@ -3256,7 +3256,7 @@ object ChatController {
               chatModel.secondaryChatsContext.value?.removeMemberItems(rhId, r.deletedMember, byMember = r.byMember, r.groupInfo)
             }
           }
-        } else {
+        } else if (rhId == chatModel.remoteHostId()) {
           val users = chatController.listUsers(rhId)
           chatModel.users.clear()
           chatModel.users.addAll(users)
@@ -3270,7 +3270,7 @@ object ChatController {
           withContext(Dispatchers.Main) {
             chatModel.secondaryChatsContext.value?.upsertGroupMember(rhId, r.groupInfo, r.member)
           }
-        } else {
+        } else if (rhId == chatModel.remoteHostId()) {
           val users = chatController.listUsers(rhId)
           chatModel.users.clear()
           chatModel.users.addAll(users)
