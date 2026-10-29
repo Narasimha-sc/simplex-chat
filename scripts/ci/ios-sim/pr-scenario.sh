@@ -176,9 +176,9 @@ read_log() {
 # "Tap to paste link" is enabled only when the clipboard has text as the sheet opens
 "$ui" clipboard "$archive_link"
 tap_match '^Button "[^"]*Migrate' || fail "no Migrate button"
+# the sheet's QR code scanner asks for the camera, and the alert hides the sheet from the tree
+answer_alert 15 Allow OK
 "$ui" wait "Tap to paste link" 30 || fail "no migration sheet"
-# the sheet's QR code scanner asks for the camera
-answer_alert 10 Allow OK
 "$ui" shot migrate-sheet
 if "$ui" tree | grep -F '"Tap to paste link"' | grep ' disabled$'; then
   fail "Tap to paste link is disabled: the clipboard was empty when the sheet opened"
