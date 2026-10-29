@@ -200,7 +200,14 @@ wait_match 'Open chat' 600 "$failure" || fail "no passphrase screen after 600 s"
 "$ui" type "$passphrase"
 tap_match '"([^"]*, )?Open chat"' || fail "no Open chat button"
 
-wait_match 'Chat migrated!|Confirm network settings' 300 "Wrong passphrase|Error starting chat|Database downgrade|Incompatible database" || fail "the migration did not finish after 300 s"
+# the started chat asks for notifications, and the alert hides the migration result from the tree
+deadline=$((SECONDS + 300))
+until wait_match 'Chat migrated!|Confirm network settings' 3 "Wrong passphrase|Error starting chat|Database downgrade|Incompatible database"; do
+  if [ "$SECONDS" -ge "$deadline" ]; then
+    fail "the migration did not finish after 300 s"
+  fi
+  tap_alert_button Allow || true
+done
 if wait_match 'Confirm network settings' 1; then
   "$ui" shot network-settings
   tap_match '"([^"]*, )?Apply"' || fail "no Apply button"
