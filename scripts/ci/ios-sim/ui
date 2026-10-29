@@ -19,6 +19,7 @@
 #   ui point <x> <y>                print the element at this point, also when it belongs to a system alert that the tree misses
 #   ui layout <reachable|top>       restart the app with the one-hand UI (reachable toolbar) or the top bar
 #   ui relaunch                     restart the app
+#   ui reset                        reinstall the app without its data, so it starts at onboarding ("Get started")
 #   ui text-size <category>         set Dynamic Type: medium (the default), large, extra-large, extra-extra-large,
 #                                   extra-extra-extra-large, accessibility-medium ... accessibility-extra-extra-extra-large
 #   ui directory <stop|start>       stop or start the test directory (searches fail while it is stopped)
@@ -168,6 +169,20 @@ layout() {
   echo "layout $1: the toolbar is at y=$y"
 }
 
+# Uninstalling removes the app's containers but not the simulator's keychain, which holds the database passphrase.
+reset() {
+  local app copy
+  app=$(xcrun simctl get_app_container "$SIM_UDID" "$bundle_id" app)
+  copy=$(mktemp -d)
+  cp -R "$app" "$copy/"
+  xcrun simctl terminate "$SIM_UDID" "$bundle_id" 2> /dev/null || true
+  xcrun simctl uninstall "$SIM_UDID" "$bundle_id"
+  xcrun simctl keychain "$SIM_UDID" reset
+  xcrun simctl install "$SIM_UDID" "$copy/$(basename "$app")"
+  xcrun simctl launch "$SIM_UDID" "$bundle_id" > /dev/null
+  wait_for "Get started" 180
+}
+
 text_size() {
   case "$1" in
     medium | large | extra-large | extra-extra-large | extra-extra-extra-large | accessibility-medium | accessibility-large | accessibility-extra-large | accessibility-extra-extra-large | accessibility-extra-extra-extra-large) ;;
@@ -234,12 +249,13 @@ case "${1:-}" in
   point) point "$2" "$3" ;;
   layout) layout "$2" ;;
   relaunch) launch true ;;
+  reset) reset ;;
   text-size) text_size "$2" ;;
   directory) directory "$2" ;;
   listings) backend listings ;;
   requests) requests ;;
   *)
-    sed -n '3,27s/^# \{0,1\}//p' "$0"
+    sed -n '3,28s/^# \{0,1\}//p' "$0"
     exit 1
     ;;
 esac
