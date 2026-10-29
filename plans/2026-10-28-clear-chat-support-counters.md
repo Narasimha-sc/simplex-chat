@@ -14,20 +14,22 @@ The chat list row, the group info "Chat with admins" row and the "chats with mem
 ## Fix
 
 1. `deleteGroupChatItemsMessages`: set `support_chat_items_unread`, `support_chat_items_member_attention` and `support_chat_items_mentions` to 0 for all members of the group, including the own membership row.
-2. Same function: recompute `groups.members_require_attention` as the number of members other than the user with status pending approval or pending review.
-   Pending members always require attention (`gmRequiresAttention`), so the value is a recount, not 0.
-   The own membership row is excluded because the counter is only increased for other members (Subscriber.hs `increaseGroupMembersRequireAttention` call sites, `updateGroupMembersRequireAttention` callers).
+2. Same function, before step 1: decrease `groups.members_require_attention` by the number of members other than the user that are not pending and have support chat attention or mentions above 0, not below 0.
+   These are the members for which `gmRequiresAttention` changes from true to false when their counters become 0; pending members keep requiring attention, so their part of the counter stays.
+   A recount of pending members is wrong: a pending invitee is counted only when it connects (Subscriber.hs CON handler), so a recount before that counts it twice.
+   The own membership row is excluded because the counter is only changed for other members (Subscriber.hs `increaseGroupMembersRequireAttention` call sites, `updateGroupMembersRequireAttention` callers).
 3. `APIClearChat`: read the group info after the deletions and return it in `CRChatCleared`.
 
 `support_chat_ts` is not changed: the support chat row stays, with all counters 0, like an empty chat.
-The SQL is plain and valid on SQLite and Postgres (no `MAX`/`GREATEST`; `COUNT(1)` into a `BIGINT` column; enum values bound like other `member_status` queries).
+The decrease uses `MAX` on SQLite and `GREATEST` on Postgres, like `decreaseGroupMembersRequireAttention`; enum values are bound like other `member_status` queries.
 `chat_query_plans.txt` has two new entries, generated with `explain query plan` on SQLite with foreign keys on; the harness reproduced the existing entries of the neighbouring statements byte for byte first.
 
 ## Alternatives
 
 - Reset `members_require_attention` to 0: wrong while members are pending review.
+- Recount the pending members: double counts pending invitees that have not connected yet.
 - Update the counters in `APIClearChat` instead of the store function: the store function is the single place that knows what clearing removes; one caller either way.
-- Do not re-read the group info and patch the old value in memory: duplicates the recount in Haskell.
+- Do not re-read the group info and patch the old value in memory: duplicates the decrease in Haskell.
 - Delete the support chats (as removing a member does): clears `support_chat_ts`, the row would disappear from the app after Clear chat.
 
 ## Tests

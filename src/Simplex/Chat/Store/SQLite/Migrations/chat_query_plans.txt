@@ -5727,11 +5727,12 @@ SEARCH groups USING INTEGER PRIMARY KEY (rowid=?)
 
 Query: 
       UPDATE groups
-      SET members_require_attention = (
+      SET members_require_attention = MAX(0, members_require_attention - (
         SELECT COUNT(1)
         FROM group_members
-        WHERE group_id = ? AND member_category != ? AND member_status IN (?,?)
-      )
+        WHERE group_id = ? AND member_category != ? AND member_status NOT IN (?,?)
+          AND (support_chat_items_member_attention > 0 OR support_chat_items_mentions > 0)
+      ))
       WHERE user_id = ? AND group_id = ?
     
 Plan:
