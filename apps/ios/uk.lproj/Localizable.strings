@@ -164,13 +164,13 @@
 "%d days" = "%d днів";
 
 /* forward confirmation reason */
-"%d file(s) are still being downloaded." = "%их файл(ів) ще досі завантажуються.";
+"%d file(s) are still being downloaded." = "%d файл(ів) ще досі завантажуються.";
 
 /* forward confirmation reason */
-"%d file(s) failed to download." = "%их файлів не вийшло завантажити.";
+"%d file(s) failed to download." = "%d файлів не вийшло завантажити.";
 
 /* forward confirmation reason */
-"%d file(s) were deleted." = "%их файл(ів) було видалено.";
+"%d file(s) were deleted." = "%d файл(ів) було видалено.";
 
 /* forward confirmation reason */
 "%d file(s) were not downloaded." = "%d файл(и) не було завантажено.";
@@ -2447,7 +2447,7 @@ chat item action */
 /* No comment provided by engineer. */
 "Error saving user password" = "Помилка збереження пароля користувача";
 
-/* No comment provided by engineer. */
+/* alert message */
 "Error scanning code: %@" = "Код помилки сканування: %@";
 
 /* No comment provided by engineer. */
@@ -3079,7 +3079,7 @@ servers warning */
 /* alert title */
 "Invalid name!" = "Неправильне ім'я!";
 
-/* No comment provided by engineer. */
+/* alert title */
 "Invalid QR code" = "Неправильний QR-код";
 
 /* No comment provided by engineer. */
@@ -3211,7 +3211,7 @@ servers warning */
 /* No comment provided by engineer. */
 "KeyChain error" = "помилка KeyChain";
 
-/* No comment provided by engineer. */
+/* file alert title */
 "Large file!" = "Великий файл!";
 
 /* badge alert button */
@@ -3918,9 +3918,6 @@ alert button */
 
 /* new chat action */
 "Open new chat" = "Відкрити новий чат";
-
-/* new chat action */
-"Open new group" = "Відкрити нову групу";
 
 /* No comment provided by engineer. */
 "Open Settings" = "Відкрийте Налаштування";
@@ -4647,10 +4644,10 @@ chat item action */
 "Saved" = "Збережено";
 
 /* No comment provided by engineer. */
-"Saved from" = "Збережено з";
+"saved from" = "збережено з";
 
 /* No comment provided by engineer. */
-"saved from %@" = "збережено з %@";
+"Saved from" = "Збережено з";
 
 /* message info title */
 "Saved message" = "Збережене повідомлення";
@@ -6024,6 +6021,12 @@ alert title */
 /* No comment provided by engineer. */
 "You already have a chat profile with the same display name. Please choose another name." = "Ви вже маєте профіль у чаті з таким самим іменем. Будь ласка, виберіть інше ім'я.";
 
+/* new chat alert */
+"You are a member" = "Ви учасник";
+
+/* new chat alert */
+"You are a moderator" = "Ви модератор";
+
 /* No comment provided by engineer. */
 "You are already connected to %@." = "Ви вже підключені до %@.";
 
@@ -6034,7 +6037,7 @@ alert title */
 "You are already connecting to %@." = "Ви вже з'єднані з %@.";
 
 /* new chat sheet message */
-"You are already connecting via this one-time link!" = "Ви вже підключаєтеся до %@.Ви вже підключаєтеся за цим одноразовим посиланням!";
+"You are already connecting via this one-time link!" = "Ви вже підключаєтеся за цим одноразовим посиланням!";
 
 /* No comment provided by engineer. */
 "You are already in group %@." = "Ви вже перебуваєте в групі %@.";
@@ -6047,6 +6050,15 @@ alert title */
 
 /* new chat sheet title */
 "You are already joining the group!\nRepeat join request?" = "Ви вже приєдналися до групи!\nПовторити запит на приєднання?";
+
+/* new chat alert */
+"You are an admin" = "Ви адмін";
+
+/* new chat alert */
+"You are an observer" = "Ви спостерігач";
+
+/* new chat alert */
+"You are an owner" = "Ви власник";
 
 /* No comment provided by engineer. */
 "You are invited to group" = "Запрошуємо вас до групи";
@@ -6257,9 +6269,6 @@ alert title */
 
 /* No comment provided by engineer. */
 "Your contact removed this link, or it was a one-time link that was already used.\nTo connect, ask your contact to create a new link." = "Якщо ваш контакт не видалив з'єднання або якщо це посилання вже використовувалося, це може бути помилкою - будь ласка, повідомте про це.\nЩоб підключитися, попросіть вашого контакта створити інше посилання і перевірте, чи маєте ви стабільне з'єднання з мережею.";
-
-/* No comment provided by engineer. */
-"Your contact sent a file that is larger than currently supported maximum size (%@)." = "Ваш контакт надіслав файл, розмір якого перевищує підтримуваний на цей момент максимальний розмір (%@).";
 
 /* No comment provided by engineer. */
 "Your contacts can allow full message deletion." = "Ваші контакти можуть дозволити повне видалення повідомлень.";

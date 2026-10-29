@@ -19,11 +19,12 @@ actual fun SimpleAndAnimatedImageView(
   blurred: State<Boolean>,
   ImageView: @Composable (painter: Painter, onClick: () -> Unit) -> Unit
 ) {
-  // The small view is the chat list preview: a 36dp box that the desktop layout keeps on screen the whole
-  // time. Decoding an animation at its own resolution to fill it would hold a raster and spend a frame of
-  // work per listed chat, without pause, so it keeps the still image as it did before.
-  val frame = if (smallView) null else rememberAnimatedImage(data, imageBitmap, blurred)
-  ImageView(BitmapPainter(frame?.value ?: imageBitmap)) {
+  // The small view is the chat list preview, which the layout keeps on screen without pause, so it stays a
+  // still image. A full screen modal is shown beside the chat rather than in place of it, so this item keeps
+  // composing under one and would otherwise decode where nobody can see it.
+  val frame = if (smallView) imageBitmap
+  else rememberAnimatedImage(data, imageBitmap) { blurred.value || ModalManager.fullscreen.hasModalsOpen() || ModalManager.center.hasModalsOpen() }
+  ImageView(BitmapPainter(frame)) {
     if (getLoadedFilePath(file) != null) {
       ModalManager.fullscreen.showCustomModal(animated = false) { close ->
         ImageFullScreenView(imageProvider, close)

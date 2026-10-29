@@ -19,7 +19,7 @@ import chat.simplex.common.ui.theme.DEFAULT_START_MODAL_WIDTH
 import chat.simplex.common.ui.theme.SimpleXTheme
 import chat.simplex.common.views.TerminalView
 import chat.simplex.common.views.helpers.*
-import chat.simplex.res.MR
+import chat.simplex.res.*
 import dev.icerock.moko.resources.compose.painterResource
 import dev.icerock.moko.resources.compose.stringResource
 import kotlinx.coroutines.*
@@ -120,6 +120,22 @@ private fun ApplicationScope.AppWindow(closedByError: MutableState<Boolean>) {
   }
 
   simplexWindowState.windowState = windowState
+  val unreadTotal by remember {
+    derivedStateOf {
+      val active = ChatModel.chats.value.sumOf { c ->
+        when (c.chatInfo.chatSettings?.enableNtfs) {
+          MsgFilter.All -> c.chatStats.unreadCount
+          MsgFilter.Mentions -> minOf(c.chatStats.unreadMentions, c.chatStats.unreadCount)
+          else -> 0
+        }
+      }
+      val others = ChatModel.users.sumOf { u ->
+        if (!u.user.activeUser && !u.user.hidden && u.user.showNtfs) u.unreadCount else 0
+      }
+      active + others
+    }
+  }
+  val windowTitle = if (unreadTotal > 0) "SimpleX [$unreadTotal]" else "SimpleX"
   // Reload all strings in all @Composable's after language change at runtime
   if (remember { ChatController.appPrefs.appLanguage.state }.value != "") {
     Window(state = windowState, visible = simplexWindowState.windowVisible.value, icon = painterResource(MR.images.ic_simplex), onCloseRequest = { handleCloseRequest(closedByError) }, onKeyEvent = {
@@ -128,7 +144,7 @@ private fun ApplicationScope.AppWindow(closedByError: MutableState<Boolean>) {
       } else {
         false
       }
-    }, title = "SimpleX") {
+    }, title = windowTitle) {
 //      val hardwareAccelerationDisabled = remember { listOf(GraphicsApi.SOFTWARE_FAST, GraphicsApi.SOFTWARE_COMPAT, GraphicsApi.UNKNOWN).contains(window.renderApi) }
       simplexWindowState.window = window
       AppScreen()
@@ -182,9 +198,10 @@ private fun ApplicationScope.AppWindow(closedByError: MutableState<Boolean>) {
         }
       }
       var windowFocused by remember { simplexWindowState.windowFocused }
-      LaunchedEffect(windowFocused) {
+      val showCallView = ChatModel.showCallView.value
+      LaunchedEffect(windowFocused, showCallView) {
         val delay = ChatController.appPrefs.laLockDelay.get()
-        if (!windowFocused && ChatModel.showAuthScreen.value && delay > 0) {
+        if (!windowFocused && !showCallView && ChatModel.showAuthScreen.value && delay > 0) {
           delay(delay * 1000L)
           // Trigger auth state check when delay ends (and if it ends)
           AppLock.recheckAuthState()
@@ -258,11 +275,16 @@ private fun ApplicationScope.handleCloseRequest(closedByError: MutableState<Bool
 fun showWindow() {
   simplexWindowState.windowVisible.value = true
   simplexWindowState.window?.apply {
+    // During a crash restart this is the disposed window, and showing it would bring it back.
+    if (!isDisplayable) return
     // Clear ICONIFIED so a minimized window un-minimizes; preserves MAXIMIZED_BOTH
     // when set. toFront() alone does not un-minimize on any AWT platform.
     extendedState = extendedState and Frame.ICONIFIED.inv()
+    // The window is made visible before the activation below; the next recomposition would be too late.
+    isVisible = true
     toFront()
     requestFocus()
+    if (desktopPlatform.isLinux()) requestX11Activation(this)
   }
 }
 

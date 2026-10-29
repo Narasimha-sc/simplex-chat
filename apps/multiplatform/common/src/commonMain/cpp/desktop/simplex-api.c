@@ -37,10 +37,10 @@ extern char *chat_recv_msg(chat_ctrl ctrl); // deprecated
 extern char *chat_recv_msg_wait(chat_ctrl ctrl, const int wait);
 extern char *chat_parse_markdown(const char *str);
 extern char *chat_parse_server(const char *str);
-extern char *chat_check_link(const char *str);
 extern char *chat_parse_uri(const char *str, const int safe);
 extern char *chat_password_hash(const char *pwd, const char *salt);
 extern char *chat_valid_name(const char *name);
+extern char *chat_parse_badge_code(const char *code);
 extern int chat_json_length(const char *str);
 extern char *chat_write_file(chat_ctrl ctrl, const char *path, char *ptr, int length);
 extern char *chat_read_file(const char *path, const char *key, const char *nonce);
@@ -64,6 +64,7 @@ jstring decode_to_utf8_string(JNIEnv *env, char *string) {
     (*env)->DeleteLocalRef(env, bb);
     (*env)->DeleteLocalRef(env, charset);
     (*env)->DeleteLocalRef(env, cb);
+    free(string);
     return res;
 }
 
@@ -159,14 +160,6 @@ Java_chat_simplex_common_platform_CoreKt_chatParseServer(JNIEnv *env, jclass cla
 }
 
 JNIEXPORT jstring JNICALL
-Java_chat_simplex_common_platform_CoreKt_chatCheckLink(JNIEnv *env, jclass clazz, jstring str) {
-    const char *_str = encode_to_utf8_chars(env, str);
-    jstring res = decode_to_utf8_string(env, chat_check_link(_str));
-    (*env)->ReleaseStringUTFChars(env, str, _str);
-    return res;
-}
-
-JNIEXPORT jstring JNICALL
 Java_chat_simplex_common_platform_CoreKt_chatParseUri(JNIEnv *env, jclass clazz, jstring str, jint safe) {
     const char *_str = encode_to_utf8_chars(env, str);
     jstring res = decode_to_utf8_string(env, chat_parse_uri(_str, safe));
@@ -189,6 +182,14 @@ Java_chat_simplex_common_platform_CoreKt_chatValidName(JNIEnv *env, jclass clazz
     const char *_name = encode_to_utf8_chars(env, name);
     jstring res = decode_to_utf8_string(env, chat_valid_name(_name));
     (*env)->ReleaseStringUTFChars(env, name, _name);
+    return res;
+}
+
+JNIEXPORT jstring JNICALL
+Java_chat_simplex_common_platform_CoreKt_chatParseBadgeCode(JNIEnv *env, jclass clazz, jstring code) {
+    const char *_code = encode_to_utf8_chars(env, code);
+    jstring res = decode_to_utf8_string(env, chat_parse_badge_code(_code));
+    (*env)->ReleaseStringUTFChars(env, code, _code);
     return res;
 }
 
@@ -239,6 +240,7 @@ Java_chat_simplex_common_platform_CoreKt_chatReadFile(JNIEnv *env, jclass clazz,
         arr = (*env)->NewByteArray(env, len);
         (*env)->SetByteArrayRegion(env, arr, 0, len, res + 1);
     }
+    free(res);
 
     jobjectArray ret = (jobjectArray)(*env)->NewObjectArray(env, 2, (*env)->FindClass(env, "java/lang/Object"), NULL);
     jobject statusObj = (*env)->NewObject(env, (*env)->FindClass(env, "java/lang/Integer"),

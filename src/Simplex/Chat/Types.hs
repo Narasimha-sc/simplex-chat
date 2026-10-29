@@ -30,7 +30,9 @@
 module Simplex.Chat.Types where
 
 import Control.Applicative ((<|>))
+import Control.Concurrent.STM (TVar)
 import Crypto.Number.Serialize (os2ip)
+import Crypto.Random (ChaChaDRG)
 import Data.Aeson (FromJSON (..), ToJSON (..))
 import qualified Data.Aeson as J
 import qualified Data.Aeson.Encoding as JE
@@ -52,7 +54,7 @@ import Data.Time.Clock (UTCTime)
 import Data.Type.Equality (testEquality, (:~:) (Refl))
 import Data.Typeable (Typeable)
 import Data.Word (Word16)
-import Simplex.Chat.Badges (BadgeInfo (..), BadgeProof (..), BadgeStatus (..), LocalBadge (..), localBadgeInfo, localBadgeStatus, mkBadgeStatus, verifyBadge)
+import Simplex.Chat.Badges (BadgeInfo (..), BadgeProof (..), BadgeStatus (..), LocalBadge (..), ProofPresHeader, acceptedBadge, localBadgeInfo, localBadgeStatus, mkBadgeStatus, verifyBadge)
 import Simplex.Chat.Names (SimplexDomainClaim (..))
 import Simplex.Messaging.Crypto.BBS (BBSPublicKey)
 import Simplex.Chat.Types.Preferences
@@ -60,7 +62,7 @@ import Simplex.Chat.Types.Shared
 import Simplex.Chat.Types.UITheme
 import Simplex.FileTransfer.Description (FileDigest)
 import Simplex.FileTransfer.Types (RcvFileId, SndFileId)
-import Simplex.Messaging.Agent.Protocol (ACorrId, ACreatedConnLink, AConnectionLink (..), AEventTag (..), AEvtTag (..), ConnId, ConnShortLink (..), ConnectionLink (..), ConnectionMode (..), ConnectionModeI, ConnectionRequestUri, ContactConnType (..), CreatedConnLink (..), InvitationId, SAEntity (..), SConnectionMode (..), SimplexDomain, SimplexNameInfo (..), UserId)
+import Simplex.Messaging.Agent.Protocol (ACorrId, ACreatedConnLink, AConnectionLink (..), AEventTag (..), AEvtTag (..), ConnId, ConnShortLink (..), ConnectionLink (..), ConnectionMode (..), ConnectionModeI, ConnectionRequestUri, ContactConnType (..), CreatedConnLink (..), InvitationId, SAEntity (..), SConnectionMode (..), SimplexDomain, SimplexNameInfo (..), UserId, sConnectionMode)
 import Simplex.Messaging.Agent.Store.DB (Binary (..), blobFieldDecoder, fromTextField_)
 import qualified Simplex.Messaging.Crypto as C
 import Simplex.Messaging.Crypto.File (CryptoFileArgs (..))
@@ -143,7 +145,7 @@ data User = User
     sendRcptsContacts :: Bool,
     sendRcptsSmallGroups :: Bool,
     autoAcceptMemberContacts :: Bool,
-    autoAcceptGroupInvitations :: Bool,
+    autoAcceptGroupInvitations :: BoolDef,
     userMemberProfileUpdatedAt :: Maybe UTCTime,
     userChatRelay :: BoolDef,
     clientService :: BoolDef,
@@ -206,6 +208,7 @@ data Contact = Contact
     chatTs :: Maybe UTCTime,
     preparedContact :: Maybe PreparedContact,
     contactRequestId :: Maybe Int64,
+    contactRequest :: Maybe UserContactRequestRef,
     -- contactGroupMemberId + contactGrpInvSent are used in conjunction for making connection request
     -- to a group member via direct message feature
     contactGroupMemberId :: Maybe GroupMemberId,
@@ -217,6 +220,7 @@ data Contact = Contact
     chatTags :: [ChatTagId],
     chatItemTTL :: Maybe Int64,
     uiThemes :: Maybe UIThemeEntityOverrides,
+    chatLayout :: Maybe ChatLayout,
     chatDeleted :: Bool,
     customData :: Maybe CustomData
   }
@@ -230,6 +234,12 @@ data PreparedContact = PreparedContact
     uiConnLinkType :: ConnectionMode,
     welcomeSharedMsgId :: Maybe SharedMsgId,
     requestSharedMsgId :: Maybe SharedMsgId
+  }
+  deriving (Eq, Show)
+
+data UserContactRequestRef = UserContactRequestRef
+  { contactRequestId :: Int64,
+    rejectionSupported :: Bool
   }
   deriving (Eq, Show)
 
@@ -307,6 +317,13 @@ contactActive Contact {contactStatus} = contactStatus == CSActive
 contactDeleted :: Contact -> Bool
 contactDeleted Contact {contactStatus} = contactStatus == CSDeleted || contactStatus == CSDeletedByUser
 
+contactUpdatableFromMember :: Contact -> Bool
+contactUpdatableFromMember ct
+  | not (contactActive ct) = True
+  | otherwise = case contactConn ct of
+      Nothing -> True
+      Just conn -> not (connReady conn) || (authErrCounter conn >= 1)
+
 contactSecurityCode :: Contact -> Maybe SecurityCode
 contactSecurityCode Contact {activeConn} = connectionCode =<< activeConn
 
@@ -317,6 +334,7 @@ data ContactStatus
   = CSActive
   | CSDeleted
   | CSDeletedByUser
+  | CSRejected
   deriving (Eq, Show, Ord)
 
 instance FromField ContactStatus where fromField = fromTextField_ textDecode
@@ -335,11 +353,13 @@ instance TextEncoding ContactStatus where
     "active" -> Just CSActive
     "deleted" -> Just CSDeleted
     "deletedByUser" -> Just CSDeletedByUser
+    "rejected" -> Just CSRejected
     _ -> Nothing
   textEncode = \case
     CSActive -> "active"
     CSDeleted -> "deleted"
     CSDeletedByUser -> "deletedByUser"
+    CSRejected -> "rejected"
 
 data ContactRef = ContactRef
   { contactId :: ContactId,
@@ -384,7 +404,8 @@ data UserContactRequest = UserContactRequest
     xContactId :: Maybe XContactId,
     pqSupport :: PQSupport,
     welcomeSharedMsgId :: Maybe SharedMsgId,
-    requestSharedMsgId :: Maybe SharedMsgId
+    requestSharedMsgId :: Maybe SharedMsgId,
+    rejectionSupported :: Bool
   }
   deriving (Eq, Show)
 
@@ -426,7 +447,7 @@ instance ToJSON ConnReqUriHash where
 
 data RequestEntity
   = REContact Contact
-  | REBusinessChat GroupInfo GroupMember
+  | REBusinessChat GroupInfoKeys GroupMember
 
 type RepeatRequest = Bool
 
@@ -468,12 +489,30 @@ groupRootPubKey :: GroupRootKey -> C.PublicKeyEd25519
 groupRootPubKey (GRKPrivate pk) = C.publicKey pk
 groupRootPubKey (GRKPublic pk) = pk
 
-data GroupKeys = GroupKeys
-  { publicGroupId :: B64UrlByteString,
-    groupRootKey :: GroupRootKey,
-    memberPrivKey :: C.PrivateKeyEd25519
-  }
+data GroupKeys
+  = GKGroup
+      { memberPrivKey :: C.PrivateKeyEd25519
+      }
+  | GKPublicGroup
+      { groupRootKey :: GroupRootKey,
+        memberPrivKey :: C.PrivateKeyEd25519
+      }
+  | GKRelayRequest
+      { memberPrivKey :: C.PrivateKeyEd25519
+      }
+  | GKPreparedPublicGroup
+      { memberPrivKey :: C.PrivateKeyEd25519
+      }
   deriving (Eq, Show)
+
+isPublicGroup :: GroupKeys -> Bool
+isPublicGroup = \case
+  GKGroup {} -> False
+  GKPublicGroup {} -> True
+  GKRelayRequest {} -> True
+  GKPreparedPublicGroup {} -> True
+
+data GroupInfoKeys = GIK GroupInfo GroupKeys
 
 data GroupInfo = GroupInfo
   { groupId :: GroupId,
@@ -499,13 +538,15 @@ data GroupInfo = GroupInfo
     rosterVersion :: Maybe VersionRoster,
     membersRequireAttention :: Int,
     viaGroupLinkUri :: Maybe ConnReqContact,
-    groupKeys :: Maybe GroupKeys,
     groupDomainVerified :: Maybe Bool
   }
   deriving (Eq, Show)
 
 useRelays' :: GroupInfo -> Bool
 useRelays' GroupInfo {useRelays} = isTrue useRelays
+
+publicGroup' :: GroupInfo -> Maybe PublicGroupProfile
+publicGroup' g@GroupInfo {groupProfile = GroupProfile {publicGroup}} = if useRelays' g then publicGroup else Nothing
 
 relayServesGroup :: GroupInfo -> Bool
 relayServesGroup GroupInfo {relayOwnStatus} = case relayOwnStatus of
@@ -579,7 +620,7 @@ data GroupLink = GroupLink
 
 data ContactOrGroup = CGContact Contact | CGGroup GroupInfo [GroupMember]
 
-data PreparedChatEntity = PCEContact Contact | PCEGroup {groupInfo :: GroupInfo, hostMember :: GroupMember}
+data PreparedChatEntity = PCEContact Contact | PCEGroup {groupInfo :: GroupInfoKeys, hostMember :: GroupMember}
 
 contactAndGroupIds :: ContactOrGroup -> (Maybe ContactId, Maybe GroupId)
 contactAndGroupIds = \case
@@ -709,7 +750,7 @@ data Profile = Profile
   }
   deriving (Eq, Show)
 
-data ChatPeerType = CPTHuman | CPTBot
+data ChatPeerType = CPTHuman | CPTBot | CPTBusiness | CPTAgent | CPTUnknown Text
   deriving (Eq, Show)
 
 instance FromJSON ChatPeerType where
@@ -724,13 +765,18 @@ instance FromField ChatPeerType where fromField = fromTextField_ textDecode
 instance ToField ChatPeerType where toField = toField . textEncode
 
 instance TextEncoding ChatPeerType where
-  textDecode = \case
-    "human" -> Just CPTHuman
-    "bot" -> Just CPTBot
-    _ -> Nothing
+  textDecode s = Just $ case s of
+    "human" -> CPTHuman
+    "bot" -> CPTBot
+    "business" -> CPTBusiness
+    "agent" -> CPTAgent
+    tag -> CPTUnknown tag
   textEncode = \case
     CPTHuman -> "human"
     CPTBot -> "bot"
+    CPTBusiness -> "business"
+    CPTAgent -> "agent"
+    CPTUnknown tag -> tag
 
 profileFromName :: ContactName -> Profile
 profileFromName displayName =
@@ -812,15 +858,18 @@ fromLocalProfile LocalProfile {displayName, fullName, shortDescr, description, i
       OwnBadge _ _ -> Nothing -- the own credential is not sent, proof is generated on send
       ShownBadge _ _ -> Nothing -- a display-only badge is not sent
 
-profileBadgeVerified :: Map Int BBSPublicKey -> LocalProfile -> Profile -> IO (Maybe Bool)
-profileBadgeVerified keys LocalProfile {localBadge} Profile {badge = newBadge} =
-  case (localBadge, newBadge) of
+profileBadgeVerified :: Maybe ProofPresHeader -> Map Int BBSPublicKey -> Maybe LocalProfile -> Profile -> IO (Profile, Maybe Bool)
+profileBadgeVerified expected keys lp_ p@Profile {badge = rcvBadge} =
+  (,) p {badge = newBadge} <$> case (storedBadge, newBadge) of
     (_, Nothing) -> pure (Just False)
     -- an unchanged badge that verified before stays verified; failed or unknown-key badges
     -- are re-verified, so an unknown key heals once an app update adds it
     (Just lb, Just (BadgeProof _ _ _ newInfo))
       | localBadgeInfo lb == newInfo && localBadgeStatus lb `notElem` [BSFailed, BSUnknownKey] -> pure (Just True)
     (_, Just newB) -> verifyBadge keys newB
+  where
+    storedBadge = (\LocalProfile {localBadge} -> localBadge) =<< lp_
+    newBadge = acceptedBadge expected ((\Profile {badge} -> badge) . fromLocalProfile =<< lp_) rcvBadge
 
 -- a failed or unknown-key badge is re-verified on the next profile update even when its disclosed content
 -- is unchanged, so it heals once an app update adds the issuer key
@@ -871,7 +920,8 @@ data GroupProfile = GroupProfile
     image :: Maybe ImageData,
     publicGroup :: Maybe PublicGroupProfile,
     groupPreferences :: Maybe GroupPreferences,
-    memberAdmission :: Maybe GroupMemberAdmission
+    memberAdmission :: Maybe GroupMemberAdmission,
+    chatLayout :: Maybe ChatLayout
   }
   deriving (Eq, Show)
 
@@ -929,6 +979,7 @@ instance ToJSON GroupLinkId where
 
 data GroupInvitation = GroupInvitation
   { fromMember :: MemberIdRole,
+    fromMemberKey :: Maybe MemberKey,
     invitedMember :: MemberIdRole,
     connRequest :: ConnReqInvitation,
     groupProfile :: GroupProfile,
@@ -941,6 +992,7 @@ data GroupInvitation = GroupInvitation
 data GroupLinkInvitation = GroupLinkInvitation
   { fromMember :: MemberIdRole,
     fromMemberName :: ContactName,
+    fromMemberKey :: Maybe MemberKey,
     invitedMember :: MemberIdRole,
     groupProfile :: GroupProfile,
     accepted :: Maybe GroupAcceptance,
@@ -962,7 +1014,9 @@ data GroupRelayInvitation = GroupRelayInvitation
   { fromMember :: MemberIdRole,
     fromMemberProfile :: Profile,
     relayMemberId :: MemberId,
-    groupLink :: ShortLinkContact
+    groupLink :: ShortLinkContact,
+    publicGroupId :: Maybe B64UrlByteString,
+    fromMemberKey :: Maybe MemberKey
   }
   deriving (Eq, Show)
 
@@ -993,6 +1047,26 @@ instance ToJSON GroupRejectionReason where
   toJSON = strToJSON
   toEncoding = strToJEncoding
 
+data ContactRejectionReason
+  = CRRUserRejected
+  | CRRUnknown {text :: Text}
+  deriving (Eq, Show)
+
+instance StrEncoding ContactRejectionReason where
+  strEncode = \case
+    CRRUserRejected -> "user_rejected"
+    CRRUnknown text -> encodeUtf8 text
+  strP =
+    "user_rejected" $> CRRUserRejected
+    <|> CRRUnknown . safeDecodeUtf8 <$> A.takeByteString
+
+instance FromJSON ContactRejectionReason where
+  parseJSON = strParseJSON "ContactRejectionReason"
+
+instance ToJSON ContactRejectionReason where
+  toJSON = strToJSON
+  toEncoding = strToJEncoding
+
 data RelayRejectionReason
   = RRRRejoinRejected
   | RRRUnknown {text :: Text}
@@ -1020,8 +1094,7 @@ data MemberIdRole = MemberIdRole
   deriving (Eq, Show)
 
 data IntroInvitation = IntroInvitation
-  { groupConnReq :: ConnReqInvitation,
-    directConnReq :: Maybe ConnReqInvitation
+  { groupConnReq :: ConnReqInvitation
   }
   deriving (Eq, Show)
 
@@ -1104,7 +1177,8 @@ memberRestrictions m
 data ReceivedGroupInvitation = ReceivedGroupInvitation
   { fromMember :: GroupMember,
     connRequest :: ConnReqInvitation,
-    groupInfo :: GroupInfo
+    groupInfo :: GroupInfo,
+    groupKeys :: GroupKeys
   }
   deriving (Eq, Show)
 
@@ -1145,13 +1219,15 @@ data GroupMember = GroupMember
     relayLink :: Maybe ShortLinkContact,
     -- out-of-band verified security code for connectionless (channel) members;
     -- regular members carry it in activeConn instead (see memberSecurityCode)
-    memberVerifiedCode :: Maybe SecurityCode
+    memberVerifiedCode :: Maybe SecurityCode,
+    memberBadgeProof :: NoJSON BadgeProof
   }
   deriving (Eq, Show)
 
 data RelayRequestData = RelayRequestData
   { relayInvId :: InvitationId,
     reqGroupLink :: ShortLinkContact,
+    reqPublicGroupId :: Maybe B64UrlByteString,
     reqChatVRange :: VersionRangeChat,
     reqDelay :: Int64,
     reqRetries :: Int,
@@ -1517,7 +1593,8 @@ data FileInvitation = FileInvitation
     fileDigest :: Maybe FileDigest,
     fileConnReq :: Maybe ConnReqInvitation,
     fileInline :: Maybe InlineFileMode,
-    fileDescr :: Maybe FileDescr
+    fileDescr :: Maybe FileDescr,
+    fileBadge :: Maybe BadgeProof
   }
   deriving (Eq, Show)
 
@@ -1532,7 +1609,8 @@ xftpFileInvitation fileName fileSize fileDescr =
       fileDigest = Nothing,
       fileConnReq = Nothing,
       fileInline = Nothing,
-      fileDescr = Just fileDescr
+      fileDescr = Just fileDescr,
+      fileBadge = Nothing
     }
 
 data InlineFileMode
@@ -1586,10 +1664,14 @@ instance ToJSON FileType where
   toJSON = J.String . textEncode
   toEncoding = JE.text . textEncode
 
+data FileProhibited = FileProhibited {maxSize :: Integer, badgeStatus :: Maybe BadgeStatus}
+  deriving (Eq, Show)
+
 data RcvFileTransfer = RcvFileTransfer
   { fileId :: FileTransferId,
     xftpRcvFile :: Maybe XFTPRcvFile,
     fileInvitation :: FileInvitation,
+    fileProhibited :: Maybe FileProhibited,
     fileStatus :: RcvFileStatus,
     fileType :: FileType,
     rcvFileInline :: Maybe InlineFileMode,
@@ -1831,6 +1913,17 @@ instance StrEncoding AConnectTarget where
     where
       nameStart = "@" <|> "#" <|> "simplex:/name"
 
+instance ConnectionModeI m => StrEncoding (ConnectTarget m) where
+  strEncode t = strEncode $ ACTarget sConnectionMode t
+  strP = connectTargetP
+
+connectTargetP :: forall m. ConnectionModeI m => A.Parser (ConnectTarget m)
+connectTargetP = do
+  ACTarget m t <- strP
+  case testEquality m (sConnectionMode :: SConnectionMode m) of
+    Just Refl -> pure t
+    Nothing -> fail "bad connect target mode"
+
 aConnectTarget :: AConnectionLink -> AConnectTarget
 aConnectTarget (ACL SCMInvitation cl) = ACTarget SCMInvitation (CTInv cl)
 aConnectTarget (ACL SCMContact cl) = ACTarget SCMContact $ case cl of
@@ -1904,20 +1997,6 @@ verificationCode = T.pack . unwords . chunks 5 . show . os2ip
   where
     chunks _ [] = []
     chunks n xs = let (h, t) = splitAt n xs in h : chunks n t
-
--- Recognises the textual shape of a verification code — the inverse of
--- verificationCode's `unwords . chunks 5 . show`: space-separated groups of
--- exactly 5 ASCII digits (the last group 1-5 digits), 32+ digits in total.
--- Used by chatCheckLink to classify a scanned contact security code, which has
--- no scheme to parse. Requiring the grouping keeps a bare long number out.
-isVerificationCode :: ByteString -> Bool
-isVerificationCode s = case B.split ' ' s of
-  [] -> False
-  gs -> all full5 (init gs) && lastOk (last gs) && sum (map B.length gs) >= 32
-  where
-    isAsciiDigit c = c >= '0' && c <= '9'
-    full5 g = B.length g == 5 && B.all isAsciiDigit g
-    lastOk g = let n = B.length g in n >= 1 && n <= 5 && B.all isAsciiDigit g
 
 sameVerificationCode :: Text -> Text -> Bool
 sameVerificationCode c1 c2 = noSpaces c1 == noSpaces c2
@@ -2086,7 +2165,7 @@ instance TextEncoding CommandStatus where
 
 data CommandFunction
   = CFCreateConnGrpMemInv
-  | CFCreateConnGrpInv
+  | CFCreateConnGrpInv -- deprecated
   | CFCreateConnFileInvDirect -- deprecated
   | CFCreateConnFileInvGroup -- deprecated
   | CFJoinConn
@@ -2196,8 +2275,8 @@ type VersionChat = Version ChatVersion
 type VersionRangeChat = VersionRange ChatVersion
 
 -- | Store-wide context passed to store functions in place of the bare `vr`
--- parameter. Built from config by mkStoreCxt; more fields are added here over time.
-data StoreCxt = StoreCxt {vr :: VersionRangeChat, badgeKeys :: Map Int BBSPublicKey}
+-- parameter. Built from config by storeCxt; more fields are added here over time.
+data StoreCxt = StoreCxt {vr :: VersionRangeChat, badgeKeys :: Map Int BBSPublicKey, drg :: TVar ChaChaDRG}
 
 pattern VersionChat :: Word16 -> VersionChat
 pattern VersionChat v = Version v
@@ -2219,7 +2298,7 @@ peerConnChatVersion _local@(VersionRange lmin lmax) _peer@(VersionRange rmin rma
   | otherwise = rmax
 
 initialChatVersion :: VersionChat
-initialChatVersion = VersionChat 1
+initialChatVersion = VersionChat 9
 
 chatInitialVRange :: VersionRangeChat
 chatInitialVRange = versionToRange initialChatVersion
@@ -2303,10 +2382,6 @@ instance FromJSON GroupSummary where
   parseJSON = $(JQ.mkParseJSON defaultJSON ''GroupSummary)
   omittedField = Just GroupSummary {currentMembers = 0, publicMemberCount = Nothing}
 
-$(JQ.deriveJSON (sumTypeJSON $ dropPrefix "GRK") ''GroupRootKey)
-
-$(JQ.deriveJSON defaultJSON ''GroupKeys)
-
 $(JQ.deriveJSON defaultJSON ''GroupInfo)
 
 $(JQ.deriveJSON defaultJSON ''Group)
@@ -2339,6 +2414,8 @@ $(JQ.deriveJSON defaultJSON ''GroupMemberRef)
 
 $(JQ.deriveJSON defaultJSON ''FileDescr)
 
+$(JQ.deriveJSON defaultJSON ''FileProhibited)
+
 $(JQ.deriveJSON defaultJSON ''FileInvitation)
 
 $(JQ.deriveJSON defaultJSON ''SndFileTransfer)
@@ -2356,6 +2433,8 @@ $(JQ.deriveJSON defaultJSON ''XFTPSndFile)
 $(JQ.deriveJSON defaultJSON ''FileTransferMeta)
 
 $(JQ.deriveJSON defaultJSON ''PreparedContact)
+
+$(JQ.deriveJSON defaultJSON ''UserContactRequestRef)
 
 $(JQ.deriveJSON defaultJSON ''GroupDirectInvitation)
 

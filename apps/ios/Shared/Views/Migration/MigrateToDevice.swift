@@ -204,14 +204,11 @@ struct MigrateToDevice: View {
                     ScannerInView(showQRCodeScanner: $showQRCodeScanner) { resp in
                         switch resp {
                         case let .success(r):
-                            let trimmed = r.string.trimmingCharacters(in: .whitespacesAndNewlines)
-                            switch checkLink(trimmed) {
-                            case .some(.fileDescription):
-                                migrationState = .linkDownloading(link: trimmed)
-                            case nil:
+                            let link = r.string
+                            if strHasSimplexFileLink(link.trimmingCharacters(in: .whitespaces)) {
+                                migrationState = .linkDownloading(link: link.trimmingCharacters(in: .whitespaces))
+                            } else {
                                 alert = .error(title: "Invalid link", error: "The text you pasted is not a SimpleX link.")
-                            case let type?:
-                                alert = .error(title: "Wrong link", error: wrongQRCodeMessage(type))
                             }
                         case let .failure(e):
                             logger.error("processQRCode QR code error: \(e.localizedDescription)")
@@ -235,20 +232,10 @@ struct MigrateToDevice: View {
     private func pasteLinkView() -> some View {
         Button {
             if let str = UIPasteboard.general.string {
-                let trimmed = str.trimmingCharacters(in: .whitespacesAndNewlines)
-                Task {
-                    let linkType = await checkLinkAsync(trimmed)
-                    // the sheet can be dismissed while classifying; applying the result then
-                    // resurrects it (SimpleXInfo) or skips the paste screen (CreateProfile)
-                    guard case .some(.pasteOrScanLink) = migrationState else { return }
-                    switch linkType {
-                    case .some(.fileDescription):
-                        migrationState = .linkDownloading(link: trimmed)
-                    case nil:
-                        alert = .error(title: "Invalid link", error: "The text you pasted is not a SimpleX link.")
-                    case let type?:
-                        alert = .error(title: "Wrong link", error: wrongQRCodeMessage(type))
-                    }
+                if strHasSimplexFileLink(str.trimmingCharacters(in: .whitespaces)) {
+                    migrationState = .linkDownloading(link: str.trimmingCharacters(in: .whitespaces))
+                } else {
+                    alert = .error(title: "Invalid link", error: "The text you pasted is not a SimpleX link.")
                 }
             }
         } label: {
@@ -552,7 +539,7 @@ struct MigrateToDevice: View {
         Task {
             do {
                 if !hasChatCtrl() {
-                    chatInitControllerRemovingDatabases()
+                    try chatInitControllerRemovingDatabases()
                 } else if ChatModel.shared.chatRunning == true {
                     // cannot delete storage if chat is running
                     try await stopChatAsync()
@@ -653,6 +640,10 @@ struct MigrateToDevice: View {
         dismiss()
     }
 
+    private func strHasSimplexFileLink(_ text: String) -> Bool {
+        text.starts(with: "simplex:/file") || text.starts(with: "https://simplex.chat/file")
+    }
+
     private static func urlForTemporaryDatabase() -> URL {
         URL(fileURLWithPath: generateNewFileName(getMigrationTempFilesDirectory().path + "/" + "migration", "db", fullPath: true))
     }
@@ -744,6 +735,8 @@ private func showErrorOnMigrationIfNeeded(_ status: DBMigrationResult, _ alert: 
         alert.wrappedValue = .wrongPassphrase()
     case .errorKeychain:
         alert.wrappedValue = .keychainError()
+    case .errorKeyGeneration:
+        alert.wrappedValue = .databaseError(message: NSLocalizedString("Cannot generate random database passphrase", comment: "alert message"))
     case let .errorSQL(_, error):
         alert.wrappedValue = .databaseError(message: error)
     case let .unknown(error):

@@ -11,7 +11,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import chat.simplex.common.platform.*
 import chat.simplex.common.views.helpers.getBitmapFromByteArray
-import chat.simplex.res.MR
+import chat.simplex.res.*
 import dev.icerock.moko.resources.compose.painterResource
 import dev.icerock.moko.resources.compose.stringResource
 import org.jetbrains.compose.videoplayer.SkiaBitmapVideoSurface
@@ -19,11 +19,10 @@ import kotlin.math.max
 
 @Composable
 actual fun FullScreenImageView(modifier: Modifier, data: ByteArray, imageBitmap: ImageBitmap) {
-  // Decoded once instead of on every recomposition, because an animation recomposes this on every frame
+  // Decoded once, as an animation recomposes this on every frame
   val still = remember(data) { getBitmapFromByteArray(data, false) ?: MR.images.decentralized.image.toComposeImageBitmap() }
-  val frame = rememberAnimatedImage(data, still)
   Image(
-    frame.value,
+    rememberAnimatedImage(data, still),
     contentDescription = stringResource(MR.strings.image_descr),
     contentScale = ContentScale.Fit,
     modifier = modifier,
@@ -44,7 +43,7 @@ actual fun FullScreenVideoView(player: VideoPlayer, modifier: Modifier, close: (
 }
 
 @Composable
-fun BoxScope.SurfaceFromPlayer(player: VideoPlayer, modifier: Modifier) {
+fun BoxScope.SurfaceFromPlayer(player: VideoPlayer, modifier: Modifier, contentScale: ContentScale = ContentScale.Fit) {
   val surface = remember {
     SkiaBitmapVideoSurface().also {
       player.player.videoSurface().set(it)
@@ -55,7 +54,7 @@ fun BoxScope.SurfaceFromPlayer(player: VideoPlayer, modifier: Modifier) {
       bitmap,
       modifier = modifier.align(Alignment.Center),
       contentDescription = null,
-      contentScale = ContentScale.Fit,
+      contentScale = contentScale,
       alignment = Alignment.Center,
     )
   }

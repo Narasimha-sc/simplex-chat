@@ -1416,7 +1416,7 @@ server test step */
 "Contact preferences" = "Preferencje kontaktu";
 
 /* No comment provided by engineer. */
-"Contact requests from groups" = "Prośby o kontakt od grup";
+"Contact requests in groups" = "Prośby o kontakt od grup";
 
 /* No comment provided by engineer. */
 "contact should accept…" = "kontakt powinien zaakceptować…";
@@ -2364,7 +2364,7 @@ chat item action */
 /* No comment provided by engineer. */
 "Error saving user password" = "Błąd zapisu hasła użytkownika";
 
-/* No comment provided by engineer. */
+/* alert message */
 "Error scanning code: %@" = "Błąd skanowanie kodu: %@";
 
 /* No comment provided by engineer. */
@@ -3027,7 +3027,7 @@ servers warning */
 /* alert title */
 "Invalid name!" = "Nieprawidłowa nazwa!";
 
-/* No comment provided by engineer. */
+/* alert title */
 "Invalid QR code" = "Nieprawidłowy kod QR";
 
 /* No comment provided by engineer. */
@@ -3162,7 +3162,7 @@ servers warning */
 /* No comment provided by engineer. */
 "KeyChain error" = "Błąd pęku kluczy";
 
-/* No comment provided by engineer. */
+/* file alert title */
 "Large file!" = "Duży plik!";
 
 /* badge alert button */
@@ -3899,9 +3899,6 @@ alert button */
 
 /* new chat action */
 "Open new chat" = "Otwórz nowy czat";
-
-/* new chat action */
-"Open new group" = "Otwórz nową grupę";
 
 /* No comment provided by engineer. */
 "Open Settings" = "Otwórz Ustawienia";
@@ -4643,10 +4640,10 @@ chat item action */
 "Saved" = "Zapisane";
 
 /* No comment provided by engineer. */
-"Saved from" = "Zapisane od";
+"saved from" = "zapisane od";
 
 /* No comment provided by engineer. */
-"saved from %@" = "zapisane od %@";
+"Saved from" = "Zapisane od";
 
 /* message info title */
 "Saved message" = "Zachowano wiadomość";
@@ -5507,9 +5504,6 @@ server test failure */
 "This setting applies to messages in your current chat profile **%@**." = "To ustawienie dotyczy wiadomości Twojego bieżącego profilu czatu **%@**.";
 
 /* No comment provided by engineer. */
-"This setting is for your current profile **%@**." = "To ustawienie jest dla Twojego obecnego profilu **%@**.";
-
-/* No comment provided by engineer. */
 "Time to disappear is set only for new contacts." = "Czas zniknięcia jest ustawiony tylko dla nowych kontaktów.";
 
 /* No comment provided by engineer. */
@@ -6059,6 +6053,12 @@ alert title */
 /* No comment provided by engineer. */
 "You already have a chat profile with the same display name. Please choose another name." = "Masz już profil czatu o tej samej nazwie wyświetlanej. Proszę wybrać inną nazwę.";
 
+/* new chat alert */
+"You are a member" = "Jesteś członkiem";
+
+/* new chat alert */
+"You are a moderator" = "Jesteś moderatorem";
+
 /* No comment provided by engineer. */
 "You are already connected to %@." = "Jesteś już połączony z %@.";
 
@@ -6082,6 +6082,15 @@ alert title */
 
 /* new chat sheet title */
 "You are already joining the group!\nRepeat join request?" = "Już dołączasz do grupy!\nPowtórzyć prośbę dołączenia?";
+
+/* new chat alert */
+"You are an admin" = "Jesteś administratorem";
+
+/* new chat alert */
+"You are an observer" = "Jesteś obserwatorem";
+
+/* new chat alert */
+"You are an owner" = "Jesteś właścicielem";
 
 /* subscription status explanation */
 "You are connected to the server used to receive messages from this connection." = "Jesteś połączony z serwerem służącym do odbierania wiadomości z tego połączenia.";
@@ -6301,9 +6310,6 @@ alert title */
 
 /* No comment provided by engineer. */
 "Your contact removed this link, or it was a one-time link that was already used.\nTo connect, ask your contact to create a new link." = "O ile Twój kontakt nie usunął połączenia lub ten link był już użyty, może to być błąd - zgłoś go.\nAby się połączyć, poproś Twój kontakt o utworzenie kolejnego linku połączenia i sprawdź, czy masz stabilne połączenie z siecią.";
-
-/* No comment provided by engineer. */
-"Your contact sent a file that is larger than currently supported maximum size (%@)." = "Twój kontakt wysłał plik, który jest większy niż obecnie obsługiwany maksymalny rozmiar (%@).";
 
 /* No comment provided by engineer. */
 "Your contacts can allow full message deletion." = "Twoje kontakty mogą zezwolić na pełne usunięcie wiadomości.";

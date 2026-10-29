@@ -26,7 +26,7 @@ import chat.simplex.common.model.ChatModel
 import chat.simplex.common.model.PendingContactConnection
 import chat.simplex.common.platform.*
 import chat.simplex.common.views.usersettings.*
-import chat.simplex.res.MR
+import chat.simplex.res.*
 import kotlinx.coroutines.*
 
 @Composable
@@ -66,8 +66,9 @@ fun ContactConnectionInfoView(
     deleteConnection = { deleteContactConnectionAlert(rhId, contactConnection, chatModel, close) },
     onLocalAliasChanged = { setContactAlias(rhId, contactConnection, it, chatModel) },
     learnMore = {
+      if (appPlatform.isDesktop) ModalManager.end.closeModals()
       ModalManager.end.showModalCloseable { close ->
-        AddContactLearnMore(close)
+        key(this) { AddContactLearnMore(close) }
       }
     }
   )
@@ -90,7 +91,10 @@ private fun ContactConnectionInfoLayout(
       SettingsActionItemWithContent(
         icon = painterResource(MR.images.ic_theater_comedy_filled),
         text = null,
-        click = { ModalManager.end.showModal { IncognitoView() } },
+        click = {
+          if (appPlatform.isDesktop) ModalManager.end.closeModals()
+          ModalManager.end.showModal { key(this) { IncognitoView() } }
+        },
         iconColor = Indigo,
         extraPadding = false
       ) {
@@ -204,7 +208,7 @@ private fun setContactAlias(rhId: Long?, contactConnection: PendingContactConnec
   name = "Dark Mode"
 )*/
 @Composable
-private fun PreviewContactConnectionInfoView() {
+internal fun PreviewContactConnectionInfoView() {
   SimpleXTheme {
     ContactConnectionInfoLayout(
       chatModel = ChatModel,

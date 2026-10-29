@@ -359,6 +359,11 @@ struct ChatView: View {
             revealedItems = Set()
             stopAudioPlayer()
             if let cId {
+                if im.secondaryIMFilter == nil {
+                    chatModel.groupMembers = []
+                    chatModel.groupMembersIndexes.removeAll()
+                    chatModel.membersLoaded = false
+                }
                 if let c = chatModel.getChat(cId) {
                     chat = c
                 }
@@ -369,8 +374,17 @@ struct ChatView: View {
                 mergedItems.boxedValue = MergedItems.create(im, revealedItems)
                 scrollView.updateItems(mergedItems.boxedValue.items)
 
-                if let openAt = chatModel.openAroundItemId ?? im.chatState.openAtItemId, let index = mergedItems.boxedValue.indexInParentItems[openAt] {
+                if let openAround = chatModel.openAroundItemId, let index = mergedItems.boxedValue.indexInParentItems[openAround] {
                     scrollView.scrollToItem(index)
+                } else if let viewedIdx = mergedItems.boxedValue.items.firstIndex(where: { !$0.hasUnread() }) {
+                    // scroll to first unread after last viewed item (items reversed: 0 = newest)
+                    if viewedIdx > 0 {
+                        scrollView.scrollToItem(viewedIdx - 1)
+                    } else {
+                        scrollView.scrollToBottom()
+                    }
+                } else if let unreadIndex = mergedItems.boxedValue.items.lastIndex(where: { $0.hasUnread() }) {
+                    scrollView.scrollToItem(unreadIndex)
                 } else {
                     scrollView.scrollToBottom()
                 }
@@ -771,7 +785,7 @@ struct ChatView: View {
             }
             updateAvailableContent()
         }
-        if chatModel.draftChatId == cInfo.id && !composeState.forwarding,
+        if chatModel.draftChatId == draftChatId(cInfo.id, cInfo.groupChatScope()) && !composeState.forwarding,
            let draft = chatModel.draft {
             composeState = draft
         }
@@ -1710,6 +1724,7 @@ struct ChatView: View {
         @State private var showArchivingReports = false
         @State private var showChatItemInfoSheet: Bool = false
         @State private var chatItemInfo: ChatItemInfo?
+        @State private var chatItemInfoItem: ChatItem?
         @State private var msgWidth: CGFloat = 0
         @State private var touchInProgress: Bool = false
 
@@ -1725,6 +1740,7 @@ struct ChatView: View {
         @State private var markReadTask: Task<Void, Never>? = nil
         @State private var actionSheet: SomeActionSheet? = nil
         @State private var swipeOffset: CGFloat = 0
+        @State private var swipeExclusionFrames: [CGRect] = []
 
         var revealed: Bool { revealedItems.contains(chatItem.id) }
 
@@ -1958,7 +1974,7 @@ struct ChatView: View {
                                     .padding(.trailing, 12)
                             }
                             HStack(alignment: .top, spacing: 10) {
-                                ProfileImage(imageStr: groupInfo.image, iconName: groupInfo.chatIconName, size: memberImageSize, backgroundColor: theme.colors.background)
+                                ProfileImage(imageStr: groupInfo.image, icon: Image(systemName: groupInfo.chatIconName), size: memberImageSize, backgroundColor: theme.colors.background)
                                     .simultaneousGesture(TapGesture().onEnded {
                                         showChatInfoSheet = true
                                     })
@@ -2042,7 +2058,7 @@ struct ChatView: View {
                             }
                             HStack(alignment: .top, spacing: 10) {
                                 if ci.meta.showGroupAsSender {
-                                    ProfileImage(imageStr: groupInfo.image, iconName: groupInfo.chatIconName, size: memberImageSize, backgroundColor: theme.colors.background)
+                                    ProfileImage(imageStr: groupInfo.image, icon: Image(systemName: groupInfo.chatIconName), size: memberImageSize, backgroundColor: theme.colors.background)
                                         .simultaneousGesture(TapGesture().onEnded {
                                             showChatInfoSheet = true
                                         })
@@ -2146,12 +2162,14 @@ struct ChatView: View {
                             .padding(.bottom, 4)
                     }
                 }
+                .coordinateSpace(name: swipeExclusionSpace)
+                .onPreferenceChange(SwipeExclusionFrames.self) { swipeExclusionFrames = $0 }
                 .offset(x: swipeOffset)
                 .contentShape(Rectangle())
                 .simultaneousGesture(
-                    DragGesture(minimumDistance: 10)
+                    DragGesture(minimumDistance: 10, coordinateSpace: .named(swipeExclusionSpace))
                         .onChanged { value in
-                            guard canReply else { return }
+                            guard canReply, !swipeExclusionFrames.contains(where: { $0.contains(value.startLocation) }) else { return }
                             let x = value.translation.width
                             if x < 0 {
                                 swipeOffset = max(x * 0.63, -56)
@@ -2221,8 +2239,9 @@ struct ChatView: View {
                 .frame(minWidth: 0, maxWidth: .infinity, alignment: alignment)
                 .sheet(isPresented: $showChatItemInfoSheet, onDismiss: {
                     chatItemInfo = nil
+                    chatItemInfoItem = nil
                 }) {
-                    ChatItemInfoView(ci: ci, userMemberId: chat.chatInfo.groupInfo?.membership.memberId, chatItemInfo: $chatItemInfo)
+                    ChatItemInfoView(ci: chatItemInfoItem ?? ci, userMemberId: chat.chatInfo.groupInfo?.membership.memberId, chatItemInfo: $chatItemInfo)
                 }
         }
 
@@ -2311,7 +2330,7 @@ struct ChatView: View {
                     } else {
                         saveButton(file: fileSource)
                     }
-                } else if let file = ci.file, case .rcvInvitation = file.fileStatus, fileSizeValid(file, ciSenderProfile(ci, chat.chatInfo)) {
+                } else if let file = ci.file, case .rcvInvitation = file.fileStatus, fileSizeValid(file) {
                     downloadButton(file: file)
                 }
                 if ci.meta.editable && !mc.isVoice && !live {
@@ -2565,8 +2584,9 @@ struct ChatView: View {
                 Task {
                     do {
                         let cInfo = chat.chatInfo
-                        let ciInfo = try await apiGetChatItemInfo(type: cInfo.chatType, id: cInfo.apiId, scope: cInfo.groupChatScope(), itemId: ci.id)
+                        let (aci, ciInfo) = try await apiGetChatItemInfo(type: cInfo.chatType, id: cInfo.apiId, scope: cInfo.groupChatScope(), itemId: ci.id)
                         await MainActor.run {
+                            chatItemInfoItem = aci.chatItem
                             chatItemInfo = ciInfo
                         }
                         if case let .group(gInfo, _) = chat.chatInfo {
@@ -2824,6 +2844,7 @@ struct ChatView: View {
                                     m.decreaseGroupReportsCounter(chat.chatInfo.id)
                                 }
                                 m.updateChatInfo(itemDeletion.deletedChatItem.chatInfo)
+                                m.upsertSupportChatMember(itemDeletion.deletedChatItem.chatInfo)
                             }
                         }
                     }
@@ -3028,6 +3049,7 @@ private func deleteMessages(_ chat: Chat, _ deletingItems: [Int64], _ mode: CIDe
                     }
                     if let updatedChatInfo = deletedItems.last?.deletedChatItem.chatInfo {
                         ChatModel.shared.updateChatInfo(updatedChatInfo)
+                        ChatModel.shared.upsertSupportChatMember(updatedChatInfo)
                     }
                 }
                 await onSuccess()
@@ -3314,15 +3336,15 @@ struct ChatView_Previews: PreviewProvider {
         chatModel.chatId = "@1"
         let im = ItemsModel.shared
         im.reversedChatItems = [
-            ChatItem.getSample(1, .directSnd, .now, "hello"),
-            ChatItem.getSample(2, .directRcv, .now, "hi"),
-            ChatItem.getSample(3, .directRcv, .now, "hi there"),
-            ChatItem.getDeletedContentSample(4),
-            ChatItem.getSample(5, .directRcv, .now, "hello again"),
-            ChatItem.getSample(6, .directSnd, .now, "hi there!!!"),
-            ChatItem.getSample(7, .directSnd, .now, "how are you?"),
-            ChatItem.getSample(8, .directSnd, .now, "👍👍👍👍"),
-            ChatItem.getSample(9, .directSnd, .now, "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.")
+            ChatItem.getSample(1, .directSnd, previewDate, "hello"),
+            ChatItem.getSample(2, .directRcv, previewDate, "hi"),
+            ChatItem.getSample(3, .directRcv, previewDate, "hi there"),
+            ChatItem.getDeletedContentSample(4, previewDate),
+            ChatItem.getSample(5, .directRcv, previewDate, "hello again"),
+            ChatItem.getSample(6, .directSnd, previewDate, "hi there!!!"),
+            ChatItem.getSample(7, .directSnd, previewDate, "how are you?"),
+            ChatItem.getSample(8, .directSnd, previewDate, "👍👍👍👍"),
+            ChatItem.getSample(9, .directSnd, previewDate, "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.")
         ]
         @State var showChatInfo = false
         return ChatView(

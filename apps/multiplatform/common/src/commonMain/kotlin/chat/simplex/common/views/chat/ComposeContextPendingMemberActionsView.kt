@@ -16,7 +16,7 @@ import chat.simplex.common.platform.chatModel
 import chat.simplex.common.views.chat.group.removeMember
 import chat.simplex.common.views.chat.group.removeMemberDialog
 import chat.simplex.common.views.helpers.*
-import chat.simplex.res.MR
+import chat.simplex.res.*
 import dev.icerock.moko.resources.compose.stringResource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -117,7 +117,7 @@ private fun acceptMember(rhId: Long?, groupInfo: GroupInfo, member: GroupMember,
     val r = chatModel.controller.apiAcceptMember(rhId, groupInfo.groupId, member.groupMemberId, role)
     if (r != null) {
       withContext(Dispatchers.Main) {
-        chatModel.chatsContext.upsertGroupMember(rhId, r.first, r.second)
+        chatModel.chatsContext.upsertGroupMember(rhId, r.first, chatModel.withLoadedSupportChat(r.second))
         chatModel.chatsContext.updateGroup(rhId, r.first)
       }
     }

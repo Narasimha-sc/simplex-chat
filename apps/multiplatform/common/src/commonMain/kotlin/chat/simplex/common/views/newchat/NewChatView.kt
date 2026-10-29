@@ -42,7 +42,7 @@ import chat.simplex.common.views.chat.topPaddingToContent
 import chat.simplex.common.views.helpers.*
 import chat.simplex.common.views.usersettings.*
 import chat.simplex.common.BuildConfigCommon
-import chat.simplex.res.MR
+import chat.simplex.res.*
 import kotlinx.coroutines.*
 
 enum class NewChatOption {
@@ -654,21 +654,14 @@ private fun ConnectView(rhId: Long?, showQRCodeScanner: MutableState<Boolean>, p
 
     SectionView(stringResource(MR.strings.or_scan_qr_code), headerBottomPadding = 5.dp) {
       QRCodeScanner(showQRCodeScanner) { text ->
-        val trimmed = text.trim()
-        when (val type = checkLink(trimmed)) {
-          is ScannedLinkType.Connection -> connect(rhId, trimmed, close)
-          null -> {
-            AlertManager.shared.showAlertMsg(
-              title = generalGetString(MR.strings.invalid_qr_code),
-              text = generalGetString(MR.strings.code_you_scanned_is_not_simplex_link_qr_code)
-            )
-            false
-          }
-          else -> {
-            showWrongQRCodeAlert(type)
-            false
-          }
+        val linkVerified = verifyOnly(text)
+        if (!linkVerified) {
+          AlertManager.shared.showAlertMsg(
+            title = generalGetString(MR.strings.invalid_qr_code),
+            text = generalGetString(MR.strings.code_you_scanned_is_not_simplex_link_qr_code)
+          )
         }
+        verifyAndConnect(rhId, text, close)
       }
     }
   }
@@ -784,6 +777,17 @@ private fun filteredProfiles(users: List<User>, searchTextOrPassword: String): L
   }
 }
 
+private fun verifyOnly(text: String?): Boolean = text != null && strIsSimplexLink(text)
+
+private suspend fun verifyAndConnect(rhId: Long?, text: String?, close: () -> Unit): Boolean {
+  if (text != null && strIsSimplexLink(text)) {
+    return withContext(Dispatchers.Default) {
+      connect(rhId, text, close)
+    }
+  }
+  return false
+}
+
 private suspend fun connect(rhId: Long?, link: String, close: () -> Unit, cleanup: (() -> Unit)? = null): Boolean =
   planAndConnect(
     rhId,
@@ -817,6 +821,11 @@ private fun createInvitation(
   }
 }
 
+fun strIsSimplexLink(str: String): Boolean {
+  val parsedMd = parseToMarkdown(str)
+  return parsedMd != null && parsedMd.size == 1 && parsedMd[0].format is Format.SimplexLink
+}
+
 sealed class ConnectTarget {
   class Link(val text: String, val linkType: SimplexLinkType, val linkText: String) : ConnectTarget()
   class Name(val text: String, val nameInfo: SimplexNameInfo) : ConnectTarget()
@@ -827,8 +836,6 @@ fun strConnectTarget(str: String): ConnectTarget? {
   val links = parsedMd.filter { it.format?.isSimplexLink ?: false }
   if (links.size == 1) {
     val fmt = links[0].format as Format.SimplexLink
-    // showText is set only for a link written as a markdown hyperlink, whose text is the whole
-    // "[label](link)" source rather than the link - connect via the parsed uri in that case
     val text = if (fmt.showText != null) fmt.simplexUri else links[0].text
     return ConnectTarget.Link(text, fmt.linkType, fmt.simplexLinkText)
   }

@@ -3,9 +3,13 @@ package chat.simplex.common.platform
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.autofill.ContentType
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import chat.simplex.common.model.ChatController.appPrefs
 import chat.simplex.common.views.helpers.KeyChangeEffect
@@ -29,14 +33,14 @@ expect fun Modifier.desktopPointerHoverIconHand(): Modifier
 expect fun Modifier.desktopOnHovered(action: (Boolean) -> Unit): Modifier
 
 @Composable
-fun Modifier.desktopModifyBlurredState(enabled: Boolean, blurred: MutableState<Boolean>, showMenu: State<Boolean>,): Modifier {
+fun Modifier.desktopModifyBlurredState(blurred: MutableState<Boolean>, showMenu: State<Boolean>,): Modifier {
   val blurRadius = remember { appPrefs.privacyMediaBlurRadius.state }
   if (appPlatform.isDesktop) {
     KeyChangeEffect(blurRadius.value) {
-      blurred.value = enabled && blurRadius.value > 0
+      blurred.value = blurRadius.value > 0
     }
   }
-  return if (appPlatform.isDesktop && enabled && blurRadius.value > 0 && !showMenu.value) {
+  return if (appPlatform.isDesktop && blurRadius.value > 0 && !showMenu.value) {
     var job: Job = remember { Job() }
     LaunchedEffect(Unit) {
       // The approach here is to allow menu to show up and to not blur the view. When menu is shown and mouse is hovering,
@@ -58,32 +62,37 @@ fun Modifier.desktopModifyBlurredState(enabled: Boolean, blurred: MutableState<B
   }
 }
 
-// Whether the media is behind the blur, and so is not on screen to be seen. The caller that draws it and the
-// caller that decides whether to read its file MUST agree, or one of them shows what the other is hiding.
 @Composable
 fun blurHidesMedia(enabled: Boolean, blurred: State<Boolean>): Boolean =
   enabled && blurred.value && remember { appPrefs.privacyMediaBlurRadius.state }.value > 0
 
 @Composable
 fun Modifier.privacyBlur(
-  enabled: Boolean,
+  fullSize: Boolean,
   preview: ImageBitmap,
   blurred: MutableState<Boolean> = remember { mutableStateOf(appPrefs.privacyMediaBlurRadius.get() > 0) },
   scrollState: State<Boolean>,
   onLongClick: () -> Unit = {}
 ): Modifier {
   val blurRadius = remember { appPrefs.privacyMediaBlurRadius.state }
-  return if (blurHidesMedia(enabled, blurred)) {
-    val blurredPreview = remember(preview, blurRadius.value) { preview.blurredBy(blurRadius.value) }
-    this then Modifier
-      .drawWithContent { drawImage(blurredPreview, dstSize = IntSize(size.width.roundToInt(), size.height.roundToInt())) }
+  return if (blurHidesMedia(true, blurred)) {
+    this then (if (fullSize) {
+      val blurredPreview = remember(preview, blurRadius.value) { preview.blurredBy(blurRadius.value) }
+      Modifier.drawWithContent { drawImage(blurredPreview, dstSize = IntSize(size.width.roundToInt(), size.height.roundToInt())) }
+    } else Modifier.drawWithCache {
+      val cropScale = maxOf(size.width / preview.width, size.height / preview.height)
+      val croppedSize = IntSize((preview.width * cropScale).roundToInt(), (preview.height * cropScale).roundToInt())
+      val blurredCropped = preview.blurredBy(blurRadius.value, croppedSize.width.toDp().value)
+      val offset = IntOffset(((size.width - croppedSize.width) / 2).roundToInt(), ((size.height - croppedSize.height) / 2).roundToInt())
+      onDrawWithContent { clipRect { drawImage(blurredCropped, dstOffset = offset, dstSize = croppedSize) } }
+    })
       .combinedClickable(
         onLongClick = onLongClick,
         onClick = {
           blurred.value = false
         }
       )
-  } else if (enabled && blurRadius.value > 0 && appPlatform.isAndroid) {
+  } else if (blurRadius.value > 0 && appPlatform.isAndroid) {
       LaunchedEffect(Unit) {
         snapshotFlow { scrollState.value }
           .filter { it }
@@ -96,25 +105,28 @@ fun Modifier.privacyBlur(
     }
 }
 
-// A blur and a downscale discard the same thing - detail finer than their radius - so the media is resampled to
-// about one pixel per radius and stretched back. Modifier.blur convolved the drawn layer on every frame; this
-// runs once when the item composes, and needs no RenderEffect, which Android only applies from API 31.
-private const val BLURRED_MEDIA_WIDTH_DP = 360
-// Nothing bounds a decoded video frame, so the descent starts with one step that samples rather than averages -
-// reading every pixel of a 4K frame would stall composition - and bounds both sides, so no image, however
-// shaped, makes an intermediate larger than this square. Halving from here averages away most of the aliasing.
+// Calibrated so the resample blurs as much as Modifier.blur did at each radius; 360 read 5-75% stronger.
+private const val BLURRED_MEDIA_WIDTH_DP = 400
+// The width in-chat media is assumed to be drawn at; small views are blurred as much on screen.
+private const val CHAT_MEDIA_WIDTH_DP = 360
+// Bounds the first step: nothing bounds a decoded video frame, and reading every pixel of a 4K one would stall.
 private const val RESAMPLE_MEDIA_FROM_SIDE = 512
 
-private fun ImageBitmap.blurredBy(radius: Int): ImageBitmap {
+private fun ImageBitmap.blurredBy(radius: Int, drawnWidthDp: Float = CHAT_MEDIA_WIDTH_DP.toFloat()): ImageBitmap {
   if (width <= 0 || height <= 0) return this
-  val w = (BLURRED_MEDIA_WIDTH_DP / radius).coerceIn(1, width)
+  val w = (BLURRED_MEDIA_WIDTH_DP * drawnWidthDp / CHAT_MEDIA_WIDTH_DP / radius).toInt().coerceIn(1, width)
   val h = (w * height / width).coerceIn(1, BLURRED_MEDIA_WIDTH_DP)
   val longest = maxOf(width, height)
   var image = if (longest > RESAMPLE_MEDIA_FROM_SIDE) {
     val step = RESAMPLE_MEDIA_FROM_SIDE.toFloat() / longest
     scale((width * step).roundToInt().coerceAtLeast(1), (height * step).roundToInt().coerceAtLeast(1))
   } else this
-  // A single bilinear step from a large image reads too few of its pixels to stand for it, so halve down to it.
+  // One bilinear step from a large image undersamples it.
   while (image.width / 2 > w) image = image.scale(image.width / 2, (image.height / 2).coerceAtLeast(1))
-  return image.scale(w, h)
+  image = image.scale(w, h)
+  // Stretching w px straight to the screen shows their grid; each doubling smooths it, so the last stretch is small.
+  while (maxOf(image.width, image.height) < BLURRED_MEDIA_WIDTH_DP / 2) image = image.scale(image.width * 2, image.height * 2)
+  return image
 }
+
+expect fun newPasswordContentType(): ContentType

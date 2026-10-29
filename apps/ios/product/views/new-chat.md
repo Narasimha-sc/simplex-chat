@@ -111,17 +111,25 @@ Calls `apiNewPublicGroup(incognito:relayIds:groupProfile:)` which returns `publi
 
 ### Relay Link Blocking
 
-When `planAndConnect` encounters a `.simplexLink(_, .relay, _, _)`, it shows a "Relay address" alert: "This is a chat relay address, it cannot be used to connect. To use it, open Network & servers, Your servers, Add server, then Chat relay, paste the address, then Test relay." Connection is blocked.
+When `planAndConnect` encounters a `.simplexLink(_, .relay, _, _)`, it shows a "Relay address" alert: "This is a chat relay address, it cannot be used to connect." Connection is blocked.
 
 ### Channel Prepare/Join Alerts
 
 | Context | Channel behavior | Group behavior |
 |---|---|---|
 | Prepare alert icon | `antenna.radiowaves.left.and.right.circle.fill` | `person.2.circle.fill` |
-| Prepare alert title | "Open new channel" | "Open new group" |
+| Prepare alert title | "Open channel" | "Open group" |
 | Error text | "Error opening channel" | "Error opening group" |
 | Own-link confirm | "This is your link for channel" with only "Open channel" + "Cancel" (no incognito/profile options) | Full incognito/profile selection |
-| Known group alert | "Open channel" / "Open new channel" | "Open group" / "Open new group" |
+| Known group alert | "Open channel", with the membership role line | "Open group", with the membership role line |
+
+The known group alert shows an information line with the user's role, in the
+secondary color (matching the subscriber count): "You are a subscriber" /
+"You are a contributor" for channels, "You are an observer" / "You are a
+member" for groups, and "You are a moderator" / "You are an admin" /
+"You are an owner" for both. The line is omitted for prepared chats
+(`nextConnectPrepared`) and business chats, so the prepare and known alerts
+differ only by this line.
 
 ### Pre-Join Relay Info
 
@@ -139,7 +147,6 @@ When preparing a channel link, `groupShortLinkInfo.groupRelays` (hostnames) are 
 - `Shared/Views/NewChat/NewChatView.swift` -- Main view with invite/connect tabs, link generation
 - `Shared/Views/NewChat/NewChatMenuButton.swift` -- Dropdown menu (new chat, create group, create channel)
 - `Shared/Views/NewChat/QRCode.swift` -- QR code generation and display
-- `Shared/Views/NewChat/WrongQRCode.swift` -- Message and alert shown when a scanner is given a valid SimpleX code of another kind
 - `Shared/Views/NewChat/AddGroupView.swift` -- Group creation form
 - `Shared/Views/NewChat/AddChannelView.swift` -- Channel creation wizard (3 steps)
 - `Shared/Views/NewChat/AddContactLearnMore.swift` -- Info sheet explaining connection process

@@ -32,7 +32,12 @@ public func chatMigrateInit(_ useKey: String? = nil, confirmMigrations: Migratio
     } else if useKeychain {
         if !hasDatabase() {
             logger.debug("chatMigrateInit generating a random DB key")
-            dbKey = randomDatabasePassword()
+            guard let key = randomDatabasePassword() else {
+                let result = (false, DBMigrationResult.errorKeyGeneration)
+                migrationResult = result
+                return result
+            }
+            dbKey = key
             initialRandomDBPassphraseGroupDefault.set(true)
         } else if let key = kcDatabasePassword.get() {
             dbKey = key
@@ -56,7 +61,7 @@ public func chatMigrateInit(_ useKey: String? = nil, confirmMigrations: Migratio
 
 public func chatInitTemporaryDatabase(url: URL, key: String? = nil, confirmation: MigrationConfirmation = .error) -> (DBMigrationResult, chat_ctrl?) {
     let dbPath = url.path
-    let dbKey = key ?? randomDatabasePassword()
+    guard let dbKey = key ?? randomDatabasePassword() else { return (.errorKeyGeneration, nil) }
     logger.debug("chatInitTemporaryDatabase path: \(dbPath)")
     var temporaryController: chat_ctrl? = nil
     var cPath = dbPath.cString(using: .utf8)!
@@ -66,14 +71,14 @@ public func chatInitTemporaryDatabase(url: URL, key: String? = nil, confirmation
     return (dbMigrationResult(dataFromCString(cjson)), temporaryController)
 }
 
-public func chatInitControllerRemovingDatabases() {
+public func chatInitControllerRemovingDatabases() throws {
     let dbPath = getAppDatabasePath().path
     let fm = FileManager.default
     // Remove previous databases, otherwise, can be .errorNotADatabase with nil controller
     try? fm.removeItem(atPath: dbPath + CHAT_DB)
     try? fm.removeItem(atPath: dbPath + AGENT_DB)
 
-    let dbKey = randomDatabasePassword()
+    guard let dbKey = randomDatabasePassword() else { throw RuntimeError("Cannot generate random database passphrase") }
     logger.debug("chatInitControllerRemovingDatabases path: \(dbPath)")
     var cPath = dbPath.cString(using: .utf8)!
     var cKey = dbKey.cString(using: .utf8)!
@@ -144,12 +149,15 @@ public func recvSimpleXMsg<R: ChatAPIResult>(_ ctrl: chat_ctrl? = nil, messageTi
 }
 
 public func parseSimpleXMarkdown(_ s: String) -> [FormattedText]? {
+    parseSimpleXMarkdownText(s)?.formattedText
+}
+
+public func parseSimpleXMarkdownText(_ s: String) -> ParsedMarkdown? {
     var c = s.cString(using: .utf8)!
     if let cjson = chat_parse_markdown(&c) {
         if let d = dataFromCString(cjson) {
             do {
-                let r = try jsonDecoder.decode(ParsedMarkdown.self, from: d)
-                return r.formattedText
+                return try jsonDecoder.decode(ParsedMarkdown.self, from: d)
             } catch {
                 logger.error("parseSimpleXMarkdown jsonDecoder.decode error: \(error.localizedDescription)")
             }
@@ -163,8 +171,17 @@ public func chatJsonLength(_ s: String) -> Int {
     return Int(chat_json_length(&c))
 }
 
-struct ParsedMarkdown: Decodable {
-    var formattedText: [FormattedText]?
+// the code in core's canonical form (prefix and 20 characters, no separators), or nil when core rejects it.
+// The check character is verified by core via FFI, not re-implemented here, so the two cannot disagree.
+public func parseBadgeCode(_ s: String) -> String? {
+    var c = s.cString(using: .utf8)!
+    let canonical = fromCString(chat_parse_badge_code(&c)!)
+    return canonical.isEmpty ? nil : canonical
+}
+
+public struct ParsedMarkdown: Decodable {
+    public var formattedText: [FormattedText]?
+    public var markdownBlocks: [MarkdownBlock]?
 }
 
 public func parseServerAddress(_ s: String) -> ServerAddress? {
@@ -185,38 +202,6 @@ public func parseServerAddress(_ s: String) -> ServerAddress? {
 struct ParsedServerAddress: Decodable {
     var serverAddress: ServerAddress?
     var parseError: String
-}
-
-public enum ScannedLinkType: Decodable {
-    case connection(linkType: SimplexLinkType)
-    case server
-    case fileDescription
-    case desktopCtrl
-    case verificationCode
-}
-
-struct CheckedLink: Decodable {
-    var linkType: ScannedLinkType?
-}
-
-public func checkLink(_ s: String) -> ScannedLinkType? {
-    var c = s.cString(using: .utf8)!
-    if let cjson = chat_check_link(&c) {
-        if let d = dataFromCString(cjson) {
-            do {
-                return try jsonDecoder.decode(CheckedLink.self, from: d).linkType
-            } catch {
-                logger.error("checkLink jsonDecoder.decode error: \(error.localizedDescription)")
-            }
-        }
-    }
-    return nil
-}
-
-// nonisolated async, so callers on the main actor offload to the global executor:
-// pasted text is unbounded, and classifying a file link parses its YAML description
-public func checkLinkAsync(_ s: String) async -> ScannedLinkType? {
-    checkLink(s)
 }
 
 public func parseSanitizeUri(_ s: String, safe: Bool) -> ParsedUri? {
@@ -290,8 +275,8 @@ public func parseChatData(_ jChat: Any, _ jNavInfo: Any? = nil) throws -> (ChatD
     let jChatDict = jChat as! NSDictionary
     let chatInfo: ChatInfo = try decodeObject(jChatDict["chatInfo"]!)
     let chatStats: ChatStats = try decodeObject(jChatDict["chatStats"]!)
-    let navInfo: NavigationInfo = if let jNavInfo = jNavInfo as? NSDictionary, let nav: NavigationInfo = try? decodeObject(jNavInfo) {
-        nav
+    let navInfo: NavigationInfo = if let jNavInfo = jNavInfo as? NSDictionary, let jNav = jNavInfo["navInfo"] {
+        try decodeObject(jNav)
     } else {
         NavigationInfo()
     }
@@ -377,6 +362,7 @@ public enum DBMigrationResult: Decodable, Equatable {
     case errorMigration(dbFile: String, migrationError: MigrationError)
     case errorSQL(dbFile: String, migrationSQLError: String)
     case errorKeychain
+    case errorKeyGeneration
     case unknown(json: String)
 }
 

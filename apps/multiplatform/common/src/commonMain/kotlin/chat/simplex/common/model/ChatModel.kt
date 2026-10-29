@@ -18,7 +18,7 @@ import chat.simplex.common.views.chatlist.*
 import chat.simplex.common.views.helpers.*
 import chat.simplex.common.views.migration.MigrationToDeviceState
 import chat.simplex.common.views.migration.MigrationToState
-import chat.simplex.res.MR
+import chat.simplex.res.*
 import dev.icerock.moko.resources.ImageResource
 import dev.icerock.moko.resources.StringResource
 import kotlinx.coroutines.*
@@ -102,6 +102,38 @@ object ChannelRelaysModel {
   }
 }
 
+// The badge of whichever profile it was last loaded for, kept current by the badgeChanged event so
+// that a screen already open shows what the renewal worker did with no command behind it.
+object BadgeModel {
+  val rhId = mutableStateOf<Long?>(null)
+  val userId = mutableStateOf<Long?>(null)
+  val badgeState = mutableStateOf<BadgeState?>(null)
+  val alert = mutableStateOf<BadgeAlert?>(null)
+
+  // alert follows the state: getUserBadgeState derives it on every read, so a badgeChanged is
+  // never staler than the alert it carries - the invariant a new alert kind must keep
+  fun set(rhId: Long?, userId: Long, badgeState: BadgeState?) {
+    this.rhId.value = rhId
+    this.userId.value = userId
+    this.badgeState.value = badgeState
+    alert.value = badgeState?.alert
+  }
+
+  fun setAlert(rhId: Long?, userId: Long, alert: BadgeAlert) {
+    if (isCurrent(rhId, userId)) {
+      this.alert.value = alert
+      badgeState.value = badgeState.value?.copy(alert = alert)
+    }
+  }
+
+  fun isCurrent(rhId: Long?, userId: Long?): Boolean =
+    this.rhId.value == rhId && this.userId.value == userId
+}
+
+enum class ChatListBanner { BadgeAlert, BadgePitch, GetStake }
+
+data class FileToOpen(val fileId: Long, val inChatList: Boolean)
+
 /*
  * Without this annotation an animation from ChatList to ChatView has 1 frame per the whole animation. Don't delete it
  * */
@@ -171,6 +203,25 @@ object ChatModel {
   // Needed to apply black color to left/right cutout area on Android
   val fullscreenGalleryVisible = mutableStateOf(false)
 
+  // the banner kind the chat list showed this app session: it keeps the slot until restart, so dismissing it never puts
+  // another in its place; only the badge alert shows regardless. Set while rendering, so not a state.
+  var chatListBanner: ChatListBanner? = null
+
+  var fileToOpen: FileToOpen? = null
+
+  fun bannerSlotFree(banner: ChatListBanner): Boolean = chatListBanner == null || chatListBanner == banner
+
+  fun openWhenReceived(file: CIFile, inChatList: Boolean) {
+    fileToOpen = FileToOpen(file.fileId, inChatList)
+  }
+
+  fun receivedFileToOpen(file: CIFile, inChatList: Boolean): Boolean {
+    val f = fileToOpen
+    if (f == null || f.fileId != file.fileId || f.inChatList != inChatList || !file.loaded) return false
+    fileToOpen = null
+    return !inChatList || appPlatform.isDesktop || chatId.value == null
+  }
+
   // preferences
   val notificationPreviewMode by lazy {
     mutableStateOf(
@@ -202,6 +253,7 @@ object ChatModel {
   val migrationState: MutableState<MigrationToState?> by lazy { mutableStateOf(MigrationToDeviceState.makeMigrationState()) }
 
   var draft = mutableStateOf(null as ComposeState?)
+  // chat id with chat scope, see draftChatId() - group chat and its support chats have the same chat id
   var draftChatId = mutableStateOf(null as String?)
 
   // working with external intents or internal forwarding of chat items
@@ -210,7 +262,6 @@ object ChatModel {
   val filesToDelete = mutableSetOf<File>()
   val simplexLinkMode by lazy { mutableStateOf(ChatController.appPrefs.simplexLinkMode.get()) }
 
-  val clipboardHasText = mutableStateOf(false)
   val networkInfo = mutableStateOf(UserNetworkInfo(networkType = UserNetworkType.OTHER, online = true))
 
   val conditions = mutableStateOf(ServerOperatorConditionsDetail.empty)
@@ -345,6 +396,18 @@ object ChatModel {
   fun getContactChat(contactId: Long): Chat? = chats.value.firstOrNull { it.chatInfo is ChatInfo.Direct && it.chatInfo.apiId == contactId }
   fun getGroupChat(groupId: Long): Chat? = chats.value.firstOrNull { it.chatInfo is ChatInfo.Group && it.chatInfo.apiId == groupId }
 
+  suspend fun upsertSupportChatMember(rhId: Long?, cInfo: ChatInfo) {
+    if (cInfo !is ChatInfo.Group || remoteHostId() != rhId) return
+    val member = (cInfo.groupChatScope as? GroupChatScopeInfo.MemberSupport)?.groupMember_ ?: return
+    val current = getGroupMember(member.groupMemberId)
+    chatsContext.upsertGroupMember(rhId, cInfo.groupInfo, current?.copy(supportChat = member.supportChat, memberProfile = member.memberProfile) ?: member)
+  }
+
+  fun withLoadedSupportChat(member: GroupMember): GroupMember {
+    val supportChat = getGroupMember(member.groupMemberId)?.supportChat
+    return if (supportChat != null) member.copy(supportChat = supportChat) else member
+  }
+
   fun populateGroupMembersIndexes() {
     groupMembersIndexes.value = emptyMap()
     val gmIndexes = groupMembersIndexes.value.toMutableMap()
@@ -360,6 +423,13 @@ object ChatModel {
       groupMembers.value[memberIndex]
     } else {
       null
+    }
+  }
+
+  suspend fun addSentChatItem(activeCtx: ChatsContext, rhId: Long?, cInfo: ChatInfo, cItem: ChatItem) {
+    activeCtx.addChatItem(rhId, cInfo, cItem)
+    if (activeCtx.secondaryContextFilter != null && cInfo.inMainChatList) {
+      chatsContext.addChatItem(rhId, cInfo, cItem)
     }
   }
 
@@ -433,10 +503,7 @@ object ChatModel {
         } else if (currentCInfo is ChatInfo.Group && newCInfo is ChatInfo.Group && newCInfo.groupChatScope != null) {
           newCInfo = newCInfo.copy(groupInfo = newCInfo.groupInfo, groupChatScope = null)
         }
-        val updatedChat = chats[i].copy(chatInfo = newCInfo)
-        // muted chat does not count towards user unread counter, so it is updated when notifications change
-        currentUser.value?.let { changeUserUnreadCounter(rhId, it, chats[i], updatedChat) }
-        chats[i] = updatedChat
+        chats[i] = chats[i].copy(chatInfo = newCInfo)
       }
     }
 
@@ -493,7 +560,6 @@ object ChatModel {
     suspend fun replaceChat(rhId: Long?, id: String, chat: Chat) {
       val i = getChatIndex(rhId, id)
       if (i >= 0) {
-        currentUser.value?.let { changeUserUnreadCounter(rhId, it, chats[i], chat) }
         chats[i] = chat
       } else {
         // invalid state, correcting
@@ -537,9 +603,9 @@ object ChatModel {
       val i = getChatIndex(rhId, cInfo.id)
       val chat: Chat
       if (i >= 0) {
-        chat = chatsContext.chats[i]
+        chat = chats[i]
         // update preview (for chat from main scope to show new items for invitee in pending status)
-        if (cInfo.groupChatScope() == null || cInfo.groupInfo_?.membership?.memberPending == true) {
+        if (cInfo.inMainChatList) {
           val newPreviewItem = when (cInfo) {
             is ChatInfo.Group -> {
               val currentPreviewItem = chat.chatItems.firstOrNull()
@@ -557,20 +623,20 @@ object ChatModel {
             else -> cItem
           }
           val wasUnread = chat.unreadTag
-          chatsContext.chats[i] = chat.copy(
+          chats[i] = chat.copy(
             chatItems = arrayListOf(newPreviewItem),
             chatStats =
-            if (cItem.meta.itemStatus is CIStatus.RcvNew) {
+            if (cItem.meta.itemStatus is CIStatus.RcvNew && secondaryContextFilter == null) {
+              increaseUnreadCounter(rhId, currentUser.value!!)
               chat.chatStats.copy(unreadCount = chat.chatStats.unreadCount + 1, unreadMentions = if (cItem.meta.userMention) chat.chatStats.unreadMentions + 1 else chat.chatStats.unreadMentions)
             } else
               chat.chatStats
           )
-          changeUserUnreadCounter(rhId, currentUser.value!!, chat, chatsContext.chats[i])
-          updateChatTagReadInPrimaryContext(chatsContext.chats[i], wasUnread)
+          updateChatTagReadInPrimaryContext(chats[i], wasUnread)
         }
         // pop chat
         if (appPlatform.isDesktop && cItem.chatDir.sent) {
-          reorderChat(chatsContext.chats[i], 0)
+          reorderChat(chats[i], 0)
         } else {
           popChatCollector.throttlePopChat(chat.remoteHostId, chat.id, currentPosition = i)
         }
@@ -625,7 +691,7 @@ object ChatModel {
             chats[i] = chat.copy(chatItems = arrayListOf(cItem))
             if (pItem.isRcvNew && !cItem.isRcvNew) {
               // status changed from New to Read, update counter
-              decreaseCounterInPrimaryContext(rhId, cInfo.id, cItem.meta.userMention)
+              decreaseCounterInPrimaryContext(rhId, cInfo.id)
             }
           }
         } else {
@@ -675,7 +741,7 @@ object ChatModel {
       // update chat list
       if (cInfo.groupChatScope() == null) {
         if (cItem.isRcvNew) {
-          decreaseCounterInPrimaryContext(rhId, cInfo.id, cItem.meta.userMention)
+          decreaseCounterInPrimaryContext(rhId, cInfo.id)
         }
         // update preview
         val i = getChatIndex(rhId, cInfo.id)
@@ -727,7 +793,7 @@ object ChatModel {
           for (item in chatItems.value) {
             if (isRemovedMemberItem(item)) {
               if (item.isRcvNew) {
-                decreaseCounterInPrimaryContext(rhId, groupInfo.id, item.meta.userMention)
+                decreaseCounterInPrimaryContext(rhId, groupInfo.id)
               }
               if (item.isActiveReport) {
                 decreaseGroupReportsCounter(rhId, groupInfo.id)
@@ -772,9 +838,9 @@ object ChatModel {
       // clear preview
       val i = getChatIndex(rhId, cInfo.id)
       if (i >= 0) {
+        decreaseUnreadCounter(rhId, currentUser.value!!, chats[i].chatStats.unreadCount)
         val chatBefore = chats[i]
         chats[i] = chats[i].copy(chatItems = arrayListOf(), chatStats = Chat.ChatStats(), chatInfo = cInfo)
-        changeUserUnreadCounter(rhId, currentUser.value!!, chatBefore, chats[i])
         markChatTagRead(chatBefore)
       }
       // clear current chat
@@ -845,10 +911,10 @@ object ChatModel {
           val wasUnread = chat.unreadTag
           val unreadCount = if (itemIds != null) chat.chatStats.unreadCount - markedRead else 0
           val unreadMentions = if (itemIds != null) chat.chatStats.unreadMentions - mentionsMarkedRead else 0
+          decreaseUnreadCounter(remoteHostId, currentUser.value!!, chat.chatStats.unreadCount - unreadCount)
           chats[chatIdx] = chat.copy(
             chatStats = chat.chatStats.copy(unreadCount = unreadCount, unreadMentions = unreadMentions)
           )
-          changeUserUnreadCounter(remoteHostId, currentUser.value!!, chat, chats[chatIdx])
           updateChatTagReadInPrimaryContext(chats[chatIdx], wasUnread)
         }
       }
@@ -890,7 +956,7 @@ object ChatModel {
       return markedRead to mentionsMarkedRead
     }
 
-    private fun decreaseCounterInPrimaryContext(rhId: Long?, chatId: ChatId, userMention: Boolean) {
+    private fun decreaseCounterInPrimaryContext(rhId: Long?, chatId: ChatId) {
       // updates anything only in main ChatView, not GroupReportsView or anything else from the future
       if (secondaryContextFilter != null) return
 
@@ -900,13 +966,12 @@ object ChatModel {
       val chat = chats[chatIndex]
       val unreadCount = kotlin.math.max(chat.chatStats.unreadCount - 1, 0)
       val wasUnread = chat.unreadTag
+      decreaseUnreadCounter(rhId, currentUser.value!!, chat.chatStats.unreadCount - unreadCount)
       chats[chatIndex] = chat.copy(
         chatStats = chat.chatStats.copy(
           unreadCount = unreadCount,
-          unreadMentions = if (userMention) kotlin.math.max(chat.chatStats.unreadMentions - 1, 0) else chat.chatStats.unreadMentions,
         )
       )
-      changeUserUnreadCounter(rhId, currentUser.value!!, chat, chats[chatIndex])
       updateChatTagReadInPrimaryContext(chats[chatIndex], wasUnread)
     }
 
@@ -941,6 +1006,9 @@ object ChatModel {
           // stale data, should be cleared at that point, otherwise, duplicated items will be here which will produce crashes in LazyColumn
           groupMembers.value = emptyList()
           groupMembersIndexes.value = emptyMap()
+          if (chatId.value == groupInfo.id) {
+            membersLoaded.value = false
+          }
         }
         val memberIndex = groupMembersIndexes.value[member.groupMemberId]
         val updated = chatItems.value.map {
@@ -987,12 +1055,6 @@ object ChatModel {
 
     fun increaseUnreadCounter(rhId: Long?, user: UserLike) {
       changeUnreadCounterInPrimaryContext(rhId, user, 1)
-    }
-
-    // updates unread counter of the user profile by the difference of what the chat contributes to it - see Chat.userUnreadCount
-    private fun changeUserUnreadCounter(rhId: Long?, user: UserLike, prevChat: Chat, updatedChat: Chat) {
-      val by = updatedChat.userUnreadCount - prevChat.userUnreadCount
-      if (by != 0) changeUnreadCounterInPrimaryContext(rhId, user, by)
     }
 
     fun decreaseUnreadCounter(rhId: Long?, user: UserLike, by: Int = 1) {
@@ -1090,7 +1152,7 @@ object ChatModel {
   fun updateCurrentUser(rhId: Long?, newProfile: Profile, preferences: FullChatPreferences? = null) {
     val current = currentUser.value ?: return
     val updated = current.copy(
-      profile = newProfile.toLocalProfile(current.profile.profileId),
+      profile = newProfile.toLocalProfile(current.profile.profileId).copy(localBadge = current.profile.localBadge, contactDomainVerified = current.profile.contactDomainVerified),
       fullPreferences = preferences ?: current.fullPreferences
     )
     val i = users.indexOfFirst { it.user.userId == current.userId && it.user.remoteHostId == rhId }
@@ -1271,6 +1333,12 @@ fun sameChatScope(scope1: GroupChatScope, scope2: GroupChatScope) =
       && scope2 is GroupChatScope.MemberSupport
       && scope1.groupMemberId_ == scope2.groupMemberId_
 
+fun draftChatId(chatId: String?, scope: GroupChatScope?): String? =
+  if (chatId == null || scope == null) chatId
+  else when (scope) {
+    is GroupChatScope.MemberSupport -> "$chatId support:${scope.groupMemberId_ ?: ""}"
+  }
+
 @Serializable
 sealed class GroupChatScopeInfo {
   @Serializable @SerialName("memberSupport") data class MemberSupport(val groupMember_: GroupMember?) : GroupChatScopeInfo()
@@ -1430,13 +1498,6 @@ data class Chat(
     All -> chatStats.unreadChat || chatStats.unreadCount > 0
     Mentions -> chatStats.unreadChat || chatStats.unreadMentions > 0
     else -> chatStats.unreadChat
-  }
-
-  // what this chat adds to unread counter of its user profile - has to match getUsersInfo in Profiles.hs
-  val userUnreadCount: Int get() = when (chatInfo.chatSettings?.enableNtfs) {
-    All -> if (chatStats.unreadCount > 0) chatStats.unreadCount else if (chatStats.unreadChat) 1 else 0
-    Mentions -> if (chatStats.unreadMentions > 0) chatStats.unreadMentions else if (chatStats.unreadChat) 1 else 0
-    else -> 0
   }
 
   val id: String get() = chatInfo.id
@@ -1819,6 +1880,24 @@ sealed class ChatInfo: SomeChat, NamedChat {
     else -> emptyList()
   }
 
+  val chatLayout: ChatLayoutMode? get() = when (this) {
+    is Direct -> contact.chatLayout
+    is Group -> groupInfo.groupProfile.chatLayout
+    else -> null
+  }
+
+  val uiThemes: ThemeModeOverrides? get() = when (this) {
+    is Direct -> contact.uiThemes
+    is Group -> groupInfo.uiThemes
+    else -> null
+  }
+
+  fun defaultChatLayout(user: User?): ChatLayoutMode =
+    chatLayout.known ?: profileChatLayout(user)
+
+  fun activeChatLayout(user: User?): ChatLayoutMode =
+    uiThemes?.chatLayout.known ?: defaultChatLayout(user)
+
   val contactCard: Boolean
     get() = when (this) {
       is Direct -> contact.isContactCard
@@ -1833,6 +1912,9 @@ sealed class ChatInfo: SomeChat, NamedChat {
 
   val isChannel: Boolean
     get() = groupInfo_?.useRelays == true
+
+  val inMainChatList: Boolean
+    get() = groupChatScope() == null || groupInfo_?.membership?.memberPending == true
 }
 
 @Serializable
@@ -1859,6 +1941,7 @@ data class Contact(
   val chatItemTTL: Long?,
   override val chatDeleted: Boolean,
   val uiThemes: ThemeModeOverrides? = null,
+  val chatLayout: ChatLayoutMode? = null,
 ): SomeChat, NamedChat {
   override val chatType get() = ChatType.Direct
   override val id get() = "@$contactId"
@@ -1868,6 +1951,7 @@ data class Contact(
   val active get() = contactStatus == ContactStatus.Active
   override val nextConnect get() = sendMsgToConnect
   val nextSendGrpInv get() = contactGroupMemberId != null && !contactGrpInvSent
+  val callReconnectSupported get() = (activeConn?.peerChatVRange?.maxVersion ?: 0) >= CALL_RECONNECT_VERSION
   override val nextConnectPrepared get() = active && preparedContact != null && (activeConn == null || activeConn.connStatus == ConnStatus.Prepared)
   override val profileChangeProhibited get() = activeConn != null
   val nextAcceptContactRequest get() =
@@ -1907,7 +1991,7 @@ data class Contact(
     }
 
   val isContactCard: Boolean get() =
-    (activeConn == null || activeConn.connStatus == ConnStatus.Prepared) && profile.contactLink != null && active && preparedContact == null && contactRequestId == null
+    (activeConn == null || activeConn.connStatus == ConnStatus.Prepared) && profile.contactLink != null && active && preparedContact == null && contactRequestId == null && groupDirectInv == null
 
   val isBot: Boolean get() = profile.peerType == ChatPeerType.Bot
 
@@ -1915,7 +1999,7 @@ data class Contact(
     activeConn?.customUserProfileId != null
 
   val chatIconName: ImageResource get() =
-    if (isBot) MR.images.ic_cube else MR.images.ic_account_circle_filled
+    peerTypeIcon(profile.peerType)
 
   fun allowsFeature(feature: ChatFeature): Boolean = when (feature) {
     ChatFeature.TimedMessages -> mergedPreferences.timedMessages.contactPreference.allow != FeatureAllowed.NO
@@ -1963,9 +2047,7 @@ data class Contact(
 @Serializable
 data class NavigationInfo(
   val afterUnread: Int = 0,
-  val afterTotal: Int = 0,
-  // the first unread item after the last viewed item, null to open the chat at the last item
-  val openAtItemId: Long? = null
+  val afterTotal: Int = 0
 )
 
 @Serializable
@@ -2123,11 +2205,76 @@ data class LocalProfile(
   }
 }
 
-@Serializable
-enum class ChatPeerType {
-  @SerialName("human") Human,
-  @SerialName("bot") Bot
+@Serializable(with = ChatPeerTypeSerializer::class)
+sealed class ChatPeerType {
+  @Serializable @SerialName("human") object Human: ChatPeerType()
+  @Serializable @SerialName("bot") object Bot: ChatPeerType()
+  @Serializable @SerialName("business") object Business: ChatPeerType()
+  @Serializable @SerialName("agent") object Agent: ChatPeerType()
+  @Serializable @SerialName("unknown") data class Unknown(val type: String): ChatPeerType()
+
+  val text: String
+    get() = when (this) {
+      is Human -> "human"
+      is Bot -> "bot"
+      is Business -> "business"
+      is Agent -> "agent"
+      is Unknown -> type
+    }
 }
+
+object ChatPeerTypeSerializer : KSerializer<ChatPeerType> {
+  override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("ChatPeerType", PrimitiveKind.STRING)
+  override fun deserialize(decoder: Decoder): ChatPeerType =
+    when (val v = decoder.decodeString()) {
+      "human" -> ChatPeerType.Human
+      "bot" -> ChatPeerType.Bot
+      "business" -> ChatPeerType.Business
+      "agent" -> ChatPeerType.Agent
+      else -> ChatPeerType.Unknown(v)
+    }
+  override fun serialize(encoder: Encoder, value: ChatPeerType) = encoder.encodeString(value.text)
+}
+
+@Serializable(with = ChatLayoutModeSerializer::class)
+sealed class ChatLayoutMode {
+  @Serializable @SerialName("classic") object Classic: ChatLayoutMode()
+  @Serializable @SerialName("terminal") object Terminal: ChatLayoutMode()
+  @Serializable @SerialName("unknown") data class Unknown(val type: String): ChatLayoutMode()
+
+  val text: String
+    get() = when (this) {
+      is Classic -> "classic"
+      is Terminal -> "terminal"
+      is Unknown -> type
+    }
+
+  companion object {
+    fun fromText(text: String): ChatLayoutMode = when (text) {
+      "classic" -> Classic
+      "terminal" -> Terminal
+      else -> Unknown(text)
+    }
+  }
+}
+
+object ChatLayoutModeSerializer : KSerializer<ChatLayoutMode> {
+  override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("ChatLayoutMode", PrimitiveKind.STRING)
+  override fun deserialize(decoder: Decoder): ChatLayoutMode = ChatLayoutMode.fromText(decoder.decodeString())
+  override fun serialize(encoder: Encoder, value: ChatLayoutMode) = encoder.encodeString(value.text)
+}
+
+private val ChatLayoutMode?.known: ChatLayoutMode? get() = if (this is ChatLayoutMode.Unknown) null else this
+
+fun profileChatLayout(user: User?): ChatLayoutMode =
+  user?.uiThemes?.chatLayout.known ?: ChatController.appPrefs.chatLayout.state.value.known ?: ChatLayoutMode.Classic
+
+fun peerTypeIcon(peerType: ChatPeerType?): ImageResource =
+  when (peerType) {
+    ChatPeerType.Bot -> MR.images.ic_cube
+    ChatPeerType.Agent -> MR.images.ic_agent
+    else -> MR.images.ic_account_circle_filled
+  }
 
 // Supporter badge. The credential/proof bytes stay core-side; the UI only sees the disclosed type + status.
 // Unknown types keep their string so a verified badge's real name can be shown, while the icon falls back to supporter.
@@ -2174,7 +2321,7 @@ enum class BadgeStatus {
 @Serializable
 data class BadgeInfo(
   val badgeType: BadgeType,
-  val badgeExpiry: Instant? = null,
+  val badgeExpiry: Instant,
   val badgeExtra: String = ""
 )
 
@@ -2183,6 +2330,298 @@ data class LocalBadge(
   val badge: BadgeInfo,
   val status: BadgeStatus
 )
+
+// paidThrough is the only date to show the user: BadgeInfo.badgeExpiry is the credential's expiry,
+// which outlives entitlement so the credential's window can cover a renewal.
+@Serializable
+data class BadgeState(
+  val badgePurchaseId: Long,
+  val purchaseKey: String,
+  val badgeType: BadgeType,
+  val shown: Boolean,
+  val monthsLeft: Int,
+  val paidThrough: Instant,
+  val renewsAt: Instant? = null,
+  val willRenew: Boolean,
+  val alert: BadgeAlert? = null,
+  val issueError: BadgeIssueError? = null,
+  val nextWakeAt: Instant? = null,
+  val subscription: BadgeSubscription? = null
+) {
+  val paidThroughText: String get() = badgeDateText(paidThrough)
+}
+
+@Serializable
+data class BadgeSubscription(
+  val planMonths: Int,
+  // null until the service or the device's store has been asked
+  val status: BadgeSubscriptionState? = null,
+  // the store's reference: Apple's original transaction id, or a hash of Play's token
+  val transactionRef: String? = null
+)
+
+// the store's state as last observed; a newer core may know a state this version does not
+@Serializable(with = BadgeSubscriptionStateSerializer::class)
+enum class BadgeSubscriptionState {
+  Renewing,
+  Cancelled,
+  BillingRetry,
+  Ended,
+  Unknown;
+
+  // as /_badge subscription takes it, which accepts only the four known states
+  val text: String
+    get() = when (this) {
+      Renewing -> "renewing"
+      Cancelled -> "cancelled"
+      BillingRetry -> "billingRetry"
+      Ended -> "ended"
+      Unknown -> "unknown"
+    }
+}
+
+object BadgeSubscriptionStateSerializer : KSerializer<BadgeSubscriptionState> {
+  override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("BadgeSubscriptionState", PrimitiveKind.STRING)
+  override fun deserialize(decoder: Decoder): BadgeSubscriptionState =
+    when (decoder.decodeString()) {
+      "renewing" -> BadgeSubscriptionState.Renewing
+      "cancelled" -> BadgeSubscriptionState.Cancelled
+      "billingRetry" -> BadgeSubscriptionState.BillingRetry
+      "ended" -> BadgeSubscriptionState.Ended
+      else -> BadgeSubscriptionState.Unknown
+    }
+  override fun serialize(encoder: Encoder, value: BadgeSubscriptionState) = encoder.encodeString(value.text)
+}
+
+@Serializable
+data class BadgeIssueError(
+  val failedSince: Instant,
+  val lastAttemptAt: Instant,
+  val reason: BadgeIssueFailure
+)
+
+@Serializable
+sealed class BadgeIssueFailure {
+  // retryable is the service's own view of transience: it gave retryAfter
+  @Serializable @SerialName("serviceError") data class ServiceError(val code: BadgeServiceErrorCode, val retryable: Boolean) : BadgeIssueFailure()
+  @Serializable @SerialName("serviceTimeout") object ServiceTimeout : BadgeIssueFailure()
+  @Serializable @SerialName("network") data class Network(val agentError: String) : BadgeIssueFailure()
+  @Serializable @SerialName("invalidCredential") object InvalidCredential : BadgeIssueFailure()
+  @Serializable @SerialName("unexpected") data class Unexpected(val message: String) : BadgeIssueFailure()
+
+  val text: String get() = when (this) {
+    is ServiceError -> badgeServiceErrorText(code) ?: String.format(generalGetString(MR.strings.badges_error_service_refused), code.text)
+    is ServiceTimeout -> generalGetString(MR.strings.badges_error_no_response)
+    is Network -> generalGetString(MR.strings.badges_error_unreachable)
+    is InvalidCredential -> generalGetString(MR.strings.badges_error_credential_invalid)
+    is Unexpected -> String.format(generalGetString(MR.strings.badges_error_unexpected), message)
+  }
+
+  val purchaseText: String get() = when (this) {
+    is ServiceError -> badgeServiceErrorText(code) ?: String.format(generalGetString(MR.strings.badges_error_purchase_refused), code.text)
+    is InvalidCredential -> generalGetString(MR.strings.badges_error_credential_not_verified)
+    is ServiceTimeout, is Network, is Unexpected -> text
+  }
+
+  // the stored form, for support
+  val tag: String get() = when (this) {
+    is ServiceError -> "serviceError ${if (retryable) "retry" else "final"} ${code.text}"
+    is ServiceTimeout -> "serviceTimeout"
+    is Network -> "network $agentError"
+    is InvalidCredential -> "invalidCredential"
+    is Unexpected -> "unexpected $message"
+  }
+}
+
+@Serializable
+data class StatementEntry(
+  val entryId: String,
+  val changeMonths: Int,
+  val balanceMonths: Int,
+  val balanceStartTs: Instant,
+  val balanceAnchorTs: Instant,
+  val balanceBadgeType: BadgeType,
+  val wasPausedSince: Instant? = null,
+  val createdAt: Instant,
+  val entryType: StatementEntryType
+)
+
+@Serializable
+sealed class StatementEntryType {
+  @Serializable @SerialName("credit") data class Credit(val credit: StatementCreditType): StatementEntryType()
+  @Serializable @SerialName("debit") data class Debit(val debit: StatementDebitType): StatementEntryType()
+
+  val text: String
+    get() = when (this) {
+      is Credit -> credit.text
+      is Debit -> debit.text
+    }
+}
+
+// the service is deployed ahead of clients, so a type this version does not know keeps its tag
+@Serializable(with = StatementCreditTypeSerializer::class)
+sealed class StatementCreditType {
+  @Serializable data class Payment(val invoiceId: String? = null): StatementCreditType()
+  object Code: StatementCreditType()
+  @Serializable data class Charge(val chargeId: String): StatementCreditType()
+  object Support: StatementCreditType()
+  @Serializable data class TransferIn(val fromPurchaseKey: String): StatementCreditType()
+  object Opening: StatementCreditType()
+  data class Unknown(val type: String): StatementCreditType()
+
+  val text: String
+    get() = when (this) {
+      is Payment -> "payment"
+      is Code -> "code"
+      is Charge -> "charge"
+      is Support -> "support"
+      is TransferIn -> "transferIn"
+      is Opening -> "opening"
+      is Unknown -> type
+    }
+}
+
+object StatementCreditTypeSerializer : KSerializer<StatementCreditType> {
+  override val descriptor: SerialDescriptor = buildClassSerialDescriptor("StatementCreditType")
+
+  override fun deserialize(decoder: Decoder): StatementCreditType {
+    require(decoder is JsonDecoder)
+    val json = decoder.decodeJsonElement().jsonObject
+    return when (val type = json["type"]?.jsonPrimitive?.content ?: "") {
+      "payment" -> decoder.json.decodeFromJsonElement<StatementCreditType.Payment>(json)
+      "code" -> StatementCreditType.Code
+      "charge" -> decoder.json.decodeFromJsonElement<StatementCreditType.Charge>(json)
+      "support" -> StatementCreditType.Support
+      "transferIn" -> decoder.json.decodeFromJsonElement<StatementCreditType.TransferIn>(json)
+      "opening" -> StatementCreditType.Opening
+      else -> StatementCreditType.Unknown(type)
+    }
+  }
+
+  override fun serialize(encoder: Encoder, value: StatementCreditType) {
+    require(encoder is JsonEncoder)
+    encoder.encodeJsonElement(buildJsonObject {
+      put("type", value.text)
+      when (value) {
+        is StatementCreditType.Payment -> value.invoiceId?.let { put("invoiceId", it) }
+        is StatementCreditType.Charge -> put("chargeId", value.chargeId)
+        is StatementCreditType.TransferIn -> put("fromPurchaseKey", value.fromPurchaseKey)
+        is StatementCreditType.Code, is StatementCreditType.Support, is StatementCreditType.Opening, is StatementCreditType.Unknown -> {}
+      }
+    })
+  }
+}
+
+@Serializable(with = StatementDebitTypeSerializer::class)
+sealed class StatementDebitType {
+  object Refund: StatementDebitType()
+  @Serializable data class Upgrade(val toPurchaseKey: String): StatementDebitType()
+  @Serializable data class TransferOut(val toPurchaseKey: String): StatementDebitType()
+  object Support: StatementDebitType()
+  object Badge: StatementDebitType()
+  object Lapse: StatementDebitType()
+  data class Unknown(val type: String): StatementDebitType()
+
+  val text: String
+    get() = when (this) {
+      is Refund -> "refund"
+      is Upgrade -> "upgrade"
+      is TransferOut -> "transferOut"
+      is Support -> "support"
+      is Badge -> "badge"
+      is Lapse -> "lapse"
+      is Unknown -> type
+    }
+}
+
+object StatementDebitTypeSerializer : KSerializer<StatementDebitType> {
+  override val descriptor: SerialDescriptor = buildClassSerialDescriptor("StatementDebitType")
+
+  override fun deserialize(decoder: Decoder): StatementDebitType {
+    require(decoder is JsonDecoder)
+    val json = decoder.decodeJsonElement().jsonObject
+    return when (val type = json["type"]?.jsonPrimitive?.content ?: "") {
+      "refund" -> StatementDebitType.Refund
+      "upgrade" -> decoder.json.decodeFromJsonElement<StatementDebitType.Upgrade>(json)
+      "transferOut" -> decoder.json.decodeFromJsonElement<StatementDebitType.TransferOut>(json)
+      "support" -> StatementDebitType.Support
+      "badge" -> StatementDebitType.Badge
+      "lapse" -> StatementDebitType.Lapse
+      else -> StatementDebitType.Unknown(type)
+    }
+  }
+
+  override fun serialize(encoder: Encoder, value: StatementDebitType) {
+    require(encoder is JsonEncoder)
+    encoder.encodeJsonElement(buildJsonObject {
+      put("type", value.text)
+      when (value) {
+        is StatementDebitType.Upgrade -> put("toPurchaseKey", value.toPurchaseKey)
+        is StatementDebitType.TransferOut -> put("toPurchaseKey", value.toPurchaseKey)
+        is StatementDebitType.Refund, is StatementDebitType.Support, is StatementDebitType.Badge, is StatementDebitType.Lapse, is StatementDebitType.Unknown -> {}
+      }
+    })
+  }
+}
+
+@Serializable
+data class BadgeAlert(
+  val kind: BadgeAlertKind,
+  val episode: String,
+  val date: Instant,
+  val price: BadgeAlertPrice? = null
+) {
+  val dateText: String get() = badgeDateText(date)
+}
+
+@Serializable
+data class BadgeAlertPrice(val amount: Long, val currency: String)
+
+// a kind added by a newer core decodes, so the badge state still does, and shows no banner
+@Serializable(with = BadgeAlertKindSerializer::class)
+sealed class BadgeAlertKind {
+  object RenewalApproaching: BadgeAlertKind()
+  object PaymentIssue: BadgeAlertKind()
+  object SubscriptionCancelled: BadgeAlertKind()
+  object SubscriptionEnded: BadgeAlertKind()
+  object PrepaidEnding: BadgeAlertKind()
+  object SupportEnded: BadgeAlertKind()
+  object IssueFailed: BadgeAlertKind()
+  data class Unknown(val kind: String): BadgeAlertKind()
+
+  val text: String
+    get() = when (this) {
+      is RenewalApproaching -> "renewalApproaching"
+      is PaymentIssue -> "paymentIssue"
+      is SubscriptionCancelled -> "subscriptionCancelled"
+      is SubscriptionEnded -> "subscriptionEnded"
+      is PrepaidEnding -> "prepaidEnding"
+      is SupportEnded -> "supportEnded"
+      is IssueFailed -> "issueFailed"
+      is Unknown -> kind
+    }
+}
+
+object BadgeAlertKindSerializer : KSerializer<BadgeAlertKind> {
+  override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("BadgeAlertKind", PrimitiveKind.STRING)
+  override fun deserialize(decoder: Decoder): BadgeAlertKind =
+    when (val v = decoder.decodeString()) {
+      "renewalApproaching" -> BadgeAlertKind.RenewalApproaching
+      "paymentIssue" -> BadgeAlertKind.PaymentIssue
+      "subscriptionCancelled" -> BadgeAlertKind.SubscriptionCancelled
+      "subscriptionEnded" -> BadgeAlertKind.SubscriptionEnded
+      "prepaidEnding" -> BadgeAlertKind.PrepaidEnding
+      "supportEnded" -> BadgeAlertKind.SupportEnded
+      "issueFailed" -> BadgeAlertKind.IssueFailed
+      else -> BadgeAlertKind.Unknown(v)
+    }
+  override fun serialize(encoder: Encoder, value: BadgeAlertKind) = encoder.encodeString(value.text)
+}
+
+private fun badgeDateText(date: Instant): String {
+  val ts = date.toLocalDateTime(TimeZone.currentSystemDefault())
+  return ts.toJavaLocalDateTime().format(DateTimeFormatter.ofLocalizedDate(FormatStyle.LONG))
+}
 
 // the wire proof carried on a profile - opaque to the UI, only round-tripped back to the core (apiPrepareContact)
 @Serializable
@@ -2398,7 +2837,8 @@ data class GroupProfile (
   val publicGroup: PublicGroupProfile? = null,
   override val localAlias: String = "",
   val groupPreferences: GroupPreferences? = null,
-  val memberAdmission: GroupMemberAdmission? = null
+  val memberAdmission: GroupMemberAdmission? = null,
+  val chatLayout: ChatLayoutMode? = null
 ): NamedChat {
   val isChannel: Boolean get() = publicGroup?.groupType == GroupType.Channel
 
@@ -2437,6 +2877,7 @@ data class ContactShortLinkData (
   val profile: Profile,
   val message: MsgContent?,
   val business: Boolean,
+  val chatLayout: ChatLayoutMode? = null,
   // set by the core when building the connection plan: the link profile's badge, verified and crypto-free
   val localBadge: LocalBadge? = null
 )
@@ -2690,10 +3131,7 @@ data class GroupMember (
     else if (groupInfo.useRelays && !groupInfo.isOwner) null
     else groupInfo.membership.memberRole.let { userRole ->
       if (groupInfo.useRelays)
-        // TODO [relays]: for now owners can only set observer/member in channels.
-        //   Restore the full Owner-excluded picker when moderator/admin promotion is supported:
-        // GroupMemberRole.selectableRoles.filter { it <= userRole && it != GroupMemberRole.Owner }
-        listOf(GroupMemberRole.Observer, GroupMemberRole.Member)
+        listOf(GroupMemberRole.Observer, GroupMemberRole.Member, GroupMemberRole.Moderator)
       else
         GroupMemberRole.selectableRoles.filter { it <= userRole }
     }
@@ -3120,6 +3558,7 @@ data class ChatItem (
   val meta: CIMeta,
   val content: CIContent,
   val formattedText: List<FormattedText>? = null,
+  val markdownBlocks: List<MarkdownBlock>? = null,
   val mentions: Map<String, CIMention>? = null,
   val quotedItem: CIQuote? = null,
   val reactions: List<CIReactionCount>,
@@ -3299,6 +3738,7 @@ data class ChatItem (
         is RcvGroupEvent.MemberCreatedContact -> false
         is RcvGroupEvent.MemberProfileUpdated -> false
         is RcvGroupEvent.NewMemberPendingReview -> true
+        is RcvGroupEvent.MsgBadSignature -> false
       }
       is CIContent.SndGroupEventContent -> false
       is CIContent.RcvConnEventContent -> false
@@ -3917,13 +4357,15 @@ enum class MsgDirection {
 sealed class CIForwardedFrom {
   @Serializable @SerialName("unknown") object Unknown: CIForwardedFrom()
   @Serializable @SerialName("contact") class Contact(override val chatName: String, val msgDir: MsgDirection, val contactId: Long? = null, val chatItemId: Long? = null): CIForwardedFrom()
-  @Serializable @SerialName("group") class Group(override val chatName: String, val msgDir: MsgDirection, val groupId: Long? = null, val chatItemId: Long? = null): CIForwardedFrom()
+  @Serializable @SerialName("group") class Group(override val chatName: String, val msgDir: MsgDirection, val groupId: Long? = null, val chatItemId: Long? = null, val memberId: String? = null, val sharedMsgId_: String? = null, val groupType: GroupType? = null): CIForwardedFrom()
+  @Serializable @SerialName("groupLink") class GroupLink(override val chatName: String, val msgDir: MsgDirection, val groupLink: String, val publicGroupId: String, val memberId: String? = null, val sharedMsgId: String, val groupType: GroupType? = null): CIForwardedFrom()
 
   open val chatName: String
     get() = when (this) {
         Unknown -> ""
         is Contact -> chatName
         is Group -> chatName
+        is GroupLink -> chatName
       }
 
   val chatTypeApiIdMsgId: Triple<ChatType, Long, Long?>?
@@ -3931,18 +4373,15 @@ sealed class CIForwardedFrom {
       Unknown -> null
       is Contact -> if (contactId != null) Triple(ChatType.Direct, contactId, chatItemId) else null
       is Group -> if (groupId != null) Triple(ChatType.Group, groupId, chatItemId) else null
+      is GroupLink -> null
     }
 
+  val sourceGroupLink: String?
+    get() = if (this is GroupLink) groupLink else null
+
   fun text(chatType: ChatType): String =
-    if (chatType == ChatType.Local) {
-      if (chatName.isEmpty()) {
-        generalGetString(MR.strings.saved_description)
-      } else {
-        generalGetString(MR.strings.saved_from_description).format(chatName)
-      }
-    } else {
-      generalGetString(MR.strings.forwarded_description)
-    }
+    if (chatType == ChatType.Local) generalGetString(MR.strings.saved_description)
+    else generalGetString(MR.strings.forwarded_description)
 }
 
 @Serializable
@@ -4125,7 +4564,8 @@ class CIQuote (
   val sharedMsgId: String? = null,
   val sentAt: Instant,
   val content: MsgContent,
-  val formattedText: List<FormattedText>? = null
+  val formattedText: List<FormattedText>? = null,
+  val markdownBlocks: List<MarkdownBlock>? = null
 ): ItemContent {
   override val text: String by lazy {
     if (content.text == "" && content is MsgContent.MCVoice)
@@ -4238,6 +4678,13 @@ enum class MREmojiChar(val value: String) {
   @SerialName("✅") Check("✅");
 }
 
+// set by the core when the file is above the size the sender's badge allows; badgeStatus is null when no proof was sent
+@Serializable
+data class FileProhibited(
+  val maxSize: Long,
+  val badgeStatus: BadgeStatus? = null
+)
+
 @Serializable
 data class CIFile(
   val fileId: Long,
@@ -4245,8 +4692,12 @@ data class CIFile(
   val fileSize: Long,
   val fileSource: CryptoFile? = null,
   val fileStatus: CIFileStatus,
-  val fileProtocol: FileProtocol
+  val fileProtocol: FileProtocol,
+  val fileExpires: Instant? = null,
+  val fileProhibited: FileProhibited? = null
 ) {
+  val expired: Boolean = fileExpires != null && fileExpires < Clock.System.now()
+
   val loaded: Boolean = when (fileStatus) {
     is CIFileStatus.SndStored -> true
     is CIFileStatus.SndTransfer -> true
@@ -4296,7 +4747,7 @@ data class CIFile(
     is CIFileStatus.SndCancelled -> true
     is CIFileStatus.SndError -> true
     is CIFileStatus.SndWarning -> true
-    is CIFileStatus.RcvInvitation -> false
+    is CIFileStatus.RcvInvitation -> expired
     is CIFileStatus.RcvAccepted -> true
     is CIFileStatus.RcvTransfer -> true
     is CIFileStatus.RcvAborted -> true
@@ -4866,7 +5317,7 @@ class FormattedText(val text: String, val format: Format? = null) {
   val linkUri: String? get() =
     when (format) {
       is Format.Uri -> text
-      is Format.HyperLink -> format.linkUri
+      is Format.HyperLink -> if (format.isEmail) null else format.linkUri
       else -> null
     }
 
@@ -4877,7 +5328,7 @@ class FormattedText(val text: String, val format: Format? = null) {
 
 @Serializable
 sealed class Format {
-  @Serializable @SerialName("bold") class Bold: Format()
+  @Serializable @SerialName("bold") class Bold(val singleStar: Boolean = false): Format()
   @Serializable @SerialName("italic") class Italic: Format()
   @Serializable @SerialName("strikeThrough") class StrikeThrough: Format()
   @Serializable @SerialName("snippet") class Snippet: Format()
@@ -4885,7 +5336,9 @@ sealed class Format {
   @Serializable @SerialName("small") class Small: Format()
   @Serializable @SerialName("colored") class Colored(val color: FormatColor): Format()
   @Serializable @SerialName("uri") class Uri: Format()
-  @Serializable @SerialName("hyperLink") class HyperLink(val showText: String?, val linkUri: String): Format()
+  @Serializable @SerialName("hyperLink") class HyperLink(val showText: String?, val linkUri: String): Format() {
+    val isEmail: Boolean get() = linkUri.startsWith("mailto:")
+  }
   @Serializable @SerialName("simplexLink") class SimplexLink(val showText: String?, val linkType: SimplexLinkType, val simplexUri: String, val smpHosts: List<String>): Format() {
     val simplexLinkText: String get() =
       "${linkType.description} $viaHosts"
@@ -4902,6 +5355,8 @@ sealed class Format {
   }
   @Serializable @SerialName("email") class Email: Format()
   @Serializable @SerialName("phone") class Phone: Format()
+  @Serializable @SerialName("escape") class Escape: Format()
+  @Serializable @SerialName("markup") class Markup(val token: BlockToken): Format()
   @Serializable @SerialName("unknown") class Unknown: Format()
 
   val style: SpanStyle @Composable get() = when (this) {
@@ -4921,6 +5376,8 @@ sealed class Format {
     is Email -> linkStyle
     is Phone -> linkStyle
     is Modal -> linkStyle
+    is Escape -> SpanStyle()
+    is Markup -> SpanStyle()
     is Unknown -> SpanStyle()
   }
 
@@ -4929,6 +5386,87 @@ sealed class Format {
   companion object {
     val linkStyle @Composable get() = SpanStyle(color = MaterialTheme.colors.primary, textDecoration = TextDecoration.Underline)
   }
+}
+
+@Serializable
+sealed class BlockToken {
+  @Serializable @SerialName("lineBreak") class LineBreak: BlockToken()
+  @Serializable @SerialName("softBreak") class SoftBreak: BlockToken()
+  @Serializable @SerialName("hardBreak") class HardBreak: BlockToken()
+  @Serializable @SerialName("paragraphBreak") class ParagraphBreak(val lineBreaks: Int): BlockToken()
+  @Serializable @SerialName("indent") class Indent: BlockToken()
+  @Serializable @SerialName("headingMark") class HeadingMark(val level: Int): BlockToken()
+  @Serializable @SerialName("headingClose") class HeadingClose: BlockToken()
+  @Serializable @SerialName("headingUnderline") class HeadingUnderline(val level: Int): BlockToken()
+  @Serializable @SerialName("listMark") class ListMark(val number: String? = null): BlockToken()
+  @Serializable @SerialName("quoteMark") class QuoteMark: BlockToken()
+  @Serializable @SerialName("fenceMark") class FenceMark(val language: String? = null): BlockToken()
+  @Serializable @SerialName("rowMark") class RowMark: BlockToken()
+  @Serializable @SerialName("cellMark") class CellMark: BlockToken()
+  @Serializable @SerialName("delimiterRow") class DelimiterRow(val columns: List<TableAlign>): BlockToken()
+  @Serializable @SerialName("ruleMark") class RuleMark: BlockToken()
+
+  val drawnText: String get() = when (this) {
+    is SoftBreak -> " "
+    is LineBreak, is HardBreak -> "\n"
+    is ParagraphBreak -> "\n".repeat(lineBreaks)
+    else -> ""
+  }
+
+  val previewText: String get() = when (this) {
+    is SoftBreak, is HardBreak, is CellMark -> " "
+    is LineBreak, is ParagraphBreak -> "\n"
+    is ListMark -> (number ?: "•") + " "
+    else -> ""
+  }
+}
+
+@Serializable
+sealed class MarkdownBlock {
+  @Serializable @SerialName("paragraph") class Paragraph(val content: SegmentRange): MarkdownBlock()
+  @Serializable @SerialName("heading") class Heading(val level: Int, val content: SegmentRange): MarkdownBlock()
+  @Serializable @SerialName("codeBlock") class CodeBlock(val language: String? = null, val content: SegmentRange): MarkdownBlock()
+  @Serializable @SerialName("quote") class Quote(val content: SegmentRange): MarkdownBlock()
+  @Serializable @SerialName("list") class ItemList(val items: List<ListEntry>): MarkdownBlock()
+  @Serializable @SerialName("table") class Table(val columns: List<TableAlign>, val header: List<SegmentRange>, val rows: List<List<SegmentRange>>): MarkdownBlock()
+  @Serializable @SerialName("rule") class Rule(val mark: SegmentRange): MarkdownBlock()
+}
+
+@Serializable
+class ListEntry(val number: String? = null, val content: SegmentRange, val items: List<ListEntry>)
+
+@Serializable
+class SegmentRange(val from: Int, val to: Int)
+
+@Serializable
+enum class TableAlign {
+  @SerialName("none") None,
+  @SerialName("left") Left,
+  @SerialName("center") Center,
+  @SerialName("right") Right
+}
+
+class BlockTextRange(val range: SegmentRange, val inRow: Boolean)
+
+val MarkdownBlock.textRanges: List<BlockTextRange> get() = when (this) {
+  is MarkdownBlock.Paragraph -> listOf(BlockTextRange(content, false))
+  is MarkdownBlock.Heading -> listOf(BlockTextRange(content, false))
+  is MarkdownBlock.CodeBlock -> listOf(BlockTextRange(content, false))
+  is MarkdownBlock.Quote -> listOf(BlockTextRange(content, false))
+  is MarkdownBlock.ItemList -> listEntries(items, 0).map { (entry, _) -> BlockTextRange(entry.content, false) }
+  is MarkdownBlock.Table -> (listOf(header) + rows).flatMap { row -> row.mapIndexed { c, cell -> BlockTextRange(cell, c > 0) } }
+  is MarkdownBlock.Rule -> emptyList()
+}
+
+fun listEntries(items: List<ListEntry>, level: Int): List<Pair<ListEntry, Int>> =
+  items.flatMap { listOf(it to level) + listEntries(it.items, level + 1) }
+
+fun blockTextRanges(blocks: List<MarkdownBlock>): List<BlockTextRange> = blocks.flatMap { it.textRanges }
+
+fun headingSegments(size: Int, blocks: List<MarkdownBlock>): BooleanArray {
+  val bold = BooleanArray(size)
+  blocks.forEach { if (it is MarkdownBlock.Heading) for (i in it.content.from.coerceIn(0, size) until it.content.to.coerceIn(0, size)) bold[i] = true }
+  return bold
 }
 
 @Serializable
@@ -5195,6 +5733,7 @@ sealed class RcvGroupEvent() {
   @Serializable @SerialName("memberCreatedContact") class MemberCreatedContact(): RcvGroupEvent()
   @Serializable @SerialName("memberProfileUpdated") class MemberProfileUpdated(val fromProfile: Profile, val toProfile: Profile): RcvGroupEvent()
   @Serializable @SerialName("newMemberPendingReview") class NewMemberPendingReview(): RcvGroupEvent()
+  @Serializable @SerialName("msgBadSignature") class MsgBadSignature(): RcvGroupEvent()
 
   val text: String get() = text(isChannel = false)
 
@@ -5219,6 +5758,7 @@ sealed class RcvGroupEvent() {
     is MemberCreatedContact -> generalGetString(MR.strings.rcv_group_event_member_created_contact)
     is MemberProfileUpdated -> profileUpdatedText(fromProfile, toProfile)
     is NewMemberPendingReview -> generalGetString(MR.strings.rcv_group_event_new_member_pending_review)
+    is MsgBadSignature -> generalGetString(MR.strings.rcv_group_event_msg_bad_signature)
   }
 
   private fun profileUpdatedText(from: Profile, to: Profile): String =
@@ -5405,7 +5945,8 @@ data class ChatTag(
 class ChatItemInfo(
   val itemVersions: List<ChatItemVersion>,
   val memberDeliveryStatuses: List<MemberDeliveryStatus>?,
-  val forwardedFromChatItem: AChatItem?
+  val forwardedFromChatItem: AChatItem?,
+  val fileXftpServers: List<String> = emptyList()
 )
 
 @Serializable
@@ -5413,6 +5954,7 @@ data class ChatItemVersion(
   val chatItemVersionId: Long,
   val msgContent: MsgContent,
   val formattedText: List<FormattedText>?,
+  val markdownBlocks: List<MarkdownBlock>? = null,
   val itemVersionTs: Instant,
   val createdAt: Instant,
 )
