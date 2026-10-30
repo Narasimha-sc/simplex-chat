@@ -52,11 +52,30 @@ adb shell am force-stop "$package"
 launch
 observe s1-cold-relaunch
 
+kill_app() {
+  local pid
+  pid=$(adb shell pidof "$package" | tr -d '\r')
+  echo "killing pid ${pid:-none}"
+  [ -n "$pid" ] && adb shell run-as "$package" kill -9 "$pid"
+  sleep 3
+  echo "pid after kill: $(adb shell pidof "$package" | tr -d '\r')"
+}
+
+unlock_device() {
+  adb shell input keyevent KEYCODE_WAKEUP
+  sleep 2
+  adb shell wm dismiss-keyguard
+  sleep 3
+  adb shell input text 1111
+  adb shell input keyevent KEYCODE_ENTER
+  sleep 5
+  adb shell dumpsys window | grep -m 1 mCurrentFocus
+}
+
 marker "S2 kill in background, relaunch from launcher"
 adb shell input keyevent KEYCODE_HOME
 sleep 3
-adb shell am kill "$package"
-sleep 2
+kill_app
 launch
 observe s2-bg-kill-relaunch
 
@@ -96,8 +115,7 @@ sleep 15
 "$ui" shot s6-prompt-before-home > /dev/null 2>&1 || true
 adb shell input keyevent KEYCODE_HOME
 sleep 3
-adb shell am kill "$package"
-sleep 2
+kill_app
 launch
 observe s6-lock-bg-kill 30
 
@@ -116,17 +134,13 @@ adb wait-for-device
 until [ "$(adb shell getprop sys.boot_completed 2> /dev/null | tr -d '\r')" = 1 ]; do sleep 2; done
 sleep 10
 adb shell svc power stayon true
-adb shell input keyevent KEYCODE_WAKEUP
-adb shell input keyevent KEYCODE_MENU
-adb shell input text 1111
-adb shell input keyevent KEYCODE_ENTER
-sleep 5
-adb shell wm dismiss-keyguard
+unlock_device
 setsid adb logcat -v threadtime < /dev/null >> "$UI_OUT/app-after-reboot2.log" 2>&1 &
 launch
 observe s8-lock-after-reboot 60
 
 marker "S9 SimpleX Lock, device PIN removed"
+unlock_device
 adb shell locksettings clear --old 1111
 adb shell am force-stop "$package"
 launch
