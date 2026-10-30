@@ -1,4 +1,4 @@
-# Test: replies, reactions, editing and deletion (part 1) in the SimpleX Chat Android app
+# Test: replies, reactions, editing and deletion (part 2): roles, irreversible deletion, deleting several messages in the SimpleX Chat Android app
 
 You are testing the SimpleX Chat Android app, which runs in an Android emulator on this machine. Drive it only with the `ui` helper, through Bash, one command per call: `ui <command> [args]`. Anything else is refused; don't look for ways around that, and if something blocks the test, report it. The commands are listed at the end.
 
@@ -36,57 +36,49 @@ Your working directory is where your output goes. `ui shot <name>` saves `screen
 
 ## The test
 
-The steps build on each other: run them in this order. Three profiles of this app take part: "citester", "cibob" and "cicarol"; citester is connected with cibob and with cicarol by 1-time links, and owns the group "ci team" that cibob and cicarol join. Messages go through the app's preset servers on the internet: after switching profile, wait up to 30 s for a message from another profile (`ui wait "<text>" 30`). When a step says "reopen the chat", do it as described under "Reopen a chat".
+The steps build on each other: run them in this order. Three profiles of this app take part: "citester", "cibob" and "cicarol"; citester is connected with cibob and with cicarol by 1-time links, and owns the group "ci team" where cibob is an admin and cicarol a member. Messages go through the app's preset servers on the internet: after switching profile, wait up to 30 s for a message from another profile (`ui wait "<text>" 30`).
+
+Selecting messages: message menu → "Select"; a selection mark shows next to each message, the title reads "Selected 1", and a toolbar of three icon buttons without text replaces the message field: delete (a trash can, at the left), moderate (a flag, in the middle; shown only to moderators and above) and forward (at the right). Tap other messages to add them to the selection. Deleting asks "Delete <n> messages?"; moderating asks "Delete <n> messages of members?".
 
 **S. Setup.**
 
 1. (S1) Onboarding. Each screen waits for the one before it; wait for a text before tapping it. The first screen has "Get started": tap it (if a What's new sheet covers it, close it first). Tap the field "Enter profile name…", type `citester`, and tap "Create profile". On "Your network", tap "Continue". The app explains instant notifications in an alert: tap "Allow"; Android then asks whether the app may always run in the background: tap "Allow" again. Tap "Accept" on the conditions screen. Wait up to 60 s for the chat list, which shows "Talk to someone" while there are no conversations.
 2. (S2) Add the profile `cibob`, then the profile `cicarol`; switch back to citester. Check: the profile menu of citester lists cibob and cicarol.
-3. (S3) Connect citester (A) and cibob (B) by a 1-time link. Check: both chats show the encryption notice and a message field.
-4. (S4) As cibob, in the chat "citester": send `bob one`, then `*bold* and _italic_`. Check: the second shows "bold" in bold and "italic" in italics, without `*` and `_`.
+3. (S3) Connect citester (A) and cibob (B) by a 1-time link; switch to citester and connect citester (A) and cicarol (B) the same way. Check: cibob and cicarol each have a chat "citester" with the encryption notice and a message field.
+4. (S4) Switch to citester. Create the group `ci team`: on the invite screen set "New member role" to "admin", select cibob and tap "Invite to group". In the group: group info → "Invite members" → set "New member role" to "member", select cicarol → "Invite to group". Send `owner msg` in the group. Switch to cibob and join "ci team"; switch to cicarol and join "ci team". Check: cibob and cicarol each have "ci team" with an enabled message field and `owner msg` in it; citester's group info lists cibob with the role admin and cicarol with member.
+5. (S5) As cicarol in "ci team": send `member msg`. Switch to cibob → "ci team": send `admin msg`. Check: both show as sent.
 
-**Replies and reactions in the direct chat.**
+**Cases.**
 
-5. (R8.1) Switch to citester → chat "cibob": open the message menu of `bob one` → "Reply", send `reply one`; reopen the chat. Check: `reply one` shows a quote of `bob one` above its text, also after reopening. (cibob's side is checked in R8.2.)
-6. (R8.6) As citester: message menu of the message "bold and italic" → "Reply", send `markdown reply`. Check: the quote above `markdown reply` shows "bold" in bold and "italic" in italics, without `*` and `_` (judge from the screenshot). (cibob's side is checked in R8.2.)
-7. (R8.2) As citester: send `own one`; its message menu → "Reply", send `quote own`; reopen the chat. Then switch to cibob → chat "citester" and reopen it. Check: on citester `quote own` quotes `own one`, also after reopening. On cibob after reopening: `reply one` quotes `bob one`, `markdown reply` quotes the formatted message, `quote own` quotes `own one`. Record the cibob results of R8.1 and R8.6 in their rows.
-8. (R8.7) As cibob: message menu of `own one` (citester's) → 👍 (the first emoji of the menu's top row); message menu of `bob one` (cibob's own) → 👍. Then tap the 👍 reaction under `bob one`. Check: after adding, a 👍 reaction shows under each of the two messages; after tapping the one under `bob one`, it is gone there and stays under `own one`.
-9. (R8.8) Switch to citester → chat "cibob": tap the 👍 reaction under `own one` (cibob's reaction). Check: before, 👍 has no count; after, the count "2" shows next to it.
+6. (R10.13) As cibob (admin) in "ci team": open the message menu of `owner msg` (citester is the owner) and close it; open the message menu of `member msg` (cicarol is a member) and close it without choosing. Check: the menu of `owner msg` has no "Moderate"; the menu of `member msg` has "Moderate".
+7. (R10.14) Switch to citester → chat "cibob" → chat info → "Contact preferences" → in the section "Delete for everyone" set "You allow" to "yes" → "Save and notify contact". Switch to cibob → chat "citester" → the same: "You allow" "yes" → "Save and notify contact". Switch to citester → chat "cibob": send `vanish direct`, message menu → "Delete". Check: the alert "Delete message?" says "Message will be deleted - this cannot be undone!"; tap "For everyone". Switch to cibob → chat "citester". Check: `vanish direct` is gone from both chats, with no "marked deleted" item left on cibob.
+8. (S6) As cibob in the chat "citester": send `bob 1`. Switch to citester → chat "cibob": send `own 1`, `own 2`, `own 3`. Check: all show in citester's chat.
+9. (R10.16) As citester in the chat "cibob": message menu of `bob 1` → "Select"; tap `own 1` to add it; tap the delete button. Check: the alert "Delete 2 messages?" offers only "Delete for me" (a received message is selected).
+10. (R10.15) Continue: tap "Delete for me". Then select `own 2` and `own 3` (message menu of `own 2` → "Select", tap `own 3`), tap the delete button and choose "For everyone". Switch to cibob → chat "citester". Then switch to citester → "ci team": select `member msg` and `admin msg` (message menu → "Select", tap the other), tap the moderate button → "Delete" in the alert "Delete 2 messages of members?". Switch to cicarol → "ci team". Check: local: `bob 1` and `own 1` are gone from citester and still on cibob; for recipient: the alert for `own 2` and `own 3` offers "For everyone", and afterwards both are gone on citester and on cibob; moderation: on citester and on cicarol `member msg` and `admin msg` show "moderated by citester".
+11. (R10.17) As cicarol in "ci team": send `member msg 2`. Switch to citester → "ci team": send `owner msg 2`; select `owner msg 2` (own) and `member msg 2` (message menu → "Select", tap the other); tap the moderate button → "Delete". Switch to cicarol → "ci team". Check: the moderate button is enabled with an own message in the selection; the alert says "Delete 2 messages of members?"; afterwards both messages show as deleted on citester and on cicarol ("moderated by citester" or "marked deleted" in place of their text).
 
-**Editing in the direct chat.**
-
-10. (R10.3) Switch to cibob → chat "citester": message menu of `quote own` → "Delete" → "Delete for me". Switch to citester → chat "cibob": edit `quote own` to `quote own edited`. Switch to cibob → chat "citester". Check: `quote own` disappears from cibob after the deletion; after citester's edit, `quote own edited` arrives on cibob as a new message at the bottom of the chat.
-11. (R10.4) Switch to citester → chat "cibob": send `plain words`, then edit it to `now *bold*`. Check: citester shows "now bold" with "bold" in bold and an edited mark (a pencil icon next to the time, judged from the screenshot). (cibob's side is checked in R10.5.)
-12. (R10.5) As citester: send `steady text`; message menu → "Edit" and, without changing the text, send it. Then switch to cibob → chat "citester". Check: no error alert; `steady text` has no edited mark on citester nor on cibob; on cibob `now bold` shows "bold" in bold with an edited mark (record this under R10.4).
-
-**The group "ci team".**
-
-13. (S5) Switch to citester. Connect citester (A) and cicarol (B) by a 1-time link. Check: cicarol's chat "citester" shows the encryption notice and a message field.
-14. (S6) Switch to citester. Create the group `ci team`, inviting cibob and cicarol (role member); in its chat send `owner note`. Switch to cibob and join "ci team"; switch to cicarol and join "ci team". Check: cibob and cicarol each have "ci team" with an enabled message field and `owner note` in it (the group sends recent history to new members).
-15. (S7) As cicarol in "ci team": message menu of `owner note` → 👍; send `carol note`. Switch to cibob → "ci team": message menu of `owner note` → 👍; send `group hello`. Check: the 👍 under `owner note` shows the count "2" on cibob.
-16. (R8.4) Switch to cicarol → "ci team": message menu of `carol note` (her own) → "Reply", send `carol self quote`; reopen the chat. Check: `carol self quote` quotes `carol note`, also after reopening. (citester's and cibob's sides are checked in R8.3.)
-17. (R8.3) Switch to citester → "ci team": message menu of `group hello` (cibob's) → "Reply", send `reply in group`; reopen the chat. Switch to cicarol → "ci team" and reopen it. Switch to cibob → "ci team" and reopen it. Check: on all three profiles after reopening, `reply in group` quotes `group hello`, and `carol self quote` quotes `carol note` (record the latter under R8.4 too).
-18. (R8.9) Switch to citester → "ci team": `ui long-press` on the 👍 reaction under `owner note`; then tap "cibob" in the menu that opens. Check: the menu lists the members who reacted, cibob and cicarol; tapping cibob opens cibob's member info (name cibob, role member). Close it (`ui key BACK`).
-19. (R10.1) As citester: in "ci team" edit `owner note` to `owner note edited`; in the chat "cibob" edit `own one` to `own one edited`. Switch to cibob: open "ci team", then the chat "citester". Check: on cibob "ci team" shows `owner note edited` and the chat "citester" shows `own one edited`, each with the edited mark (pencil icon next to the time).
-20. (R10.6) As cibob: in the chat "citester" delete `bob one` (cibob's own) and `steady text` (received) with "Delete for me"; in "ci team" delete `group hello` (own) and `carol note` (cicarol's) with "Delete for me". Switch to citester: open the chat "cibob" and "ci team". Check: on cibob the four messages are gone; on citester `bob one` is still in the chat "cibob", and `group hello` and `carol note` are still in "ci team".
-21. (R10.7) As citester: in the chat "cibob" send `bye direct`, then delete it: "Delete" → "For everyone"; in "ci team" send `bye group` and delete it the same way. Switch to cibob: open the chat "citester", then the deleted message's menu → "Reveal"; open "ci team" and do the same. Check: on citester each deleted message shows "marked deleted"; on cibob each shows "marked deleted" in place of its text, and after "Reveal" its text (`bye direct`, `bye group`) shows again.
-22. (R10.8) As cibob in the chat "citester": message menu of `bye direct` (deleted by citester) → "Delete" → "Delete for me". Check: the message is gone from cibob's chat.
-
-**Moderation in "ci team".**
-
-23. (R10.9) As cibob in "ci team": send `spam one`. Switch to citester → "ci team": message menu of `spam one` → "Moderate". Check: the alert "Delete member message?" says "The message will be marked as moderated for all members."; click "Delete"; `spam one` then shows "moderated by citester" in place of its text.
-24. (R10.10) Switch to cicarol → "ci team". Check: `spam one` shows "moderated by citester" in place of its text.
-25. (R10.11) As cicarol: message menu of the moderated `spam one` → "Reveal". Switch to citester → "ci team" → group info → "Group preferences" → turn "Delete for everyone" on → "Save and notify group members"; close the preferences. Switch to cibob → "ci team": send `spam two`. Switch to citester: message menu of `spam two` → "Moderate" → "Delete". Switch to cicarol → "ci team": open the message menu of `spam two`. Check: with the preference off, "Reveal" shows `spam one`'s text; after it is on, the "Moderate" alert says "The message will be deleted for all members."; on cicarol `spam two` shows "moderated by citester" and its menu has no "Reveal".
-26. (R10.12) As cicarol: message menu of `spam two` → "Delete" → "Delete for me". Check: the moderated message is gone from cicarol's chat.
-
-You have at most 400 turns, and the whole test fits in about 310 if you chain steps whose outcome you can predict with `ui do` and look at the screen after each chain; `ui do` stops at the first command that fails, so a failed chain tells you where it stopped. Every `ui` command and every file edit is a turn. Take a shot at each check, named after its step with letters, digits, - and _ only (`ui shot R8-1` for R8.1). For example:
+You have at most 600 turns, and the whole test fits in about 170 if you chain steps whose outcome you can predict with `ui do` and look at the screen after each chain; `ui do` stops at the first command that fails, so a failed chain tells you where it stopped. Every `ui` command and every file edit is a turn. Take a shot at each check, named after its step with letters, digits, - and _ only (`ui shot R8-1` for R8.1). For example:
 
 - `ui do click-text "Start new chat" -- click-text "Create 1-time link" 10 -- wait "Share this 1-time invite link" 30 -- shot link`
 - after tapping the message field: `ui do type "bob one" -- click-text "Send Message" -- wait "bob one" -- shot S4`
 - `ui do key BACK -- click-text "ci team" 10 -- wait "owner note" 30 -- shot group`
 
+## Anything unusual
+
+You are looking for regressions, not only running checks. Besides each case's checks, watch for anything a user would consider wrong, on every screen you pass through:
+
+- a crash, the app closing or restarting, a frozen screen;
+- an error alert or dialog of any kind ("View crashed", "Error", "Unexpected error", "Connection error", an error code or exception text);
+- an action that takes over 30 s, or a spinner that never ends;
+- text cut off, overlapping, garbled, untranslated or showing a raw key (such as `chat_item_…`), wrong plurals, empty labels;
+- a control that does nothing, a duplicated or missing item, an item in the wrong place or order;
+- a state that differs after a restart or after switching profile;
+- anything that differs from how the row or the step describes it.
+
+Record each in `report.md` under a heading `## Unusual`, with the case it happened in and the screenshot names, even when every check passes. A case passes only when its checks pass and nothing unusual happened in it; otherwise mark it FAIL and say why. Never stop at a failure: go on with the next case.
+
 ## Report
 
-Write `report.md` in your working directory as you go, so a session that is cut short still leaves its results. Before the first step, create it with a table `| ID | Result | Evidence | Screenshots |` holding one row for every ID of this test (S1, S2, S3, S4, R8.1, R8.6, R8.2, R8.7, R8.8, R10.3, R10.4, R10.5, S5, S6, S7, R8.4, R8.3, R8.9, R10.1, R10.6, R10.7, R10.8, R10.9, R10.10, R10.11, R10.12), Result `todo`; fill a row in as soon as its step is done. Result is PASS, FAIL or SKIPPED: SKIPPED with the exact reason when the step needs something this runner or the app on this platform lacks (that is not a failure); FAIL when the app does not do what the check says. Evidence quotes what you saw (the text read, positions) and names the screenshots. Add a section `## Findings` for other app bugs you notice (steps, what you saw, what you expected, screenshots). Read `report.md` again after the conversation has been compacted, to see which steps are left. End your final message with one line: `CLAUDE-TEST: PASS` if no step failed, otherwise `CLAUDE-TEST: FAIL` followed by the IDs of the steps that failed.
+Write `report.md` in your working directory as you go, so a session that is cut short still leaves its results. Before the first step, create it with a table `| ID | Result | Evidence | Screenshots |` holding one row for every ID of this test (S1, S2, S3, S4, S5, R10.13, R10.14, S6, R10.16, R10.15, R10.17), Result `todo`; fill a row in as soon as its step is done. Result is PASS, FAIL or SKIPPED: SKIPPED with the exact reason when the step needs something this runner or the app on this platform lacks (that is not a failure); FAIL when the app does not do what the check says. Evidence quotes what you saw (the text read, positions) and names the screenshots. Add a section `## Findings` for other app bugs you notice (steps, what you saw, what you expected, screenshots). Read `report.md` again after the conversation has been compacted, to see which steps are left. End your final message with one line: `CLAUDE-TEST: PASS` if no step failed, otherwise `CLAUDE-TEST: FAIL` followed by the IDs of the steps that failed.
 
 ## The ui helper
