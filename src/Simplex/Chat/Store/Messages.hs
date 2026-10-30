@@ -148,7 +148,7 @@ import Control.Monad
 import Control.Monad.Except
 import Control.Monad.IO.Class
 import Crypto.Random (ChaChaDRG)
-import Data.Bifunctor (first, second)
+import Data.Bifunctor (first)
 import Data.ByteString.Char8 (ByteString)
 import Data.Char (toLower)
 import Data.Either (fromRight, rights)
@@ -1484,12 +1484,10 @@ getCreateGroupChatScopeInfo db cxt user GroupInfo {membership} = \case
     pure $ GCSIMemberSupport {groupMember_ = Nothing}
   GCSMemberSupport (Just gmId) -> do
     m <- getGroupMemberById db cxt user gmId
-    GCSIMemberSupport . Just <$> case supportChat m of
-      Nothing -> do
-        ts <- liftIO getCurrentTime
-        liftIO $ setSupportChatTs db gmId ts
-        getGroupMemberById db cxt user gmId
-      Just _ -> pure m
+    when (isNothing $ supportChat m) $ do
+      ts <- liftIO getCurrentTime
+      liftIO $ setSupportChatTs db gmId ts
+    pure GCSIMemberSupport {groupMember_ = Just m}
 
 getGroupChatScopeInfoForItem :: DB.Connection -> StoreCxt -> User -> GroupInfo -> ChatItemId -> ExceptT StoreError IO (Maybe GroupChatScopeInfo)
 getGroupChatScopeInfoForItem db cxt user g itemId =
@@ -2178,18 +2176,18 @@ getGroupUnreadTimedItems db User {userId} groupId scope =
         |]
         (userId, groupId, GCSTMemberSupport_, groupMemberId_, CISRcvNew)
 
-updateGroupChatItemsReadList :: DB.Connection -> StoreCxt -> User -> GroupInfo -> Maybe GroupChatScopeInfo -> NonEmpty ChatItemId -> ExceptT StoreError IO ([(ChatItemId, Int)], GroupInfo, Maybe GroupChatScopeInfo)
+updateGroupChatItemsReadList :: DB.Connection -> StoreCxt -> User -> GroupInfo -> Maybe GroupChatScopeInfo -> NonEmpty ChatItemId -> ExceptT StoreError IO ([(ChatItemId, Int)], GroupInfo)
 updateGroupChatItemsReadList db cxt user@User {userId} g@GroupInfo {groupId} scopeInfo_ itemIds = do
   currentTs <- liftIO getCurrentTime
   -- Possible improvement is to differentiate retrieval queries for each scope,
   -- but we rely on UI to not pass item IDs from incorrect scope.
   readItemsData <- liftIO $ catMaybes . L.toList <$> mapM (getUpdateGroupItem currentTs) itemIds
-  (g', scopeInfo') <- case scopeInfo_ of
-    Nothing -> pure (g, Nothing)
+  g' <- case scopeInfo_ of
+    Nothing -> pure g
     Just scopeInfo@GCSIMemberSupport {groupMember_} -> do
       let decStats = countReadItems groupMember_ readItemsData
-      second Just <$> liftIO (updateGroupScopeUnreadStats db cxt user g scopeInfo decStats)
-  pure (timedItems readItemsData, g', scopeInfo')
+      liftIO $ updateGroupScopeUnreadStats db cxt user g scopeInfo decStats
+  pure (timedItems readItemsData, g')
   where
     getUpdateGroupItem :: UTCTime -> ChatItemId -> IO (Maybe (ChatItemId, Maybe Int, Maybe UTCTime, Maybe GroupMemberId, Maybe BoolInt))
     getUpdateGroupItem currentTs itemId =
@@ -2223,18 +2221,18 @@ updateGroupChatItemsReadList db cxt user@User {userId} g@GroupInfo {groupId} sco
         addTimedItem acc (itemId, Just ttl, Nothing, _, _) = (itemId, ttl) : acc
         addTimedItem acc _ = acc
 
-updateGroupScopeUnreadStats :: DB.Connection -> StoreCxt -> User -> GroupInfo -> GroupChatScopeInfo -> (Int, Int, Int) -> IO (GroupInfo, GroupChatScopeInfo)
+updateGroupScopeUnreadStats :: DB.Connection -> StoreCxt -> User -> GroupInfo -> GroupChatScopeInfo -> (Int, Int, Int) -> IO GroupInfo
 updateGroupScopeUnreadStats db cxt user g@GroupInfo {membership} scopeInfo (unread, unanswered, mentions) =
   case scopeInfo of
     GCSIMemberSupport {groupMember_} -> case groupMember_ of
       Nothing -> do
         membership' <- updateGMStats membership
-        pure (g {membership = membership'}, scopeInfo)
+        pure g {membership = membership'}
       Just member -> do
         member' <- updateGMStats member
         let didRequire = gmRequiresAttention member
             nowRequires = gmRequiresAttention member'
-        (,GCSIMemberSupport (Just member')) <$> if (not nowRequires && didRequire)
+        if (not nowRequires && didRequire)
           then decreaseGroupMembersRequireAttention db user g
           else pure g
   where
