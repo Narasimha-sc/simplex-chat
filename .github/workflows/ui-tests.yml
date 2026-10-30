@@ -1,6 +1,9 @@
 name: ui-tests
 
 on:
+  push:
+    branches:
+      - nd/ui-tests-ci-trial
   workflow_dispatch:
     inputs:
       platform:
@@ -60,7 +63,7 @@ jobs:
       - name: Choose jobs
         id: jobs
         env:
-          PLATFORM: ${{ inputs.platform }}
+          PLATFORM: ${{ inputs.platform || 'both' }}
           TESTS: ${{ inputs.tests }}
         run: scripts/ci/ui-tests/plan.sh
 
