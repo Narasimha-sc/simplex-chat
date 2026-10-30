@@ -26,14 +26,11 @@ Threat: any joining member, not necessarily a contact of the bot, can skip owner
 
 ## Fix
 
-Before handling `DEPendingMember` / `DEPendingMemberMsg`, the bot re-reads the member and ignores the event unless the member is still pending approval (`stillPendingApproval`, `Service.hs`).
+`approvePendingMember` is the only caller of `APIAcceptMember` in the bot. Before the call, the bot reads the member's status (`getMemberStatus`, `Directory/Store.hs`: one column, one row by primary key) and accepts only a member who is pending approval (`stillPendingApproval`, `Service.hs`).
 
-Only the bot accepts a member who is pending approval (`Commands.hs`: only the host can approve), and it handles events one at a time, so the re-read cannot race with another accept. `DEPendingMember` is guarded as well, for uniformity and to skip a member who left before the bot reached their join event.
+Only the bot accepts a member who is pending approval (`Commands.hs`: only the host can approve), and it handles events one at a time, so no other accept can occur between the read and the call.
 
-Alternatives considered:
-- A flag on `APIAcceptMember` so a screening approval of a member in review does nothing: protects any caller of the core API, but adds a parameter to a public command (parser, generated docs, all callers) for a rule the bot can enforce itself, and the stale accept would still be sent to the core.
-- A group lock in the core: does not help, the two accepts are sequential, not concurrent.
-- Re-read only inside `approvePendingMember`: stale events would still send captchas to members who are pending review.
+A stale event of a member who is no longer pending approval reaches the captcha handlers as before; it does not reach `APIAcceptMember`.
 
 ## Test
 
