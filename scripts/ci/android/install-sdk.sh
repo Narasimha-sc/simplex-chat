@@ -11,7 +11,7 @@ set -euo pipefail
 mkdir -p "$1"
 sdk=$(cd "$1" && pwd)
 repo=https://dl.google.com/android/repository
-api=34
+api=36
 
 install() {
   local dest=$1 url=$2 sha1=$3 sha256=$4 zip
@@ -30,8 +30,8 @@ install "$sdk" "$repo/emulator-linux_x64-16428233.zip" \
   cd7362ea55dfb86a418958138dc396e74165dd01 b08fc43d8608d2955f607f1b287beb525041e730086bdca3af152accac3af9c1
 install "$sdk" "$repo/platform-tools_r37.0.1-linux.zip" \
   477254aa5f903c15cf51001717bdf347fb6b53e0 d230f13842f60f782a8645f9c813f8f845bf36089ea7289f28c48f17979313f1
-install "$sdk/system-images/android-$api/google_apis" "$repo/sys-img/google_apis/x86_64-34_r14.zip" \
-  e0f6c9a0691aa27bd597d0deb1bcfdc943ac8ca7 783a40134baf4f3012d4464fbe1571b1612a0dbd2e7a44d14bd8328923443833
+install "$sdk/system-images/android-$api/google_apis" "$repo/sys-img/google_apis/x86_64-36_r07.zip" \
+  c6bf44bdcd885bb902b4ba752d111a073ad7a817 b1bb0769d0bed7698e61f203d7dc9bf6e7c37cd01a39d0d8788a11186bc78160
 
 # avdmanager needs the package.xml that only sdkmanager writes
 avd_home=$sdk/avd

@@ -312,7 +312,12 @@ jobs:
             export NAMES_SERVER=$(cat "$RUNNER_TEMP/backend/names-server")
             cases=backend
           fi
-          scripts/ci/android/smoke-test.sh "$RUNNER_TEMP/apk/$APK" "$RUNNER_TEMP/smoke-test" ${cases:-}
+          scripts/ci/android/smoke-test.sh "$RUNNER_TEMP/apk/$APK" "$RUNNER_TEMP/smoke-test" ${cases:-onboarding}
+
+      - name: Blank screen repro
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        timeout-minutes: 30
+        run: bash scripts/ci/android/blank-repro.sh
 
       - name: Stop test backend
         if: ${{ !cancelled() && steps.backend.outcome != 'skipped' }}
