@@ -347,7 +347,7 @@ jobs:
     needs: [plan, app]
     if: ${{ !cancelled() && needs.plan.outputs.run-claude == 'true' && needs.app.result == 'success' }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 120
+    timeout-minutes: 240
     environment:
       name: app-sim-claude
       deployment: false

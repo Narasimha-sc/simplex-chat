@@ -14,6 +14,8 @@
 #   ui wait <text> [secs]         wait up to secs (30) until the text is on screen
 #   ui click <x> <y>              tap at x,y
 #   ui click-text <text> [secs]   wait up to secs (20) for the text and tap its centre
+#   ui long-press <x> <y>         press and hold at x,y for 1 s (a message's or a chat's menu)
+#   ui swipe <x> <y> <left|right> swipe sideways from x,y by 400 pixels (swipe to reply)
 #   ui scroll <x> <y> <up|down> [times]
 #                                 swipe at x,y to scroll towards the top (up) or bottom (down) of the content, 3 times unless given
 #   ui type <text>                type ASCII text into the focused field, waiting up to 10 s for a field to have the focus;
@@ -291,6 +293,26 @@ case "${1:-}" in
     read -r x y _ <<< "$pos"
     adb shell input tap "$x" "$y"
     log "click-text \"$2\" at $x,$y"
+    ;;
+  long-press)
+    number "$2"
+    number "$3"
+    adb shell input swipe "$2" "$3" "$2" "$3" 1000
+    log "long-press $2,$3"
+    ;;
+  swipe)
+    number "$2"
+    number "$3"
+    case "$4" in
+      left) to=$(($2 - 400)) ;;
+      right) to=$(($2 + 400)) ;;
+      *)
+        echo "error: swipe left or right, not \"$4\""
+        exit 1
+        ;;
+    esac
+    adb shell input swipe "$2" "$3" "$to" "$3" 300
+    log "swipe $4 at $2,$3"
     ;;
   scroll)
     scroll "$2" "$3" "$4" "${5:-3}"
