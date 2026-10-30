@@ -5,6 +5,6 @@
 backend: no
 model: claude-haiku-5-5
 layouts: reachable
-cases-reachable: R24.1, S2, R22.1, R22.2, R22.3, R22.4, R24.3, R24.4, R24.5, R24.6, R24.7, R24.11, R24.12, R24.8, R24.13, R24.9, R19.3, R24.10, R24.14, R19.4, R19.5, R19.6, R24.15, R24.16, R24.17, R24.18, R24.20, R24.21, R24.22, R24.19
+cases-reachable: S2, R24.23, S3, R24.24, R24.26, R24.27, R24.29, R24.28, R24.25, R25.2, R25.3, R25.1, R25.4
 max-turns: 600
 max-budget-usd: 5
