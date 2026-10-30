@@ -145,14 +145,15 @@ All JNI declarations reside in [`Core.kt`](../common/src/commonMain/kotlin/chat/
 | 17 | [`chatReadFile()`](../common/src/commonMain/kotlin/chat/simplex/common/platform/Core.kt#L39) | `external fun chatReadFile(path: String, key: String, nonce: String): Array<Any>` | 39 | Read and decrypt file |
 | 18 | [`chatEncryptFile()`](../common/src/commonMain/kotlin/chat/simplex/common/platform/Core.kt#L40) | `external fun chatEncryptFile(ctrl: ChatCtrl, fromPath: String, toPath: String): String` | 40 | Encrypt file on disk |
 | 19 | [`chatDecryptFile()`](../common/src/commonMain/kotlin/chat/simplex/common/platform/Core.kt#L41) | `external fun chatDecryptFile(fromPath: String, key: String, nonce: String, toPath: String): String` | 41 | Decrypt file on disk |
-| 20 | [`chatResizeImageUri()`](../common/src/commonMain/kotlin/chat/simplex/common/platform/Core.kt#L42) | `external fun chatResizeImageUri(buffer: ByteBuffer, maxSize: Int): String` | 42 | Resize encoded image to a data URI of at most `maxSize` characters |
-| 21 | [`chatResizeImage()`](../common/src/commonMain/kotlin/chat/simplex/common/platform/Core.kt#L43) | `external fun chatResizeImage(buffer: ByteBuffer, maxSize: Int, png: Int): String` | 43 | Resize encoded image to base64 of PNG or JPEG data of at most `maxSize` bytes |
-| 22 | [`chatResizeImageFileUri()`](../common/src/commonMain/kotlin/chat/simplex/common/platform/Core.kt#L44) | `external fun chatResizeImageFileUri(path: String, maxSize: Int): String` | 44 | Desktop: as `chatResizeImageUri`, from the file at `path` |
-| 23 | [`chatResizeImageFile()`](../common/src/commonMain/kotlin/chat/simplex/common/platform/Core.kt#L45) | `external fun chatResizeImageFile(path: String, maxSize: Int, png: Int): String` | 45 | Desktop: as `chatResizeImage`, from the file at `path`; `png` −1 selects the format by transparency |
-| 24 | [`chatResizeImageFdUri()`](../common/src/commonMain/kotlin/chat/simplex/common/platform/Core.kt#L46) | `external fun chatResizeImageFdUri(fd: Int, maxSize: Int): String` | 46 | Android: as `chatResizeImageUri`, from the file descriptor `fd`, which core closes |
-| 25 | [`chatResizeImageFd()`](../common/src/commonMain/kotlin/chat/simplex/common/platform/Core.kt#L47) | `external fun chatResizeImageFd(fd: Int, maxSize: Int, png: Int): String` | 47 | Android: as `chatResizeImage`, from the file descriptor `fd`, which core closes |
+| 20 | [`chatCheckLink()`](../common/src/commonMain/kotlin/chat/simplex/common/platform/Core.kt#L42) | `external fun chatCheckLink(link: String): String` | 42 | Classify a scanned QR code / link into its type |
+| 21 | [`chatResizeImageUri()`](../common/src/commonMain/kotlin/chat/simplex/common/platform/Core.kt#L43) | `external fun chatResizeImageUri(buffer: ByteBuffer, maxSize: Int): String` | 43 | Resize encoded image to a data URI of at most `maxSize` characters |
+| 22 | [`chatResizeImage()`](../common/src/commonMain/kotlin/chat/simplex/common/platform/Core.kt#L44) | `external fun chatResizeImage(buffer: ByteBuffer, maxSize: Int, png: Int): String` | 44 | Resize encoded image to base64 of PNG or JPEG data of at most `maxSize` bytes |
+| 23 | [`chatResizeImageFileUri()`](../common/src/commonMain/kotlin/chat/simplex/common/platform/Core.kt#L45) | `external fun chatResizeImageFileUri(path: String, maxSize: Int): String` | 45 | Desktop: as `chatResizeImageUri`, from the file at `path` |
+| 24 | [`chatResizeImageFile()`](../common/src/commonMain/kotlin/chat/simplex/common/platform/Core.kt#L46) | `external fun chatResizeImageFile(path: String, maxSize: Int, png: Int): String` | 46 | Desktop: as `chatResizeImage`, from the file at `path`; `png` −1 selects the format by transparency |
+| 25 | [`chatResizeImageFdUri()`](../common/src/commonMain/kotlin/chat/simplex/common/platform/Core.kt#L47) | `external fun chatResizeImageFdUri(fd: Int, maxSize: Int): String` | 47 | Android: as `chatResizeImageUri`, from the file descriptor `fd`, which core closes |
+| 26 | [`chatResizeImageFd()`](../common/src/commonMain/kotlin/chat/simplex/common/platform/Core.kt#L48) | `external fun chatResizeImageFd(fd: Int, maxSize: Int, png: Int): String` | 48 | Android: as `chatResizeImage`, from the file descriptor `fd`, which core closes |
 
-**Total: 25 external native functions** (the `ChatCtrl` type alias at [line 23](../common/src/commonMain/kotlin/chat/simplex/common/platform/Core.kt#L23) is `Long`, representing the Haskell-side controller pointer).
+**Total: 26 external native functions** (the `ChatCtrl` type alias at [line 23](../common/src/commonMain/kotlin/chat/simplex/common/platform/Core.kt#L23) is `Long`, representing the Haskell-side controller pointer).
 
 <a id="initChatControllerOnStart"></a>
 <a id="chatInitTemporaryDatabase"></a>
@@ -162,8 +163,8 @@ All JNI declarations reside in [`Core.kt`](../common/src/commonMain/kotlin/chat/
 
 | Function | Line | Purpose |
 |---|---|---|
-| [`initChatControllerOnStart()`](../common/src/commonMain/kotlin/chat/simplex/common/platform/Core.kt#L51) | 51 | Entry point called during app startup; launches `initChatController` in a long-running coroutine |
-| [`initChatController()`](../common/src/commonMain/kotlin/chat/simplex/common/platform/Core.kt#L62) | 62 | Main initialization: DB migration via `chatMigrateInit`, error recovery (incomplete DB removal), sets file paths, loads active user, starts chat |
+| [`initChatControllerOnStart()`](../common/src/commonMain/kotlin/chat/simplex/common/platform/Core.kt#L52) | 52 | Entry point called during app startup; launches `initChatController` in a long-running coroutine |
+| [`initChatController()`](../common/src/commonMain/kotlin/chat/simplex/common/platform/Core.kt#L63) | 63 | Main initialization: DB migration via `chatMigrateInit`, error recovery (incomplete DB removal), sets file paths, loads active user, starts chat |
 | [`chatInitTemporaryDatabase()`](../common/src/commonMain/kotlin/chat/simplex/common/platform/Core.kt#L190) | 190 | Creates a temporary database for migration scenarios |
 | [`chatInitControllerRemovingDatabases()`](../common/src/commonMain/kotlin/chat/simplex/common/platform/Core.kt#L202) | 202 | Removes existing DBs and creates fresh controller (used during re-initialization) |
 | [`showStartChatAfterRestartAlert()`](../common/src/commonMain/kotlin/chat/simplex/common/platform/Core.kt#L222) | 222 | Shows confirmation dialog when chat was stopped and DB passphrase is stored |
