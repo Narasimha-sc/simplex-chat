@@ -1,4 +1,4 @@
-# Test: onboarding, the chat list and sending images in the SimpleX Chat Android app
+# Test: settings, appearance and chat layouts in the SimpleX Chat Android app
 
 You are testing the SimpleX Chat Android app, which runs in an Android emulator on this machine. Drive it only with the `ui` helper, through Bash, one command per call: `ui <command> [args]`. Anything else is refused; don't look for ways around that, and if something blocks the test, report it. The commands are listed at the end.
 
@@ -9,55 +9,78 @@ Your working directory is where your output goes. `ui shot <name>` saves `screen
 - The app is already running, on its first screen, with a new, empty database: never run `ui start` or `ui stop`. Begin with `ui shot start` to see it.
 - `ui type` types into the field that has the focus: tap a field before typing into it. `ui key BACK` is Android's back button.
 - Besides the chats, the chat list shows the app's own cards as list items until they are closed: "New 1-time link / Paste link / Scan" (once there is a conversation), "Bottom bar / Top bar", and "Invest in SimpleX Chat!". They are part of the list, not something drawn over it: leave them open.
-- The emulator's Pictures folder has two images for part D: `test-card.jpg`, a TV test card 1280×720 (colour bars, a large circle, "1080" at the top and "TVB" at the bottom), and `simplex-logo.png`, the dark blue and turquoise SimpleX logo on a transparent background.
+- Developer tools are on: the job starts the app with them, so "Show developer options" is already on.
+- All profiles are in this one app, which shows one profile at a time. A profile that is not shown still receives messages and profile updates; its chats show them once you switch to it. Messages go through the preset servers on the internet: after an action in one profile, wait up to 60 s for its effect in another (`ui wait "<text>" 60`).
+- The emulator's Pictures folder has two images: `test-card.jpg`, a TV test card 1280×720 (colour bars, a large circle, "1080" at the top and "TVB" at the bottom), and `simplex-logo.png`, the SimpleX logo.
+
+## How to do things in the app
+
+- **Send a message:** tap the message field (placeholder "Message"), `ui type "<text>"`, then tap "Send Message". Check the message then shows in the chat. `ui key BACK` leaves the chat for the chat list.
+- **Chat info:** tap the chat's name in the chat's toolbar. `ui key BACK` returns to the chat.
+- **Your profile menu:** tap your profile picture at the left end of the chat list's toolbar (with the default reachable toolbar it is at the bottom left; its element reads "profile image placeholder", or "profile image" once it has a picture; chat rows have the same label, so pick it by position). The menu lists your profiles by name, "Your chat profiles" and "Settings".
+- **Settings:** profile menu → "Settings". `ui key BACK` goes back one screen.
+- **Developer tools:** Settings → scroll to the bottom → the app version row (the last row of "Advanced settings", showing the version number) → "App version" opens → "Developer tools".
+- **Chat console:** Developer tools → "Chat console". Tap the empty input field at the bottom of the console, `ui type "<command>"`, then tap "Send Message" at its right end. The console lists the command as "> <command>" and the answer as "< <type>"; tap an answer to read its details.
+- **Your profile:** profile menu → tap your own name (the active profile): "Your current profile" opens, with "Profile name:", "Bio:", "Add description" (or "Edit description") and "Save and notify contacts".
+- **Switch profile:** profile menu → tap the other profile's name.
+- **Add a profile:** profile menu → "Your chat profiles" → "Add profile". On "Create profile" the name field under "Enter your name:" has the focus: type the name and tap "Create profile" (the button, not the title). The new profile becomes the active one; `ui key BACK` until the chat list shows.
+- **Copy a 1-time link:** "Start new chat" → "Create 1-time link"; under "Share this 1-time invite link" the link is shown with a copy icon at its right end (an unlabeled button: find it with `ui tree` on the link's row) — tap the copy icon (tapping the link text opens Android's share sheet instead). `ui key BACK` until the chat list shows.
+- **Open a copied link** (as another profile): "Start new chat" → "Paste link / Scan" → "Tap to paste link". An alert names the other profile with "Open new chat": tap it; the chat opens with a "Connect" button at the bottom: tap it. If the alert is "Connect via one-time link?" instead, tap "Use current profile". For an address, the chat shows the field "Add message" with "Connect" at its right: tap "Connect", then "Send request without message" in the alert "Send contact request?".
+- **Pick an image:** "Attach" (left of the message field) or the profile's "Edit image" opens a choice: "Image" or "From Gallery". Android then opens a picker that is not part of the app (the photo picker, or Files): find `test-card.jpg` (under Pictures, Images or Recent, in a folder "test-card"; its thumbnail shows the test card), choose it, and confirm if the picker has a button for it ("Add", "Select", "Done").
+- **Dropdown rows** (for example "Chat layout", "Color mode"): tap the value at the right end of the row; a menu lists the values: tap one.
 
 ## The test
 
-**A. Onboarding.** Each screen waits for the one before it; wait for a text before clicking it.
+The cases build on each other: run them in this order. Write texts exactly as given.
 
-1. The first screen has "Get started": click it.
-2. Click the field "Enter profile name…", type `citester`, and click "Create profile".
-3. On "Your network", click "Continue".
-4. The app explains instant notifications in an alert: click "Allow". Android then asks whether the app may always run in the background: click "Allow" again.
-5. Click "Accept" on the conditions screen.
-6. Wait up to 60 s for the chat list, which shows "Talk to someone" while there are no conversations. Take a shot.
+**S. Setup.**
 
-**B. A group, and the chat list with the toolbar at the bottom.**
+1. (S1) Onboarding. Each screen waits for the one before it; wait for a text before clicking it. The first screen has "Get started": click it. Click the field "Enter profile name…", type `citester`, and click "Create profile". On "Your network", click "Continue". The app explains instant notifications in an alert: click "Allow". Android then asks whether the app may always run in the background: click "Allow" again. Click "Accept" on the conditions screen. Wait up to 60 s for the chat list, which shows "Talk to someone" while there are no conversations.
+2. (S2) As citester, copy a 1-time link. Add the profile `cibob`; as cibob, open the copied link. Wait up to 120 s until cibob's chat "citester" shows the message field "Message". Send `bob one`, then `bob two`.
+3. (S3) Switch to citester. Check: within 60 s the chat list shows "cibob"; open it: it shows "bob one" and "bob two". Send `tester one`, then `tester two`.
 
-1. Click "Start new chat" (the round button in the bottom toolbar), then "Create group". The name field under "Enter group name:" has the focus: type `seeded notes` and click "Create group". Wait for "Invite members", which shows once the group exists.
-2. Run `ui relaunch`: it restarts the app and waits for the chat list. Take a shot.
-3. Check, noting the evidence (screenshot names, positions):
-   - "seeded notes" is listed;
-   - the search field "Search or paste SimpleX link" is in the bottom half of the screen (y over 1200), and "Add list" is just above it;
-   - nothing is cut off, overlapping or garbled.
+**R. Cases.**
 
-**Between the layouts:** run `ui layout top`: it restarts the app with the toolbar at the top.
+1. (R19.7) Open the chat console; run `/v`. Check: the console shows "> /v" and an answer line "< versionInfo"; tap the answer: its details name the core version. `ui key BACK` until the chat list shows.
+2. (R19.18) Open "cibob" → chat info; scroll down. Check: a section "For console" with "Local name" (cibob) and "Database ID". Developer tools → tap the switch of "Show developer options". Check: the footer starts with "Hide:". Open "cibob" → chat info. Check: "For console" is gone. Turn "Show developer options" on again (footer "Show:"); check that chat info shows "For console" again.
+3. (R13.0) Settings → "Appearance". In "Themes", set "Chat layout" to "Terminal". Go back to the chat list; open "cibob". Check, from a shot: messages are drawn without bubbles; "cibob" shows once above "bob one" and "bob two", and "citester" once above "tester one" and "tester two"; each message's time is at the right end of its line.
+4. (R15.0) Still in "cibob" (terminal layout): send `*bold* _italic_ ~strike~ #secret#`. Attach the image test-card.jpg ("Attach" → "Image") and tap "Send Message". Check, from a shot: the markdown message shows bold, italic and struck-through words without the markup characters, and "secret" hidden; the test card shows whole, not stretched. Quotes need the message menu and voice messages a microphone: both are out of scope here.
+5. (R14.0) Settings → "Appearance". Set "Apply to" to "citester". Check: "Chat layout" now offers "Terminal (default)" and "Classic". Choose "Classic". Open "cibob". Check: bubbles again (the profile's layout overrides the app's Terminal). Chat info → scroll to "Chat theme" → its "Chat layout" row shows "Classic (default)"; choose "Terminal". Go back to the chat. Check: terminal layout in "cibob" (the chat's layout overrides the profile's). Then switch back: in "Chat theme" set "Chat layout" to "Classic (default)"; in Appearance set "Apply to" to "citester" again (it shows "App theme" each time Appearance opens) and "Chat layout" to "Terminal (default)"; set "Apply to" to "App theme" and "Chat layout" to "Classic". Check: "cibob" shows bubbles.
+6. (R16.0) Add the profile `cicarol`. As cicarol, open the chat console and run, one at a time: `/ad`, then `/auto_accept on layout=terminal` (the address settings of the row's `/_address_settings` command, for the active profile), then `/sa`. Check: each command gets an answer that is not an error; `/sa` lists the address link. Go back to the chat list. Switch to citester, then back to cicarol (this reloads the address). Profile menu → "Your SimpleX address" → "Share address": Android's share sheet opens (not the app's): tap its "Copy". Switch to citester and open the copied link (address: "Open new chat", "Connect", "Send request without message"). Check: the chat "cicarol" opens in terminal layout (no bubbles, sender name above messages), and within 60 s it becomes a contact (the "Connect" bar is replaced by the message field) without cicarol accepting by hand. If the share sheet has no "Copy", mark R16.0 SKIPPED with a shot.
+7. (R19.1) Switch to cibob. In the chat console run `/_profile 2 {"displayName":"cibob","fullName":"Bob Fuller"}` (cibob is the second profile created, so its ID is 2; `ui type '/_profile 2 {"displayName":"cibob","fullName":"Bob Fuller"}'`). Switch to citester → "cibob" → chat info. Check: within 60 s "Bob Fuller" shows under the name (full name). Switch to cibob → Your profile: tap the field under "Profile name:", `ui key MOVE_END`, type `x` (the name becomes "cibobx"), tap "Save and notify contacts". Switch to citester. Check: the chat list shows "cibobx" (display name). Switch to cibob; run `/_profile 2 {"displayName":"cibob","fullName":"Robert Bob"}`. Switch to citester. Check: the chat list shows "cibob" and its chat info shows "Robert Bob" (both).
+8. (R19.2) Switch to cibob → Your profile → "Add description"; tap the field "Enter description (optional)" and type `This is a long description of the profile cibob written to check that contacts receive descriptions longer than one hundred characters in full.`; `ui key BACK` to return to the profile (hide the keyboard first if BACK only hides it), then tap "Save and notify contacts". Switch to citester → "cibob" → chat info. Check: within 60 s the info shows the start of the description ending with "…" and "Read more"; tap "Read more": the whole text shows.
+9. (R19.9) Switch to cibob → Your profile → "Edit image" → "From Gallery" → pick test-card.jpg. Tap "Save and notify contacts". Switch to citester. Check: within 60 s the row "cibob" in the chat list shows the test card as its picture (shot; its element reads "profile image").
+10. (R19.11) Switch to cibob → Your profile → "Delete image" → "Save and notify contacts". Switch to citester. Check: within 60 s the row "cibob" shows the default icon again ("profile image placeholder").
+11. (R19.8) Settings → "Audio & video calls" → "WebRTC ICE servers". Check: "Your ICE servers" opens with the switch "Configure ICE servers" off and the text "Using SimpleX Chat servers.". Go back to the chat list.
+12. (R19.13) Settings → "Appearance" → "Customize theme" → "Accent". Tap the hex colour field below the two colour boxes, `ui key MOVE_END DEL DEL DEL DEL DEL DEL DEL`, then type `ff0000`. Check: the right colour box and the app's accent colour (for example the "Reset color" text) turn red. `ui key BACK` until "Customize theme" shows.
+13. (R19.24) In "Customize theme": tap "Export theme". Android's file picker opens (not the app's) with the name "simplex.theme": save it in Downloads (its save button). Tap "Reset colors". Check: the accent is the default blue again. Tap "Import theme"; in Android's picker choose "simplex.theme" (Downloads or Recent). Check: no "Import theme error" alert, and the accent is red again. Tap "Reset colors" (accent blue). Go back to "Appearance".
+14. (R19.14) In "Appearance": set "Color mode" to "Dark". Check: the app turns dark. Set "Dark mode colors" to "Black". Check: the background turns black. Set "Color mode" to "Light". Check: the app is light again.
+15. (R19.17) In "Message shape": tap the left end of the "Corner" slider, then tap the switch of "Tail". Open "cibob". Check: the message bubbles have square corners and no tails. Back in Appearance, tap the right part of the "Corner" slider and turn "Tail" on again; check the bubbles are rounded with tails.
+16. (R19.15) In "Appearance", tap the switch of "Reachable app toolbars" (off). Go back to the chat list. Check: the search field "Search or paste SimpleX link" is in the top half of the screen (y under 1200), and "Start new chat" is a floating button at the bottom right. Tap "Start new chat". Check: the new chat sheet's items ("Create 1-time link", "Paste link / Scan", "Create group") and their y positions (shot); go back. Turn "Reachable app toolbars" on again; check the search field is in the bottom half, then open "Start new chat" again and compare: with the reachable toolbar the items sit lower on the screen (near the bottom toolbar). Go back.
+17. (R19.25) In "Appearance", in "Themes", tap a wallpaper picture in the row of small chat previews (not the first and not the last "+"). Open "cicarol". Check: the chat background shows the wallpaper pattern. Open "cibob" → chat info → "Chat theme"; tap a different wallpaper in its row. Go back to the chat. Check: "cibob" shows that other wallpaper while "cicarol" keeps the global one (shots of both).
+18. (R19.20) Settings → "Network & servers"; scroll to the section "Network connection". Check: it shows one of "WiFi", "Wired ethernet", "Cellular", "Other" (the emulator's network type, not "No network connection") with a status dot. Only the runner's network type can be shown here; cellular cannot be reproduced.
+19. (R19.21) On "Network & servers" tap "Advanced network settings" ("Advanced settings" opens). Note the value of "TCP connection timeout" (default "15 sec"); tap it and choose "20 sec". Tap "Save and reconnect" → "Update" in the alert "Update network settings?". Go back and open "Advanced network settings" again. Check: "20 sec" (saved). Choose "30 sec", then `ui key BACK`. Check: the alert "Update network settings?" offers "Save and reconnect" and "Exit without saving": tap "Exit without saving"; reopen: "20 sec" (reverted). Tap "Reset to defaults". Check: "15 sec"; tap "Save and reconnect" → "Update". Go back to the chat list; send `after reconnect` to cibob, switch to cibob and check it arrives within 60 s (the client reconnected); switch back to citester.
+20. (R19.22) Settings → "Network & servers": tap the switch of "Use SOCKS proxy" → "Confirm" in the alert "Use SOCKS proxy?". Open "Advanced network settings". Check: "TCP connection timeout" shows "30 sec" and "Protocol timeout" "20 sec" (proxy values). Go back; tap the switch of "Use SOCKS proxy" again → "Confirm" in the alert "Use direct Internet connection?". Open "Advanced network settings". Check: "15 sec" and "10 sec" again. The proxy must end off: no SOCKS proxy runs here.
+21. (R19.23) Settings → "Your privacy": tap the switch of "Protect app screen" (on). Check: the switch is on; take a shot and note whether the screenshot comes out black or blank (the setting forbids screen capture; the emulator console's screenshots may or may not obey it). Turn it off again and take a shot to confirm the screen is captured normally. The effect on the app switcher is out of scope here.
+22. (R19.29) Settings → "Your privacy" → "More privacy": tap the switch of "Message draft" (off). Open "cibob", tap the message field and type `draft off` (do not send); `ui key BACK` until the chat list shows; open "cibob" again. Check: the message field is empty.
+23. (R19.30) Turn "Message draft" on. In "cibob" type `draft kept`; go back to the chat list. Check: the row "cibob" shows "draft kept". Turn "Message draft" off. Check: the row "cibob" no longer shows "draft kept", and opening "cibob" shows an empty message field.
+24. (R19.31) Turn "Message draft" on and "Show last messages" off. Check: the chat list rows show no last message text. In "cibob" type `draft shown`; go back to the chat list. Check: the row "cibob" shows "draft shown" while the other rows still show no message text.
+25. (R19.32) Settings → "Your privacy" → set "Blur media" to "Strong". Open "cibob". Check: the test card sent in R15.0 is blurred. Set "Blur media" to "Off"; check it is sharp again.
+26. (R20.0) Developer tools → "Storage". Check: "Storage" lists one or more folders (their paths as section titles), each with "Total" and named entries with sizes. Go back to the chat list.
+27. (R19.28) "Show last messages" is off since R19.31: check again that the chat list shows no last message text. Run `ui relaunch`. Check: after the restart the rows still show no last message text, and Settings → "Your privacy" → "More privacy" shows "Show last messages" off.
+28. (R19.26) Settings → "Shutdown" (in "Advanced settings"). Check: the alert "Shutdown?" with "Notifications will stop working until you re-launch the app" and "Cancel", "Restart", "Shutdown". Tap "Restart". Check: the app restarts and shows the chat list within 90 s (`ui wait "Start new chat" 90`). Open the alert again and tap "Shutdown". Check: the app closes (`ui text` no longer lists the app's chat list). Run `ui relaunch`: it starts the app again and waits for the chat list.
 
-**C. The chat list, toolbar at the top.** Check, noting the evidence:
-
-- "seeded notes" is still listed;
-- the search field is in the top half of the screen (y under 1200), and "Add list" is just below it;
-- nothing is cut off, overlapping or garbled. "Start new chat" is now a floating button at the bottom right, drawn over whatever the list shows there: note what it covers, but that alone is not a failure.
-
-**D. Sending images in "seeded notes".**
-
-1. Click "seeded notes" to open the group. Click "Attach" (left of the message field), then "Image". Android opens a picker that is not part of the app (the photo picker, or Files): find `test-card.jpg` (under Pictures, Images or Recent; its thumbnail shows the test card) and choose it, then confirm the choice if the picker has a button for it ("Add", "Select", "Done").
-2. Back in the app, the compose area shows the image above the message field before it is sent. Take a shot. Check: the preview shows the whole test card, upright, not stretched.
-3. Click "Send Message". Check: the chat shows the sent test card. Click the image: it opens full screen, and "1080" and "TVB" are sharp and readable. Take a shot, then `ui key BACK`.
-4. Repeat 1 to 3 with `simplex-logo.png`. Check: the preview and the sent image show the whole logo, and the area around its letters shows the chat's background, not black or grey.
-5. Check that the chat shows both images after `ui relaunch` and opening "seeded notes" again.
-
-You have at most 90 turns, and the whole test fits in about 45 if you chain steps whose outcome you can predict with `ui do` and look at the screen after each chain. For example:
+You have at most 370 turns, and the whole test fits in about 290 if you chain steps whose outcome you can predict with `ui do` and look at the screen after each chain. For example:
 
 - `ui do click-text "Get started" -- click-text "Enter profile name" 30 -- type citester -- shot profile`
-- `ui do click-text "Create profile" -- wait Continue 60 -- shot your-network`
-- `ui do click-text "Start new chat" -- click-text "Create group" 10 -- wait "Enter group name" -- shot new-group`
-- `ui do relaunch -- shot chat-list-bottom`
+- `ui do click-text "Start new chat" -- click-text "Paste link / Scan" 10 -- click-text "Tap to paste link" 10 -- wait "Open new chat" 60 -- shot open-new-chat`
+- `ui do click-text "Settings" 10 -- click-text "Appearance" 10 -- wait "Chat layout" -- shot appearance`
+- `ui do click-text "Message" -- type "tester one" -- click-text "Send Message" -- wait "tester one" -- shot S3`
 
-`ui do` stops at the first command that fails, so a failed chain tells you where it stopped.
+`ui do` stops at the first command that fails, so a failed chain tells you where it stopped. Take a shot at each check, named after its case (`ui shot R13-0`).
 
 ## Report
 
-Write `report.md` in your working directory: for each of A, B, C and D, each check you ran as PASS or FAIL with its evidence, and anything else unexpected. End your final message with one line: `CLAUDE-TEST: PASS` if every check you ran passed, otherwise `CLAUDE-TEST: FAIL` followed by the checks that failed.
+Write `report.md` in your working directory as you go, so a session that is cut short still leaves its results: a table with one row per case ID (S1 to S3, R19.7, R19.18, R13.0, R15.0, R14.0, R16.0, R19.1, R19.2, R19.9, R19.11, R19.8, R19.13, R19.24, R19.14, R19.17, R19.15, R19.25, R19.20, R19.21, R19.22, R19.23, R19.29, R19.30, R19.31, R19.32, R20.0, R19.28, R19.26), each with PASS, FAIL or SKIPPED (with the reason) and its evidence (element texts and positions, screenshot names). A case the app cannot do on this platform is SKIPPED, not FAIL. Add anything else unexpected. End your final message with one line: `CLAUDE-TEST: PASS` if no case failed, otherwise `CLAUDE-TEST: FAIL` followed by the IDs of the cases that failed.
 
 ## The ui helper

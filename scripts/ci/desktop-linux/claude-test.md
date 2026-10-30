@@ -1,4 +1,4 @@
-# Test: channel message signing, channel moderators and sending images in the SimpleX Chat desktop app
+# Test: settings, appearance and chat layouts in the SimpleX Chat desktop app
 
 You are testing the SimpleX Chat desktop app, which runs on a virtual display on this machine. Drive it only with the `ui` helper, through Bash, one command per call: `ui <command> [args]`. Anything else is refused; don't look for ways around that, and if something blocks the test, report it. The commands are listed at the end.
 
@@ -6,76 +6,79 @@ Your working directory is where your output goes. `ui shot <name>` saves `screen
 
 ## What is set up
 
-- The app is already running, on its first screen, with a new, empty database: never run `ui start` or `ui stop`. Begin with `ui shot start` to see it.
+- The app is already running, on its first screen, with a new, empty database: never run `ui start` or `ui stop`, except where case R19.28 says so. Begin with `ui shot start` to see it.
 - After onboarding, the chat list is in the left pane (x 1 to 389) and chats open in the right pane. An empty chat list shows only its toolbar, with the profile picture at about 27,730 and a pencil (New chat) at about 363,730: the search field "Search or paste SimpleX link" appears once there is a chat. The toolbar is at the bottom of the left pane.
-- The channel uses the app's preset chat relays, on the internet. Creating it and joining it wait for them: wait up to 120 s there (`ui wait "<text>" 120`).
-- The folder `images` in your working directory has two images for part I: `test-card.jpg`, a TV test card 1280×720 (colour bars, a large circle, "1080" at the top and "TVB" at the bottom), and `simplex-logo.png`, the dark blue and turquoise SimpleX logo on a transparent background. You can Read them to compare with what the app shows.
+- Developer tools are on: the job starts the app with them, so "Show developer options" is already on.
+- All profiles are in this one app, which shows one profile at a time. A profile that is not shown still receives messages and profile updates; its chats show them once you switch to it. Messages go through the preset servers on the internet: after an action in one profile, wait up to 60 s for its effect in another (`ui wait "<text>" 60`).
+- The folder `images` in your working directory has two images: `test-card.jpg`, a TV test card 1280×720 (colour bars, a large circle, "1080" at the top and "TVB" at the bottom), and `simplex-logo.png`, the dark blue and turquoise SimpleX logo on a transparent background.
 
 ## How to do things in the app
 
-- **Send a message:** click the message field at the bottom of the right pane (its placeholder is "Broadcast" for the channel's owner, "Message" for others), `ui type "<text>"`, then `ui key Return`. Check the message then shows in the chat.
-- **Channel info:** click the channel name at the top of the right pane. Press Escape to close it and other panes (preferences, member info, a message's info) and get back to the chat.
-- **Message menu:** `ui right-click <x> <y>` on the message's text (centre from `ui find`) opens its menu ("Info", "Moderate", …).
-- **Signatures are read as text, never from the seal icons:** a message's "Info" shows "Signed" (your own message), "Signed & verified" (someone else's, checked) or "Signature missing".
-- **Switch profile:** click the profile picture (about 27,730); the menu lists your other profiles by name: click the one you want. The chat list then shows that profile's chats; click "ci signing" in it.
+- **Send a message:** click the message field at the bottom of the right pane (placeholder "Message"), `ui type "<text>"`, then `ui key Return`. Check the message then shows in the chat.
+- **Leave a chat:** Escape does not close a chat on desktop: click another chat in the chat list.
+- **Chat info:** click the chat's name at the top of the right pane. Press Escape to close it and other panes and get back to the chat.
+- **Message menu:** `ui right-click <x> <y>` on the message's text (centre from `ui find`) opens its menu ("Reply", "Info", …).
+- **Settings:** click the profile picture (about 27,730), then "Settings". Settings open in the left pane; press Escape to go back one screen, until the chat list shows.
+- **Developer tools:** Settings → scroll to the bottom → the app version row (the last row of "Advanced settings", showing the version number) → "App version" opens → "Developer tools".
+- **Chat console:** Developer tools → "Chat console". Click the empty input field at the bottom of the console, `ui type "<command>"`, then `ui key Return`. The console lists the command as "> <command>" and the answer as "< <type>"; click an answer to read its details.
+- **Your profile:** profile picture → click your own name at the top of the menu: "Your current profile" opens, with "Profile name:", "Bio:", "Add description" (or "Edit description") and "Save and notify contacts".
+- **Switch profile:** click the profile picture; the menu lists your other profiles by name: click the one you want.
 - **Add a profile:** profile picture → "Your chat profiles" → "Add profile". On "Create profile", click the field about 40 px below the text "Enter your name:", type the name, and click the "Create profile" button (the lower of the two "Create profile" texts; the upper one is the title). The new profile becomes the active one; press Escape until the chat list shows.
-- **Join by the copied link** (from a profile without chats): the pencil (about 363,730) → "Paste link" → "Tap to paste link". An alert names the channel with "Open channel": click it. The channel opens with "Tap Join channel" and a "Join channel" bar at the bottom: click the bar, and wait up to 120 s until the bottom of the chat shows "you are subscriber".
+- **Copy a 1-time link:** pencil (about 363,730) → "Create 1-time link"; wait for the link under "Share this 1-time invite link" and click the link text: the toast "Copied to clipboard" shows. Press Escape until the chat list shows.
+- **Open a copied link** (as another profile): pencil → "Paste link" → "Tap to paste link". An alert names the other profile with "Open new chat": click it; the chat opens with a "Connect" button at the bottom: click it. If the alert is "Connect via one-time link?" instead, click "Use current profile". For an address, the chat shows the field "Add message" with "Connect" at its right: click "Connect", then "Send request without message" in the alert "Send contact request?".
+- **Attach an image:** click the paperclip icon at the left end of the message field, then "Image". A file dialog opens: click its "File Name" field, type the absolute path of `images/test-card.jpg` in your working directory, and press Return. Back in the app, press Return or click the send button at the right end of the message field.
+- **Dropdown rows** (for example "Chat layout", "Color mode"): click the value at the right end of the row; a menu lists the values: click one.
 
 ## The test
 
-The parts build on each other: run them in this order. cisub must join only after cimod has become a moderator (B2), so that cimod learns about cisub.
+The cases build on each other: run them in this order. Write texts exactly as given.
 
 **S. Setup.**
 
 1. (S1) Onboarding. Each screen waits for the one before it; wait for a text before clicking it. The first screen has "Create your profile": click it. On "Create profile", click the field "Enter profile name", type `citester`, and click "Create profile". The next screen offers a database passphrase: click "Use random passphrase", then "OK" in the alert that follows. Click "Continue", then "Accept" on the screen after it. Wait up to 60 s for the chat list: the right pane shows "Talk to someone".
-2. (S2) Click the pencil, then "Create public channel". Click the field about 40 px below the text "Channel name", type `ci signing`, and click the "Create public channel" button (the lower of the two texts with that name). Wait up to 120 s for "Share link": the channel opens and its "Channel link" pane shows over it. If "N/M relays active" stays below M for 120 s with N at least 1, click "Continue", and "Continue" in the alert. On "Channel link", click "Continue". Check: the chat "ci signing" is open.
-3. (S3) Send `before signing`. Check: it shows in the chat.
+2. (S2) As citester, copy a 1-time link. Add the profile `cibob`; as cibob, open the copied link. Wait up to 120 s until cibob's chat "citester" shows the message field "Message". Send `bob one`, then `bob two`.
+3. (S3) Switch to citester. Check: within 60 s the chat list shows "cibob"; open it: it shows "bob one" and "bob two". Send `tester one`, then `tester two`.
 
-**A. "Sign messages" (as citester).**
+**R. Cases.**
 
-1. (A1) Channel info → "Channel preferences". Check: the first row is "Sign messages", and its footer says "Do not require signing messages." (the switch is off).
-2. (A2) Click the switch of "Sign messages", at the right end of its row. Check: the alert "Sign messages?" says "Messages sent before will show "signature missing" to subscribers who join later." and has "Enable" and "Cancel". Click "Cancel". Check: the footer says "Do not require signing messages." again.
-3. (A3) Click the switch again, then "Enable". Check: the footer says "Require signing messages.". Click "Save and notify channel subscribers", then press Escape until the chat shows. Check: the chat shows "Sign messages: on".
-4. (A4) Send `after signing`, right-click it → "Info". Check: the info says "Signed".
-5. (A5) Channel info → "Channel preferences". Check: the footer of "Chat with admins" says "Prohibit chats with admins." (saving in A3 did not turn it on). Press Escape until the chat shows.
+1. (R19.7) Open the chat console (Developer tools → "Chat console"); run `/v`. Check: the console shows "> /v" and an answer line "< versionInfo"; click the answer: its details name the core version. Press Escape until the chat list shows.
+2. (R19.18) Open "cibob" → chat info. Check: it has a section "For console" with "Local name" (cibob) and "Database ID". Press Escape. Developer tools → click the switch of "Show developer options" (right end of its row). Check: the footer starts with "Hide:". Open "cibob" → chat info. Check: "For console" is gone. Turn "Show developer options" on again (footer "Show:"); check that chat info shows "For console" again.
+3. (R19.19) In the chat "cibob", right-click "bob one" → "Info". Check: the info shows "Database ID" and "Record updated at". Press Escape. Turn "Show developer options" off; open "bob one" → "Info" again. Check: "Database ID" and "Record updated at" are gone. Turn "Show developer options" on again.
+4. (R13.0) Settings → "Appearance". In "Themes", set "Chat layout" to "Terminal". Press Escape until the chat list shows; open "cibob". Check, from a shot: messages are drawn without bubbles; "cibob" shows once above "bob one" and "bob two", and "citester" once above "tester one" and "tester two"; each message's time is at the right end of its line.
+5. (R15.0) Still in "cibob" (terminal layout): right-click "bob two" → "Reply", type `quoted reply`, press Return. Send `*bold* _italic_ ~strike~ #secret#` (`ui type '*bold* _italic_ ~strike~ #secret#'`). Attach the image `images/test-card.jpg` and send it. Check, from a shot: the reply shows the quoted "bob two" above "quoted reply"; the markdown message shows bold, italic and struck-through words without the markup characters, and "secret" hidden; the test card shows whole, not stretched. Voice messages are out of scope here (no microphone).
+6. (R14.0) Settings → "Appearance". Set "Apply to" to "citester". Check: "Chat layout" now offers "Terminal (default)" and "Classic". Choose "Classic". Open "cibob". Check: bubbles again (the profile's layout overrides the app's Terminal). Chat info → "Chat theme". Check: its "Chat layout" row shows "Classic (default)"; choose "Terminal". Press Escape until the chat shows. Check: terminal layout in "cibob" only (the chat's layout overrides the profile's). Then switch back: in "Chat theme" set "Chat layout" to "Classic (default)"; in Appearance set "Apply to" to "citester" again (it shows "App theme" each time Appearance opens) and "Chat layout" to "Terminal (default)"; set "Apply to" to "App theme" and "Chat layout" to "Classic". Check: "cibob" shows bubbles.
+7. (R16.0) Add the profile `cicarol`. As cicarol, open the chat console and run, one at a time: `/ad`, then `/auto_accept on layout=terminal` (the address settings of the row's `/_address_settings` command, for the active profile), then `/sa`. Check: each command gets an answer that is not an error; `/sa` lists the address link. Press Escape until the chat list shows. Switch to citester, then back to cicarol (this reloads the address). Profile picture → "Your SimpleX address" → "Share address" (toast "Copied to clipboard"). Switch to citester and open the copied link (address: "Open new chat", "Connect", "Send request without message"). Check: the chat "cicarol" opens in terminal layout (no bubbles, sender name above messages), and within 60 s it becomes a contact (the "Connect" bar is replaced by the message field) without cicarol accepting by hand.
+8. (R19.1) Switch to cibob. In the chat console run `/_profile 2 {"displayName":"cibob","fullName":"Bob Fuller"}` (cibob is the second profile created, so its ID is 2; type it in single quotes: `ui type '/_profile 2 {"displayName":"cibob","fullName":"Bob Fuller"}'`). Switch to citester → "cibob" → chat info. Check: within 60 s "Bob Fuller" shows under the name (full name). Switch to cibob → Your profile: change "Profile name:" to `cibobx` (click the field, `ui key ctrl+a`, type), click "Save and notify contacts". Switch to citester. Check: the chat list shows "cibobx" (display name). Switch to cibob; run `/_profile 2 {"displayName":"cibob","fullName":"Robert Bob"}`. Switch to citester. Check: the chat list shows "cibob" and its chat info shows "Robert Bob" (both).
+9. (R19.2) Switch to cibob → Your profile → "Add description"; click the field "Enter description (optional)" and type `This is a long description of the profile cibob written to check that contacts receive descriptions longer than one hundred characters in full.`; press Escape to return to the profile, then click "Save and notify contacts". Switch to citester → "cibob" → chat info. Check: within 60 s the info shows the start of the description ending with "…" and "Read more"; click "Read more": the whole text shows.
+10. (R19.9) Switch to cibob → Your profile → click the camera icon in the middle of the large profile image ("Edit image") → "From Gallery"; in the file dialog type the absolute path of `images/test-card.jpg` and press Return. Click "Save and notify contacts". Switch to citester. Check: within 60 s the row "cibob" in the chat list has the test card as its picture (`ui avatar cibob` reports coloured pixels; take a shot).
+11. (R19.11) Switch to cibob → Your profile → click the × at the top right of the profile image ("Delete image") → "Save and notify contacts". Switch to citester. Check: within 60 s the row "cibob" shows the default profile icon again (`ui avatar cibob`, shot).
+12. (R19.8) Settings → "Audio & video calls" → "WebRTC ICE servers". Check: "Your ICE servers" opens with the switch "Configure ICE servers" off and the text "Using SimpleX Chat servers.". Press Escape until the chat list shows.
+13. (R19.13) Settings → "Appearance" → "Customize theme" → "Accent". Click the hex colour field below the two colour boxes, `ui key ctrl+a`, type `ff0000`. Check: the right colour box and the app's accent colour (for example the "Reset color" text) turn red. Press Escape once, back to "Customize theme".
+14. (R19.24) In "Customize theme": click "Export theme"; in the file dialog type the absolute path `simplex.theme` in your working directory and press Return. Click "Reset colors". Check: the accent is the default blue again. Click "Import theme"; in the file dialog type the same path and press Return. Check: no "Import theme error" alert, and the accent is red again. Click "Reset colors" (accent blue). Press Escape until "Appearance" shows.
+15. (R19.14) In "Appearance": set "Color mode" to "Dark". Check: the app turns dark. Set "Dark mode colors" to "Black". Check: the background turns black. Set "Color mode" to "Light". Check: the app is light again.
+16. (R19.17) In "Message shape": click the left end of the "Corner" slider, then click the switch of "Tail". Open "cibob". Check: the message bubbles have square corners and no tails. Back in Appearance, click the right part of the "Corner" slider and turn "Tail" on again; check the bubbles are rounded with tails.
+17. (R19.15) In "Appearance", click the switch of "Reachable app toolbars". Press Escape until the chat list shows. Check: the toolbar and the search field "Search or paste SimpleX link" are at the top of the left pane (y under 200). Turn "Reachable app toolbars" on again; check they are at the bottom.
+18. (R19.25) In "Appearance", in "Themes", click a wallpaper picture in the row of small chat previews (not the first and not the last "+"). Open "cicarol". Check: the chat background shows the wallpaper pattern. Open "cibob" → chat info → "Chat theme"; click a different wallpaper in its row. Press Escape until the chat shows. Check: "cibob" shows that other wallpaper while "cicarol" keeps the global one (shots of both).
+19. (R19.21) Settings → "Network & servers" → "Advanced network settings" ("Advanced settings" opens). Note the value of "TCP connection timeout" (default "15 sec"); click it and choose "20 sec". Click "Save and reconnect" → "Update" in the alert "Update network settings?". Press Escape, open "Advanced network settings" again. Check: "20 sec" (saved). Choose "30 sec", press Escape. Check: the alert "Update network settings?" offers "Save and reconnect" and "Exit without saving": click "Exit without saving"; reopen: "20 sec" (reverted). Click "Reset to defaults". Check: "15 sec"; click "Save and reconnect" → "Update". Press Escape until the chat list shows; send `after reconnect` to cibob, switch to cibob and check it arrives within 60 s (the client reconnected); switch back to citester.
+20. (R19.22) Settings → "Network & servers": click the switch of "Use SOCKS proxy" → "Confirm" in the alert "Use SOCKS proxy?". Open "Advanced network settings". Check: "TCP connection timeout" shows "30 sec" and "Protocol timeout" "20 sec" (proxy values). Press Escape; click the switch of "Use SOCKS proxy" again → "Confirm" in the alert "Use direct Internet connection?". Open "Advanced network settings". Check: "15 sec" and "10 sec" again. Press Escape until the chat list shows. The proxy must end off: no SOCKS proxy runs here.
+21. (R19.29) Settings → "Your privacy" → "More privacy": click the switch of "Message draft" (off). Open "cibob", click the message field and type `draft off` (do not send). Open "cicarol", then "cibob" again. Check: the message field is empty.
+22. (R19.30) Turn "Message draft" on. In "cibob" type `draft kept`; open "cicarol". Check: the row "cibob" in the chat list shows "draft kept". Turn "Message draft" off. Check: the row "cibob" no longer shows "draft kept", and opening "cibob" shows an empty message field.
+23. (R19.31) Turn "Message draft" on and "Show last messages" off. Check: the chat list rows show no last message text. In "cibob" type `draft shown`; open "cicarol". Check: the row "cibob" shows "draft shown" while the other rows still show no message text.
+24. (R19.32) Settings → "Your privacy" → set "Blur media" to "Strong". Open "cibob". Check: the test card sent in R15.0 is blurred. Set "Blur media" to "Off"; check it is sharp again.
+25. (R20.0) Developer tools → "Storage". Check: "Storage" lists one or more folders (their paths as section titles), each with "Total" and named entries with sizes. Press Escape until the chat list shows.
+26. (R19.28) "Show last messages" is off since R19.31: check again that the chat list shows no last message text. Restart the app: `ui stop`, then `ui start /home/runner/work/_temp/app/simplex` (the job's app directory), then wait up to 120 s for "cibob". Check: after the restart the rows still show no last message text, and Settings → "Your privacy" → "More privacy" shows "Show last messages" off. If `ui start` fails, mark only the restart part SKIPPED with its output.
 
-**J. A subscriber joins.**
+You have at most 370 turns, and the whole test fits in about 280 if you chain steps whose outcome you can predict with `ui do` and look at the screen after each chain. For example:
 
-1. (J1) Channel info → "Channel link" → "Share link". Check: the toast "Copied to clipboard". Press Escape until the chat list shows.
-2. (J2) Add the profile `cimod`, and as cimod join by the copied link. Check: "you are subscriber".
-3. (A6) As cimod in "ci signing": click the message "before signing". Check: the alert "Signature missing" says "The message was sent before the channel started signing messages, or it is fake." Close it, right-click "before signing" → "Info". Check: "Signature missing". Then right-click "after signing" → "Info". Check: "Signed & verified".
-
-**B. A moderator.**
-
-1. (B1) Switch to citester → "ci signing" → channel info → "Subscribers" → "cimod". Click the "Change role" row. Check: the list offers exactly "subscriber", "contributor" and "moderator" (no admin, no owner).
-2. (B2) Click "moderator", then "Change" in the alert "Change role?". Check: cimod's role shows moderator, and the section above it is titled "Moderator". Press Escape until the chat shows. Check: the chat shows "you changed role of cimod to moderator".
-3. (B3) Switch to cimod → "ci signing". Check: the chat shows "changed your role to moderator". Send `moderator post`. Check: it shows in the chat.
-4. (J3) Add the profile `cisub`, and as cisub join by the same link (it is still on the clipboard; if not, copy it again as citester as in J1). Check: "you are subscriber".
-5. (J4) Switch to citester → "ci signing" → channel info → "Subscribers" → "cisub" → "Change role" → "contributor" → "Change". Check: cisub's role shows contributor, in the section titled "Contributor".
-6. (J5) Switch to cisub → "ci signing". Send `contributor post`. Check: it shows in the chat.
-7. (B4) Switch to cimod → "ci signing" → channel info. Check: it shows "Subscribers"; click it: the list includes "cisub".
-8. (B5) Click "cisub". Check: its info offers "Block for all" (don't click it yet). Press Escape until the chat shows.
-9. (B6) Right-click "contributor post" → "Moderate" → "Delete" in the alert "Delete member message?". Check: the message shows "moderated by cimod" in its place.
-10. (B7) Channel info → "Subscribers" → "cisub" → "Block for all" → "Block for all" in the alert "Block subscriber for all?". Check: cisub's info now offers "Unblock for all". Press Escape until the chat shows. Check: the chat shows "you blocked cisub".
-
-**I. Sending images (as citester).**
-
-1. (I1) Switch to citester, and press Escape until the chat list shows. Click the pencil (about 363,730), then "Create group". Click the name field, about 40 px below the text "Enter group name", type `image notes`, and click "Create group". If "Skip inviting members" shows, click it. Check: the group "image notes" is open in the right pane.
-2. (I2) Click the attachment button, the paperclip icon at the left end of the message field at the bottom of the right pane, then "Image". A file dialog opens: click its "File Name" field, type the absolute path of `images/test-card.jpg` in your working directory, and press Return. Back in the app, the compose area shows the image above the message field before it is sent. Take a shot. Check: the preview shows the whole test card, upright, not stretched.
-3. (I3) Press Return or click the send button at the right end of the message field. Check: the chat shows the sent test card. Click the image: it opens larger, and "1080" and "TVB" are sharp and readable. Take a shot, then close the image with Escape.
-4. (I4) Repeat I2 and I3 with `images/simplex-logo.png`. Check: the preview and the sent image show the whole logo, and the area around its letters shows the chat's background, not black or grey.
-
-You have at most 330 turns, and the whole test fits in about 170 if you chain steps whose outcome you can predict with `ui do` and look at the screen after each chain. For example:
-
-- `ui do click-text "Create your profile" -- wait "Enter profile name" -- click-text "Enter profile name" -- type citester -- shot profile`
-- `ui do click 363 730 -- click-text "Create public channel" 10 -- wait "Channel name" -- shot new-channel`
-- `ui do click-text "Broadcast" -- type "after signing" -- key Return -- wait "after signing" -- shot after-signing`
 - `ui do click 27 730 -- click-text "Your chat profiles" 10 -- click-text "Add profile" 10 -- wait "Enter your name" -- shot add-profile`
+- `ui do click 363 730 -- click-text "Paste link" 10 -- click-text "Tap to paste link" 10 -- wait "Open new chat" 60 -- shot open-new-chat`
+- `ui do click 27 730 -- click-text "Settings" 10 -- click-text "Appearance" 10 -- wait "Chat layout" -- shot appearance`
+- `ui do click-text "Message" -- type "tester one" -- key Return -- wait "tester one" -- shot S3`
 
-`ui do` stops at the first command that fails, so a failed chain tells you where it stopped. Take a shot at each check, named after its step (`ui shot A2`).
+`ui do` stops at the first command that fails, so a failed chain tells you where it stopped. Take a shot at each check, named after its case (`ui shot R13-0`).
 
 ## Report
 
-Write `report.md` in your working directory as you go, so a session that is cut short still leaves its results: one row per step (S1 to S3, A1 to A5, J1, J2, A6, B1 to B3, J3 to J5, B4 to B7, I1 to I4), each check you ran as PASS or FAIL with its evidence (the text OCR read, screenshot names), and anything else unexpected. End your final message with one line: `CLAUDE-TEST: PASS` if every check you ran passed, otherwise `CLAUDE-TEST: FAIL` followed by the steps that failed.
+Write `report.md` in your working directory as you go, so a session that is cut short still leaves its results: a table with one row per case ID (S1 to S3, R19.7, R19.18, R19.19, R13.0, R15.0, R14.0, R16.0, R19.1, R19.2, R19.9, R19.11, R19.8, R19.13, R19.24, R19.14, R19.17, R19.15, R19.25, R19.21, R19.22, R19.29, R19.30, R19.31, R19.32, R20.0, R19.28), each with PASS, FAIL or SKIPPED (with the reason) and its evidence (the text OCR read, screenshot names). A case the app cannot do on this platform is SKIPPED, not FAIL. Add anything else unexpected. End your final message with one line: `CLAUDE-TEST: PASS` if no case failed, otherwise `CLAUDE-TEST: FAIL` followed by the IDs of the cases that failed.
 
 ## The ui helper
