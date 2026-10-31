@@ -1,4 +1,4 @@
-# Test: replies, reactions, editing and deletion (part 2): roles, irreversible deletion, deleting several messages in the SimpleX Chat desktop app
+# Test: live and disappearing messages, message info, link previews (part 1) in the SimpleX Chat desktop app
 
 You are testing the SimpleX Chat desktop app, which runs on a virtual display on this machine. Drive it only with the `ui` helper, through Bash, one command per call: `ui <command> [args]`. Anything else is refused; don't look for ways around that, and if something blocks the test, report it. The commands are listed at the end.
 
@@ -6,7 +6,7 @@ Your working directory is where your output goes. `ui shot <name>` saves `screen
 
 ## What is set up
 
-- The app is already running, on its first screen, with a new, empty database: never run `ui start` or `ui stop`. Begin with `ui shot start` to see it.
+- The app is already running, on its first screen, with a new, empty database: never run `ui start` or `ui stop` (except in R10.30, as it says). Begin with `ui shot start` to see it.
 - After onboarding, the chat list is in the left pane (x 1 to 389) and chats open in the right pane. An empty chat list shows only its toolbar, with the profile picture at about 27,730 and a pencil (New chat) at about 363,730: the search field "Search or paste SimpleX link" appears once there is a chat. The toolbar is at the bottom of the left pane.
 - No test backend runs: the app uses its preset servers on the internet. Never connect to anyone outside this app's own profiles.
 
@@ -32,30 +32,70 @@ Your working directory is where your output goes. `ui shot <name>` saves `screen
 - **Settings:** profile picture (about 27,730) → "Settings". Press Escape until the chat list shows to close it.
 - **Toggles** in Settings and preferences are switches at the right end of their rows (about x 335 in the left pane); click the switch, not the text.
 
+## More about this test
+
+- **Live message from an empty field:** while the message field is empty, a lightning button shows right of the microphone at the right end of the field (OCR can't read icons: find it on the screenshot); click it. The first time, the alert "Live message!" asks to confirm with "Send". Then type: the message is sent at once and updated about every 3 s while you type; the send button turns into a checkmark; click it to finish the live message.
+- **Send button menu:** with text (or an attachment) in the compose area, `ui right-click` on the send button at the right end of the field opens its menu: "Send live message" and "Disappearing message". "Disappearing message" opens a menu headed "Send disappearing message" with "30 seconds", "1 minute", "5 minutes" and "Custom time"; "Custom time" opens the dialog "Delete after" with a "Send" button below two dropdowns for the number and the unit (seconds, minutes, hours, days, weeks, months); click each and pick the value.
+- **Timer mark:** a disappearing message shows a timer icon next to its time; when its time differs from the chat's timer it also shows the time in short form ("30s", "5m", "2h", "12mth").
+- **Message info:** message menu → "Info" opens the message's details titled "Sent message" or "Received message", with "Sent at" / "Received at", "Disappears at" for a disappearing message, "File servers" for a file, "Share" and "Copy", and tabs at the bottom such as "History", "In reply to" and "Delivery". Close it with Escape.
+- **Attaching the test card:** click the paperclip (about 415,730, left of the message field) → "Image"; in the file dialog click its "File Name" field, type the absolute path of `images/test-card.jpg` in your working directory and press Return. The compose area then shows the image above the field (a TV test card: colour bars, "1080" at the top).
+- **Waiting a fixed time:** `ui wait "<a text that never shows>" <secs>` returns after <secs> seconds; its "not on screen" result is expected there.
+
 ## The test
 
-The steps build on each other: run them in this order. Three profiles of this app take part: "citester", "cibob" and "cicarol"; citester is connected with cibob and with cicarol by 1-time links, and owns the group "ci team" where cibob is an admin and cicarol a member. Messages go through the app's preset servers on the internet: after switching profile, wait up to 30 s for a message from another profile (`ui wait "<text>" 30`).
-
-Selecting messages: message menu → "Select"; a selection mark shows next to each message, the title reads "Selected 1", and a toolbar of three icon buttons without text replaces the message field: delete (a trash can, at the left), moderate (a flag, in the middle; shown only to moderators and above) and forward (at the right). Click other messages to add them to the selection. Deleting asks "Delete <n> messages?"; moderating asks "Delete <n> messages of members?".
+The steps build on each other: run them in this order. Three profiles of this app take part: "citester", "cibob" and "cicarol"; citester is connected with cibob and with cicarol by 1-time links, and owns the group "ci team" that both join. The chat citester–cibob has no chat-level timer; the chat citester–cicarol gets one in R10.39. Messages go through the app's preset servers on the internet: after switching profile, wait up to 30 s for a message from another profile (`ui wait "<text>" 30`).
 
 **S. Setup.**
 
 1. (S1) Onboarding. Each screen waits for the one before it; wait for a text before clicking it. The first screen has "Create your profile": click it. On "Create profile", click the field "Enter profile name", type `citester`, and click "Create profile". The next screen offers a database passphrase: click "Use random passphrase", then "OK" in the alert that follows. Click "Continue", then "Accept" on the screen after it. Wait up to 60 s for the chat list: the right pane shows "Talk to someone".
 2. (S2) Add the profile `cibob`, then the profile `cicarol`; switch back to citester. Check: the profile menu of citester lists cibob and cicarol.
-3. (S3) Connect citester (A) and cibob (B) by a 1-time link; switch to citester and connect citester (A) and cicarol (B) the same way. Check: cibob and cicarol each have a chat "citester" with the encryption notice and a message field.
-4. (S4) Switch to citester. Create the group `ci team`: on the invite screen set "New member role" to "admin", select cibob and click "Invite to group". In the group: group info → "Invite members" → set "New member role" to "member", select cicarol → "Invite to group". Send `owner msg` in the group. Switch to cibob and join "ci team"; switch to cicarol and join "ci team". Check: cibob and cicarol each have "ci team" with an enabled message field and `owner msg` in it; citester's group info lists cibob with the role admin and cicarol with member.
-5. (S5) As cicarol in "ci team": send `member msg`. Switch to cibob → "ci team": send `admin msg`. Check: both show as sent.
+3. (S3) Connect citester (A) and cibob (B) by a 1-time link; then, as cibob in the chat "citester", send `bob hi`. Check: citester's chat "cibob" shows `bob hi`.
+4. (S4) Switch to citester. Connect citester (A) and cicarol (B) by a 1-time link. Check: cicarol's chat "citester" shows the encryption notice and a message field.
+5. (S5) Switch to citester. Create the group `ci team`, inviting cibob and cicarol (role member). Switch to cibob and join "ci team"; switch to cicarol and join "ci team". Check: cibob and cicarol each have "ci team" with an enabled message field.
 
-**Cases.**
+**Live messages (chat citester–cibob).**
 
-6. (R10.13) As cibob (admin) in "ci team": open the message menu of `owner msg` (citester is the owner) and close it; open the message menu of `member msg` (cicarol is a member) and close it without choosing. Check: the menu of `owner msg` has no "Moderate"; the menu of `member msg` has "Moderate".
-7. (R10.14) Switch to citester → chat "cibob" → chat info → "Contact preferences" → in the section "Delete for everyone" set "You allow" to "yes" → "Save and notify contact". Switch to cibob → chat "citester" → the same: "You allow" "yes" → "Save and notify contact". Switch to citester → chat "cibob": send `vanish direct`, message menu → "Delete". Check: the alert "Delete message?" says "Message will be deleted - this cannot be undone!"; click "For everyone". Switch to cibob → chat "citester". Check: `vanish direct` is gone from both chats, with no "marked deleted" item left on cibob.
-8. (S6) As cibob in the chat "citester": send `bob 1`. Switch to citester → chat "cibob": send `own 1`, `own 2`, `own 3`. Check: all show in citester's chat.
-9. (R10.16) As citester in the chat "cibob": message menu of `bob 1` → "Select"; click `own 1` to add it; click the delete button. Check: the alert "Delete 2 messages?" offers only "Delete for me" (a received message is selected).
-10. (R10.15) Continue: click "Delete for me". Then select `own 2` and `own 3` (message menu of `own 2` → "Select", click `own 3`), click the delete button and choose "For everyone". Switch to cibob → chat "citester". Then switch to citester → "ci team": select `member msg` and `admin msg` (message menu → "Select", click the other), click the moderate button → "Delete" in the alert "Delete 2 messages of members?". Switch to cicarol → "ci team". Check: local: `bob 1` and `own 1` are gone from citester and still on cibob; for recipient: the alert for `own 2` and `own 3` offers "For everyone", and afterwards both are gone on citester and on cibob; moderation: on citester and on cicarol `member msg` and `admin msg` show "moderated by citester".
-11. (R10.17) As cicarol in "ci team": send `member msg 2`. Switch to citester → "ci team": send `owner msg 2`; select `owner msg 2` (own) and `member msg 2` (message menu → "Select", click the other); click the moderate button → "Delete". Switch to cicarol → "ci team". Check: the moderate button is enabled with an own message in the selection; the alert says "Delete 2 messages of members?"; afterwards both messages show as deleted on citester and on cicarol ("moderated by citester" or "marked deleted" in place of their text).
+6. (R10.19) Switch to citester → chat "cibob". With the message field empty, click the lightning button. Check: the alert "Live message!" says "Send a live message - it will update for the recipient(s) as you type it" and offers "Send"; click "Send".
+7. (R10.20) Continue the live message: type `live hello`; wait 5 s; take two shots a second apart. Then open the live message's menu and look at its items; close the menu. Check: the live message shows the header "LIVE" and animated dots after its text (the typing indicator); its menu has no "Edit", no "Delete" and no "Reply" (record this under R10.22, R10.23 and R10.24 too). The recipient's side cannot be watched while citester types (one app): that part is not checked.
+8. (R10.18) Continue: type ` world`; wait 5 s; click the send button (a checkmark) to finish. Check: the message shows `live hello world` without the "LIVE" header. (The recipient is checked in R10.21.)
+9. (R10.27) Type `typed then live` (do not send), `ui right-click` on the send button → "Send live message". Type ` more`, wait 5 s, click the checkmark. Check: no alert this time; while live the message shows "LIVE"; finished, it reads `typed then live more`.
+10. (R10.28) Attach the test card; `ui right-click` on the send button → "Send live message"; type `live with image`; wait 5 s; click the checkmark. Check: the menu offers "Send live message" with an image attached; the chat then shows the image with the text `live with image`.
+11. (R10.21) Switch to cibob → chat "citester". Check: cibob shows `live hello world`, `typed then live more` and the image with `live with image` (record these under R10.18, R10.27 and R10.28), each without "LIVE" and without an edited mark (pencil icon); citester's copies had no edited mark either.
+12. (R10.22) Switch to citester → chat "cibob": edit `live hello world` to `live edited`. Check: after the live message was finished, "Edit" is in its menu and the edit works: `live edited` shows with an edited mark. (While live, "Edit" was absent: R10.20.)
+13. (R10.24) Message menu of `live edited` → "Reply", send `quote live`. Check: `quote live` shows a quote of `live edited`. (While live, "Reply" was absent.)
+14. (R10.23) Message menu of `typed then live more` → "Delete" → "Delete for me". Check: the message is gone. (While live, "Delete" was absent.)
 
-You have at most 600 turns, and the whole test fits in about 160 if you chain steps whose outcome you can predict with `ui do` and look at the screen after each chain; `ui do` stops at the first command that fails, so a failed chain tells you where it stopped. Every `ui` command and every file edit is a turn. Take a shot at each check, named after its step with letters, digits, - and _ only (`ui shot R8-1` for R8.1). For example:
+**Disappearing messages.**
+
+15. (R10.37) As citester: chat "cibob" → chat info → "Contact preferences": look at "Disappearing messages"; close it. Type `custom check`, `ui right-click` on the send button. Check: "You allow" is on and "Delete after" is "off" (no chat timer), messages sent normally (`bob hi`, `quote live`) have no timer icon, and the send button's menu still offers "Disappearing message".
+16. (R10.36) Continue: "Disappearing message" → "Custom time" → set 2 and "minutes" → "Send". Check: `custom check` shows the timer icon and "2m".
+17. (R10.38) Type `year message`, `ui right-click` on the send button → "Disappearing message" → "Custom time" → set "months" and 12 → "Send". Message menu of `year message` → "Info". Check: the message shows "12mth"; its info shows "Disappears at" about 360 days after "Sent at".
+18. (R10.29) Type `vanish 30`, `ui right-click` on the send button → "Disappearing message" → "30 seconds". Wait 40 s. Then switch to cibob → chat "citester"; wait 40 s. Check: on citester `vanish 30` shows the timer and "30s", then is gone after 40 s; on cibob it shows when the chat is opened (read), then is gone 30–40 s later.
+19. (R10.39) Switch to citester → chat "cicarol" → chat info → "Contact preferences" → "Disappearing messages": "You allow" on, "Delete after" → "custom" → set 2 and "hours" → "Select" → "Save and notify contact"; close it. Then "ci team" → group info → "Group preferences" → turn "Disappearing messages" on → "Delete after" → "custom" → set 3 and "hours" → "Select" → "Save and notify group members"; close it. Check: "Delete after" shows "2 hours" for the contact and "3 hours" for the group; the chat "cicarol" shows the event "Disappearing messages: 2 hours" and "ci team" shows "Disappearing messages: 3 hours".
+20. (R10.31) Chat "cicarol": send `default ttl` normally; type `custom ttl`, `ui right-click` on the send button → "Disappearing message" → "5 minutes". Check: `default ttl` shows the timer icon without a time text (it uses the chat's 2 hours); `custom ttl` shows the timer icon and "5m".
+21. (R10.32) Edit `custom ttl` to `custom ttl edited` (within 5 minutes of sending it). Check: the text changes and the message keeps the timer icon and "5m", with an edited mark.
+22. (R10.34) Message menu of `custom ttl edited` → "Reply", send `quote timed`. Check: `quote timed` shows a quote of `custom ttl edited` and the timer icon.
+23. (R10.33) Message menu of `default ttl` → "Delete" → "Delete for me". Check: `default ttl` is gone.
+24. (R10.35) With the field empty click the lightning button; type `live timed`; wait 5 s; its message menu → "Info"; close it; click the checkmark to finish; message menu → "Info" again. Check: while live, the info has no "Disappears at"; after finishing, it shows "Disappears at" about 2 hours after "Sent at".
+
+**Message info.**
+
+25. (R10.40) Chat "cibob": message menu of `live edited` (own, edited) → "Info"; the "History" tab; click "Copy"; close. Message menu of `bob hi` (cibob's) → "Info"; close. Check: own: title "Sent message", "Sent at", and under "History" two versions (`live edited` marked "(current)", and `live hello world`); "Copy" works without an error. Other's: title "Received message", with "Sent at" and "Received at".
+26. (R10.42) Message menu of `quote live` → "Info" → the "In reply to" tab. Check: it shows the quoted message `live edited`.
+27. (R10.43) Message menu of the image with `live with image` → "Info". Check: it shows "File servers" with at least one server host name.
+28. (R10.41) "ci team": send `status check`; wait 30 s; its message menu → "Info" → the "Delivery" tab. Check: the tab lists cibob and cicarol, each with a delivery status icon.
+
+**Link previews (chat citester–cibob).**
+
+29. (R11.1) Chat "cibob": type `https://example.com`; wait up to 10 s; if the alert "Enable link previews?" shows, click "Enable"; wait up to 20 s for the preview above the field; send. Reopen the chat. Switch to cibob → chat "citester", reopen it. Check: before sending, the compose area shows a preview with the page title "Example Domain"; the sent message shows the preview on citester and on cibob, also after reopening.
+30. (R11.2) Switch to citester → chat "cibob": `ui do click-text "Message" -- type "https://www.iana.org/about" -- key Return`, one chain, so it is sent before a preview appears. Check: the message is sent without a link preview. If a preview was attached anyway (it loaded before sending), mark SKIPPED: the timing cannot be controlled here.
+
+**Disappearing message and restart (last).**
+
+31. (R10.30) Chat "cibob": type `vanish after restart`, `ui right-click` on the send button → "Disappearing message" → "1 minute". At once restart the app. This is the only step where `ui stop` and `ui start` are allowed: `ui stop`, then `ui start <app dir>`, where <app dir> is the folder `app/simplex` next to your working directory, written out in full (your working directory is `<temp>/claude-test`, so the app is `<temp>/app/simplex`, for example `/home/runner/work/_temp/app/simplex`; the helper refuses `$` and `~`). `ui start` waits for the app's window; the app keeps its data and opens with the last active profile. If `ui start` fails, record its output, mark the step SKIPPED and end the test. Wait 70 s; open the chat "cibob". Check: after the restart the message is gone once its minute has passed. (Returning from background cannot be tested on desktop.)
+
+
+You have at most 600 turns, and the whole test fits in about 330 if you chain steps whose outcome you can predict with `ui do` and look at the screen after each chain; `ui do` stops at the first command that fails, so a failed chain tells you where it stopped. Every `ui` command and every file edit is a turn. Take a shot at each check, named after its step with letters, digits, - and _ only (`ui shot R8-1` for R8.1). For example:
 
 - `ui do click 27 730 -- click-text "Your chat profiles" 10 -- click-text "Add profile" 10 -- wait "Enter your name" -- shot add-profile`
 - `ui do click-text "Message" -- type "bob one" -- key Return -- wait "bob one" -- shot S4`
@@ -77,6 +117,6 @@ Record each in `report.md` under a heading `## Unusual`, with the case it happen
 
 ## Report
 
-Write `report.md` in your working directory as you go, so a session that is cut short still leaves its results. Before the first step, create it with a table `| ID | Result | Evidence | Screenshots |` holding one row for every ID of this test (S1, S2, S3, S4, S5, R10.13, R10.14, S6, R10.16, R10.15, R10.17), Result `todo`; fill a row in as soon as its step is done. Result is PASS, FAIL or SKIPPED: SKIPPED with the exact reason when the step needs something this runner or the app on this platform lacks (that is not a failure); FAIL when the app does not do what the check says. Evidence quotes what you saw (the text read, positions) and names the screenshots. Add a section `## Findings` for other app bugs you notice (steps, what you saw, what you expected, screenshots). Read `report.md` again after the conversation has been compacted, to see which steps are left. End your final message with one line: `CLAUDE-TEST: PASS` if no step failed, otherwise `CLAUDE-TEST: FAIL` followed by the IDs of the steps that failed.
+Write `report.md` in your working directory as you go, so a session that is cut short still leaves its results. Before the first step, create it with a table `| ID | Result | Evidence | Screenshots |` holding one row for every ID of this test (S1, S2, S3, S4, S5, R10.19, R10.20, R10.18, R10.27, R10.28, R10.21, R10.22, R10.24, R10.23, R10.37, R10.36, R10.38, R10.29, R10.39, R10.31, R10.32, R10.34, R10.33, R10.35, R10.40, R10.42, R10.43, R10.41, R11.1, R11.2, R10.30), Result `todo`; fill a row in as soon as its step is done. Result is PASS, FAIL or SKIPPED: SKIPPED with the exact reason when the step needs something this runner or the app on this platform lacks (that is not a failure); FAIL when the app does not do what the check says. Evidence quotes what you saw (the text read, positions) and names the screenshots. Add a section `## Findings` for other app bugs you notice (steps, what you saw, what you expected, screenshots). Read `report.md` again after the conversation has been compacted, to see which steps are left. End your final message with one line: `CLAUDE-TEST: PASS` if no step failed, otherwise `CLAUDE-TEST: FAIL` followed by the IDs of the steps that failed.
 
 ## The ui helper
