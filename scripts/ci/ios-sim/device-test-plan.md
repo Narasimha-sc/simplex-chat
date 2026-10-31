@@ -1,48 +1,67 @@
-# Device test plan: channel message signing, channel moderators and sending images
+# Device test plan: private notes, markdown, SimpleX links and images
 
-The app as the scripted smoke test leaves it: the profile "citester", without conversations. The cases run in the order of the tables and build on each other: one channel, "ci signing", owned by citester, and two more profiles in this app, "cimod" and "cisub", that join it by its link. Do not reorder them: cisub must join only after cimod has become a moderator (B2), so that cimod learns about cisub.
+## Anything unusual
+
+You are looking for regressions, not only running checks. Besides each case's checks, watch for anything a user would consider wrong, on every screen you pass through:
+
+- a crash, the app closing or restarting, a frozen screen;
+- an error alert or dialog of any kind ("View crashed", "Error", "Unexpected error", "Connection error", an error code or exception text);
+- an action that takes over 30 s, or a spinner that never ends;
+- text cut off, overlapping, garbled, untranslated or showing a raw key (such as `chat_item_…`), wrong plurals, empty labels;
+- a control that does nothing, a duplicated or missing item, an item in the wrong place or order;
+- a state that differs after a restart or after switching profile;
+- anything that differs from how the row or the step describes it.
+
+Record each in `report.md` under a heading `## Unusual`, with the case it happened in and the screenshot names, even when every check passes. A case passes only when its checks pass and nothing unusual happened in it; otherwise mark it FAIL and say why. Never stop at a failure: go on with the next case.
+
+
+The app as the scripted smoke test leaves it: the profile "citester", without conversations. The cases run in the order of the tables and build on each other: two more profiles in this app, "cibob" and "cicarol", connect to citester by 1-time links; the markdown cases run in citester's "Private notes"; the image cases run in citester's chat with cibob and in a group "ci images" of all three.
 
 ## Setup
 
-- The channel uses the app's preset chat relays. Creating it and joining it wait for the relays: use `ui wait "<text>" 120` there, and take a shot if a wait fails.
-- **Sending a message:** in the chat, tap the message field at the bottom (find it in `ui tree`: the text view next to the send button; for the channel's owner its placeholder is "Broadcast"), `ui type "<text>"`, then tap the send button at the right end of the field. Check the message then shows in the chat.
-- **Channel info:** tap the channel name at the top of the chat (`ui find "ci signing"`, the element with the smallest y; tap it with `ui tap-xy`). Go back with the navigation back buttons; close a sheet by swiping it down.
-- **Message menu:** `ui long-press <x> <y>` on the message's text (centre from `ui find`) opens its menu ("Info", "Moderate", …). "Info" opens the message's details; close them by swiping down.
-- **Signatures are read as text, never from the seal icons:** a message's "Info" shows "Signed" (your own message), "Signed & verified" (someone else's, checked) or "Signature missing".
-- **Switching profile:** open the picker with your profile image (`Image "Account"`), then tap the other profile's name in the row at the top of the picker (`ui find <name>`, then `ui tap-xy`; the picker's elements are in the tree even while it is closed, so open it first). The chat list then shows that profile's chats; open "ci signing" from it.
-- **Adding a profile:** picker → "Your chat profiles" → "Add profile" → tap the field "Enter your name…" (`ui tap-value "Enter your name…"`), type the name, check the field's value in the tree (the keyboard may capitalize it: then fix it), tap "Create profile". The new profile becomes the active one; close "Your chat profiles" by swiping it down.
-- **Joining by the copied link** (from a profile without conversations): "Compose" → "Scan / Paste link" → "Tap to paste link". If iOS asks to allow pasting, tap "Allow Paste". An alert names the channel with "Open channel": tap it; the channel opens with "Tap Join channel" and a "Join channel" bar at the bottom: tap the bar, and wait up to 120 s until the chat shows "you are subscriber".
+- The app's preset servers are on the internet: connecting and file transfers can take up to a minute; use `ui wait "<text>" 60` there, and take a shot if a wait fails.
+- **The guard** refuses the characters `( ) | > ; & < $` and the backtick in any command, also inside quotes, so `ui type` and `ui clipboard` cannot enter them; quotes and tables of markdown are not tested here.
+- **Sending a message:** in the chat, tap the message field at the bottom (find it in `ui tree`: the text view next to the send button), `ui type "<text>"`, check the field's value in the tree (the keyboard capitalizes and autocorrects: fix the value with `ui key delete` and typing before sending), then tap the send button at the right end of the field. `ui key return` in the message field starts a new line. Check the message then shows in the chat.
+- **Message menu:** `ui long-press <x> <y>` on the message (centre from `ui find`) opens its menu ("Reply", "Share", "Copy", "Save", "Edit", "Info", "Stop file", "Delete", …, as the item allows).
+- **Pasting into the message field:** tap the empty field once to focus it and once more to open its menu, then tap its "Paste" item (use `ui tap-xy` on the one `ui find Paste` shows in the menu).
+- **Switching profile:** open the picker with your profile image (`Image "Account"`, tap its centre with `ui tap-xy`), then tap the other profile's name in the row at the top of the picker. The chat list then shows that profile's chats.
+- **Adding a profile:** picker → "Your chat profiles" → "Add profile" → tap the field "Enter your name…" (`ui tap-value "Enter your name…"`), type the name, check the field's value in the tree, tap "Create profile". The new profile becomes the active one; close "Your chat profiles" by swiping it down.
+- **Copying a 1-time link:** "Compose" → "Create 1-time link" → wait for "Share this 1-time invite link"; the element below it whose label starts with "https://" is the full link: read it with `ui find "https://"` and put it on the clipboard with `ui clipboard "<link>"`. Close the sheet by swiping it down; if the alert "Keep unused invitation?" shows, tap "Keep".
+- **Connecting by the copied link** (from a profile without conversations): "Compose" → "Scan / Paste link" → "Tap to paste link". If iOS asks to allow pasting, tap "Allow Paste". An alert names the profile with "Open new chat": tap it (if the sheet "Connect via one-time link" shows instead, tap "Use current profile"). The chat opens with a "Connect" bar at the bottom: tap it.
+- **Settings:** picker → "Settings". Go back with the navigation back buttons; close Settings by swiping it down.
+- **Attach:** the paperclip button left of the message field opens the "Attach" dialog; "Choose from library" opens iOS's photo picker: tap the photo (identify it by its thumbnail), then the picker's "Add" button. The compose area then shows the image above the field; tap the send button.
+- **Open an image:** tap it; it opens full screen. Close it by swiping down (`ui swipe 201 300 201 750`).
+- **Database view:** Settings → "Chat data". Under "Files & media" its footer says "%d file(s) with total size of %s" or "No received or sent files".
 
 | ID | Do | Expect |
 |----|----|--------|
-| S2 | "Compose" → "Create public channel" → `ui tap-value "Enter channel name…"`, type `ci signing` (check the value) → tap the "Create public channel" button (the list row, not the title; use `ui tap-xy` if the label is ambiguous) → wait up to 120 s for "Channel link"; if "%d/%d relays active" stays below the total for 120 s with at least 1 active, tap "Continue" and "Continue" in the alert → on "Channel link" tap "Continue" (top right) | The channel "ci signing" opens as its chat |
-| S3 | Send `before signing` | "before signing" shows in the chat as sent |
-| A1 | Channel info → "Channel preferences" | The first row is the switch "Sign messages", off; its footer says "Do not require signing messages." |
-| A2 | Turn "Sign messages" on | Alert "Sign messages?" with the message "Messages sent before will show "signature missing" to subscribers who join later." and the buttons "Enable" and "Cancel". Tap "Cancel": the switch is off again |
-| A3 | Turn "Sign messages" on again, tap "Enable", then "Save and notify subscribers"; go back to the chat | After "Enable" the switch stays on (footer "Require signing messages."); after saving and going back, the chat shows the event "Sign messages: on" |
-| A4 | Send `after signing`, then long-press it → "Info" | The message's info says "Signed" |
-| A5 | Channel info → "Channel preferences" | "Chat with admins" is still off (its footer says "Prohibit chats with admins."); saving in A3 did not turn it on |
-| J1 | Channel info → "Channel link" → "Share link" → in the share sheet tap "Copy" (`ui find Copy`; if it is not in the tree, `ui tap-xy` at its position in the screenshot) → close the sheet and go back to the chat list | The link is copied (the sheet closes or shows it was copied) |
-| J2 | Add the profile `cimod`; as cimod, join by the copied link | The chat "ci signing" shows "you are subscriber" |
-| A6 | As cimod in "ci signing": tap the message "before signing"; then long-press it → "Info"; then long-press "after signing" → "Info" | Tapping "before signing" shows the alert "Signature missing" with "The message was sent before the channel started signing messages, or it is fake."; its info says "Signature missing"; the info of "after signing" says "Signed & verified" |
-| B1 | Switch to citester → "ci signing" → channel info → "Subscribers" → "cimod" → tap the "Change role" row | The role menu lists exactly "subscriber", "contributor" and "moderator" (no admin, no owner) |
-| B2 | Choose "moderator" → "Change role?" → "Change"; go back to the chat | cimod's info shows the role moderator under the section header "Moderator" (any case); the chat shows "you changed role of cimod to moderator" |
-| B3 | Switch to cimod → "ci signing"; send `moderator post` | The chat shows "changed your role to moderator"; "moderator post" shows as sent |
-| J3 | Add the profile `cisub`; as cisub, join by the same link (it is still on the clipboard; if not, copy it again as citester as in J1) | cisub's chat "ci signing" shows "you are subscriber" |
-| J4 | Switch to citester → "ci signing" → channel info → "Subscribers" → "cisub" → "Change role" → "contributor" → "Change" | cisub's role shows contributor, under the section header "Contributor" |
-| J5 | Switch to cisub → "ci signing"; send `contributor post` | "contributor post" shows as sent |
-| B4 | Switch to cimod → "ci signing" → channel info | The info shows "Subscribers"; its list includes "cisub" |
-| B5 | Open "cisub" in that list | cisub's info offers "Block for all" (do not tap it yet) |
-| B6 | Back in the chat, long-press "contributor post" → "Moderate" → "Delete member message?" → "Delete" | The message shows "moderated by cimod" in its place |
-| B7 | Channel info → "Subscribers" → "cisub" → "Block for all" → "Block subscriber for all?" → "Block for all" | cisub's info now offers "Unblock for all"; the chat shows "you blocked cisub" |
-
-## Sending images
-
-These cases run after the channel cases: first switch to citester and go back to its chat list. The photo library has, besides the simulator's own photos, the images of these cases: a TV test card 1280×720 (JPEG: colour bars, a large circle, "1080" at the top and "TVB" at the bottom), the dark blue and turquoise SimpleX logo on a transparent background (PNG), and, when the runner could make it, the same test card turned by 90° to portrait (HEIC). In the photo picker, identify each by its thumbnail. The paperclip button left of the message field opens the "Attach" dialog; the send button is the arrow at the right end of the field; find their labels with `ui tree`.
-
-| ID | Do | Expect |
-|----|----|--------|
-| I1 | Tap "Compose", then "Create group"; type `image notes` in the field "Enter group name…", check the value, tap "Create group", then "Skip" if it shows; open the group's chat if it is not open | The chat of "image notes", with the message field and the paperclip button enabled |
-| I2 | Tap the paperclip button, "Choose from library", the test card's thumbnail, then the picker's "Add" button; `ui shot I2-preview`; tap the send button; tap the sent image; `ui shot I2-full`; close the image | Before sending, the compose area shows the whole test card, upright and not stretched; after sending, the chat shows it; opened, it fills the screen width and "1080" and "TVB" are sharp and readable |
-| I3 | As I2, with the SimpleX logo | The preview and the sent image show the whole logo; the area around its letters shows the chat's background, not black or grey |
-| I4 | As I2, with the portrait test card; skipped when the library has no portrait test card | The preview and the sent image show the test card upright in portrait, as the picker's thumbnail does |
+| S2 | As citester, copy a 1-time link (see Setup) | The clipboard holds a link starting with "https://" |
+| S3 | Add the profile `cibob`; as cibob, connect by the copied link; wait up to 60 s; send `hello from cibob` | "hello from cibob" shows as sent |
+| S4 | Switch to citester | The chat list shows "cibob"; its chat shows "hello from cibob" |
+| S5 | As citester copy a new 1-time link; add the profile `cicarol`, connect by it, send `hello from cicarol`; switch to citester | citester's chat list shows "cibob", "cicarol" and "Private notes" |
+| R9.1 | Open "Private notes"; send `note one`; long-press it → "Edit"; type ` edited` at the end of the field's text; tap the send button; then long-press the message → "Delete" → "Delete for me" in "Delete message?" | After editing, one message "note one edited" in place of "note one" (no second message); after deleting, the message is gone |
+| R26.1 | Send `**bold part** and https://simplex.chat`; long-press the word "and" → "Copy"; paste into the message field; send it; then tap the link "https://simplex.chat" in the first of the two messages (`ui tap-xy` at its position in the screenshot) | The pasted field value is `**bold part** and https://simplex.chat`, with the asterisks; tapping the link shows the alert "Open link?" with "https://simplex.chat"; tap "Cancel" (never open it) |
+| R26.2 | Long-press the link "https://simplex.chat" itself in a message | The message menu opens ("Copy", "Info", "Delete" among its items); close it by tapping outside it |
+| R28.0 | Send `**text** is bold` | "text" is drawn bold without asterisks; "is bold" is regular (screenshot) |
+| R27.0 | Send four messages, one per kind, with `ui key return` for new lines: `# Heading one`; `- item one`, new line, `- item two`; `~~~`, new line, `code line`, new line, `~~~`; `above`, new line, new line, `***`, new line, new line, `below` | Each is rendered, not shown as typed: the heading larger or bold without "#"; the list with bullet markers; the code line in a monospace block without "~~~"; a horizontal line between "above" and "below" without "***". Quotes and tables are not tested (the guard refuses `>` and `|`): say so in the report |
+| R30.0 | Send `# Title`, new line, `line one`, new line, `line two` | "Title" as a heading; "line one" and "line two" on two separate lines, not joined into one |
+| R31.0 | Send `call 07777 777 777 or +44 7777 777 777`, then `12345678 2024-10-29 192.168.1.1 7.1.0.14 issue #42` | Both phone numbers are in the link colour; in the second message every part is plain text in the normal text colour (screenshot). Do not tap the phone numbers |
+| R33.0 | `ui clipboard "https://simplеx.chat"` (the fifth letter is the Cyrillic "е", U+0435: copy the text exactly as written here); paste it into the message field and send it; tap the link | The message shows `https://simpl[U+0435]x.chat`; the alert "Open link?" shows `https://simpl[U+0435]x.chat`; tap "Cancel" |
+| R26.3 | Copy a new 1-time link (see Setup); open "Private notes", paste the link into the message field and send it; tap the message's link text | The message shows "SimpleX one-time invitation" followed by "(via <server>)"; tapping it shows the sheet "Connect to yourself?" / "This is your own one-time link!" in the app (no browser); tap "Cancel" |
+| R26.4 | Settings → scroll to the bottom → the app version row ("v…") → "Developer"; under "Deprecated options" tap the picker "SimpleX links" → "Full link"; go back to the notes; then set it back to "Description" the same way | With "Full link", the invitation message of R26.3 shows the full link starting with "https://"; with "Description" it shows "SimpleX one-time invitation" again |
+| R26.6 | Long-press the invitation message → "Copy"; paste into the message field; send it | The field's value is the full link starting with "https://", not the description |
+| R9.2 | In "Private notes" attach the test card ("Choose from library") and send it; tap it to open it and close it; long-press it → "Save" (if iOS asks for access to Photos, allow it: the system alert is outside the app's tree, read it with `ui point` and tap its allow button with `ui tap-xy`); then open "Attach" → "Choose from library" and look at the photos; "Cancel" | The note shows the test card; opened, it fills the screen width with "1080" and "TVB" readable; after "Save" the library shows one more test card than before |
+| R9.3 | Go back to the chat list; swipe the row "Private notes" to the left (`ui swipe 350 <y> 80 <y>`) → "Clear"; in the alert "Clear private notes?" tap "Clear"; open "Private notes" | The alert says "All messages will be deleted - this cannot be undone!"; afterwards the notes have no messages |
+| R34.1 | Open "cibob"; attach the test card and send it; take shots at once and every few seconds until the transfer ends; switch to cibob → "citester"; then `ui relaunch` and open "citester" again; switch to citester → "cibob" | The sent image shows a progress indicator while uploading, then a completed state (check mark); cibob receives the full image; after the relaunch both sides still show it |
+| R34.13 | Settings → "Chat data" | The footer under "Files & media" says "2 file(s) with total size of …" (the sent and the received copy of the one image); the total divided by the count is below 231 KB (236700 bytes); record count and size |
+| R34.11 | Switch to cibob → "citester"; tap the image; close it | It opens full screen; "1080" and "TVB" are readable |
+| R34.10 | As cibob, long-press the image → "Save" (allow Photos access if asked, as in R9.2); then check the photo picker as in R9.2 | The library shows one more test card than before |
+| R34.4 | Switch to citester → "cibob"; "Attach" → "Choose from library" → the SimpleX logo → "Add"; send it; check as cibob. "Take picture" is not tested (no camera) | The preview and the sent image show the whole logo; cibob receives it |
+| S6 | As citester: "Compose" → "Create group" → type `ci images` in "Enter group name…" (check the value) → "Create group"; on the members screen tap "cibob" and "cicarol", then "Invite to group". Switch to cibob: tap "ci images" in the chat list → "Join group" in the dialog "Group invitation"; the same as cicarol; switch to citester → "ci images" | Within 60 s, the group chat shows that cibob and cicarol joined |
+| R34.5 | As citester in "ci images", send the test card; switch to cibob → "ci images", then to cicarol → "ci images" | Both show the received test card |
+| R34.2 | Settings → "Your privacy" → "More privacy" → turn on "Show encryption"; go back; look at the time of the received test card in cicarol's "ci images", then as citester at the sent images in "ci images" and "cibob" | A lock icon next to each image's time (screenshots, zoomed) |
+| R34.7 | As citester in "cibob": note the position of the last image; attach the test card, tap the send button, and at once long-press the new image at that position → "Stop file" → "Stop" in "Stop sending file?" | The alert says "Sending file will be stopped."; the image then shows a cancelled state in place of the progress indicator. If the menu shows "Revoke file" instead, the upload had already finished: close the menu and mark R34.7 and R34.9 skipped (timing), with the shot |
+| R34.9 | Switch to cibob → "citester" | The last image shows a cancelled state, and tapping it does not open it |
+| R34.6 | As cibob: Settings → "Your privacy" → turn off "Auto-accept images". Switch to citester → "cibob", send the SimpleX logo. Switch to cibob → "citester" and tap the new image twice in a row (`ui tap-xy` twice) | The alert "Waiting for image" says "Image will be received when your contact completes uploading it."; close it. If the image was already received at the second tap, skipped (timing) |
+| R34.8 | As citester send the test card to cibob again. As cibob → "citester": tap the new image (it starts receiving), at once long-press it → "Stop file" → "Stop" | The alert was "Stop receiving file?" with "Receiving file will be stopped."; the image then shows a cancelled state. If the menu had no "Stop file" because the image was received already, skipped (timing). The sender's view is not checked: images go over XFTP, not SMP |
+| R34.12 | As cibob: Settings → "Chat data", record the file count; in "citester", long-press the received test card of R34.1 → "Delete" → "Delete for me"; Settings → "Chat data" again | The count is one less |
