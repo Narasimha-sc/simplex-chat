@@ -1,0 +1,54 @@
+name: kt-regress
+run-name: "${{ github.event_name == 'workflow_dispatch' && format('kt-regress {0} base={1}', inputs.ref, inputs.base) || 'kt-regress: registered by a push to its branch, nothing built' }}"
+# Regression check in ONE run: the PR's desktop tests against the app sources of `base` (must FAIL),
+# then against `ref` as is (must PASS). Runbook: /home/user/code/testing/tools/ci/README.md
+on:
+  push:
+    branches: [ci/kt-regress]
+    paths: [.github/workflows/kt-regress.yml]
+  workflow_dispatch:
+    inputs:
+      ref: {description: PR branch or full sha (code + tests), type: string}
+      base: {description: 'full sha whose app sources are "without the fix"; empty = skip the base half', type: string, default: ''}
+      tests: {description: 'gradle --tests filters, space-separated (e.g. chat.simplex.app.DialogStateTest)', type: string}
+permissions: {contents: read}
+jobs:
+  regress:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with: {ref: '${{ inputs.ref }}', submodules: recursive, fetch-depth: 0}
+      - uses: actions/setup-java@v4
+        with: {distribution: corretto, java-version: '17'}
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Write test runner
+        run: |
+          cat > /tmp/run.sh <<'SH'
+          set -u
+          label=$1
+          filters=(); for t in $TESTS; do filters+=(--tests "$t"); done
+          (cd apps/multiplatform && ./gradlew --no-daemon --max-workers=2 :common:desktopTest "${filters[@]}") 2>&1 | tee /tmp/$label.log
+          rc=${PIPESTATUS[0]}
+          echo "$label: exit $rc" >> /tmp/summary
+          grep -E 'FAILED|PASSED|tests completed' /tmp/$label.log | sed "s/^/$label: /" >> /tmp/summary || true
+          SH
+      - name: Base (PR tests, app sources from base) - expected to FAIL
+        if: inputs.base != ''
+        env: {TESTS: '${{ inputs.tests }}'}
+        run: |
+          echo "BASE sources = ${{ inputs.base }}, tests = ${{ inputs.ref }}" >> /tmp/summary
+          git checkout ${{ inputs.base }} -- apps/multiplatform/common/src/commonMain apps/multiplatform/common/src/desktopMain apps/multiplatform/common/src/androidMain
+          bash -c 'source /tmp/run.sh base'
+          git checkout HEAD -- apps/multiplatform/common/src
+      - name: Fix (ref as is) - expected to PASS
+        env: {TESTS: '${{ inputs.tests }}'}
+        run: |
+          echo "FIX = $(git rev-parse HEAD)" >> /tmp/summary
+          bash -c 'source /tmp/run.sh fix'
+      - name: Summary
+        if: ${{ !cancelled() }}
+        run: |
+          cat /tmp/summary | tee -a $GITHUB_STEP_SUMMARY
+          grep -q '^fix: exit 0$' /tmp/summary
