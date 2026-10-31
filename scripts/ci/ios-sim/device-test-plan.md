@@ -1,4 +1,4 @@
-# Device test plan: receipts, post-quantum encryption, address change, voice preferences (part 1)
+# Device test plan: incognito connections (part 1)
 
 ## Anything unusual
 
@@ -15,9 +15,9 @@ You are looking for regressions, not only running checks. Besides each case's ch
 Record each in `report.md` under a heading `## Unusual`, with the case it happened in and the screenshot names, even when every check passes. A case passes only when its checks pass and nothing unusual happened in it; otherwise mark it FAIL and say why. Never stop at a failure: go on with the next case.
 
 
-The app as the scripted smoke test leaves it: the profile "citester", without conversations. The cases run in the order of the tables and build on each other: three profiles of this app, "citester", "cibob" and "cicarol"; citester is connected with cibob, cibob with cicarol, and citester owns the group "ci team" (cibob and cicarol are members) and two groups without members, "ci g1" and "ci g2". All messages go through the app's preset servers on the internet: after switching profile, wait up to 30 s for a message from another profile (`ui wait "<text>" 30`).
+The app as the scripted smoke test leaves it: the profile "citester", without conversations. The cases run in the order of the tables and build on each other: four profiles of this app, "citester", "cibob", "cicarol" and "cidan", connect to each other in different ways, with and without incognito. A profile shared incognito shows to the other side under a random name. All connections go through the app's preset servers on the internet: after switching profile, wait up to 60 s for a connection or message from another profile.
 
-Case IDs `R<row>` are rows of the manual test table; `S<n>` are setup steps.
+Case IDs `R<row>` are rows of the manual test table; `S<n>` are setup steps. Three rows of this section of the table are not in this plan: 55.14 and 55.21 contact the SimpleX Chat team, and 55.19 needs accepting a contact request incognito, which this app version offers only for an address without profile data (every address it creates has profile data, so "Accept incognito" is never shown).
 
 ## How to do things (iOS)
 
@@ -39,59 +39,63 @@ Case IDs `R<row>` are rows of the manual test table; `S<n>` are setup steps.
 - **Inviting later:** group info → "Invite members" → tap the contacts' rows → "Invite to group". The "New member role" picker sets their role.
 - **Joining a group by invitation** (as the invitee): in the chat list, tap the group's row → the dialog "Group invitation" → "Join group" (or "Join incognito" for an incognito contact). Open the group and wait up to 120 s until the message field is enabled.
 - **Settings:** picker → "Settings". Close Settings by swiping it down.
-- **Message status:** a sent message shows a status icon after its time: one checkmark when sent, two checkmarks when the recipient's app confirmed delivery (a delivery receipt). Judge them from a screenshot, zoomed on the message.
-- **Delivery receipts settings:** picker → "Settings" → "Your privacy" → "More privacy" → the section "Send delivery receipts to" with the switches "Contacts" and "Small groups (max 20)". They belong to the active profile.
-- **Send receipts of one chat:** chat info (or group info) → the picker row "Send receipts" with the values "yes", "no" and "default (yes)" / "default (no)".
-- **Message info:** message menu → "Info"; the tab "Delivery" lists the group members with a status icon each. Close it by swiping down.
-- **Voice button:** with the message field empty, a microphone button shows at the right end of the field. When voice messages are not allowed it is grey; tapping it shows an alert. Never press and hold it except where a case says so (holding records).
+- **Incognito is remembered app-wide:** the last profile choice (Incognito or not) becomes the default of every new 1-time link, every new chat opened from a link and the group creation screen. Before each such step, check which profile it shows and set the one the step asks for.
+- **Profile of a new 1-time link:** under "Share profile" a row shows the profile that the link shares ("Incognito" or the profile name); tap it → "Select chat profile" → tap "Incognito" or your own profile (a checkmark marks the choice) → go back. With Incognito the footer says "A new random profile will be shared.".
+- **Profile of a chat opened from a link:** above its "Connect" or "Join group" button, the section "Your profile" shows the profile that will be used; tap it to list the choices ("Incognito" and the profiles) and tap one.
+- **Group with incognito:** the create group screen has the switch "Incognito" below "Create group".
+- **SimpleX address:** picker → "Create SimpleX address" → "Create SimpleX address". The address shows with "Share address": tap it → share sheet → "Copy" (if the share sheet has no "Copy", read the link from the tree and use `ui clipboard`). Later the picker shows "Your SimpleX address" instead.
+- **Contact request, requester's side:** pasting an address shows an alert with "Open new chat"; the chat opens with an "Add message" field and a "Connect" button: tap "Connect" → the alert "Send contact request?" → "Send request without message".
+- **Contact request, address owner's side:** the request shows in the chat list under the requester's name. Swipe the row from right to left (`ui swipe <right x> <y> <left x> <y>` along the row) to show "Accept" and "Reject"; or tap the row: the chat opens with "Reject" and "Accept" at the bottom.
+- **Group link:** group info → "Create group link" → the link is created and shown with "Share link": tap it → share sheet → "Copy". Pasting a group link (as for a 1-time link) shows an alert with the group's name, "Open group" and "Cancel"; "Open group" opens the group's chat, not yet joined, with a "Join group" button at the bottom.
+- **A link inside a message** shows as "SimpleX group link" (or as a card with the group's name): tap it to get the same alert as when pasting.
+- **Member info:** group info → tap the member's row.
+- **Incognito marks:** an incognito chat shows a mask icon next to its name in the chat list and in the chat's top bar; its chat info has the section "Incognito" with "Your random profile" and the random name.
+
+## Incognito mode (citester alone)
+
+| ID | Do | Expect |
+|----|----|--------|
+| R55.1 | "Compose" → "Create 1-time link" → set the link's profile to "Incognito"; close the sheets ("Keep" or "Delete" for the unused link are both fine). Open "Compose" → "Create 1-time link" again and look at "Share profile"; close. `ui relaunch`; open it again and look. Then set the profile to "citester"; close; open again and look; `ui relaunch`; open again and look; close | After setting Incognito, each new link shows "Incognito" under "Share profile", also after the restart; after setting citester, each new link shows "citester", also after the restart |
 
 ## Setup
 
 | ID | Do | Expect |
 |----|----|--------|
-| S1 | Add the profile `cibob`, then the profile `cicarol`; switch back to citester | The picker of citester lists cibob and cicarol |
-| S2 | Connect citester (A) and cibob (B) by a 1-time link; switch to citester and connect citester (A) and cicarol (B); then switch to cibob and connect cibob (A) and cicarol (B) | citester has the chats "cibob" and "cicarol"; cibob has "citester" and "cicarol"; cicarol has "citester" and "cibob" |
-| S3 | Switch to citester. Create the group `ci team`, inviting cibob and cicarol (role member). Switch to cibob and join "ci team"; switch to cicarol and join "ci team" | cibob and cicarol each have "ci team" with an enabled message field |
-| S4 | Switch to citester. Create the group `ci g1` and then `ci g2`, each with "Skip" on the invite screen | citester's chat list shows "ci g1" and "ci g2" |
+| S1 | Add the profiles `cibob`, `cicarol` and `cidan` (in this order); stay in cidan. Create cidan's SimpleX address (see "SimpleX address"); do not copy it yet | cidan's picker shows "Your SimpleX address" |
 
-## Post-quantum encryption and address change (chat citester–cibob)
+## 1-time links
 
 | ID | Do | Expect |
 |----|----|--------|
-| R6.1 | As citester → chat "cibob": look at the encryption notice; open chat info and find the row "E2E encryption". Switch to cibob → chat "citester" and do the same | On both: the notice says "Messages, files and calls are protected by quantum resistant e2e encryption …" and "E2E encryption" shows "Quantum resistant" |
-| R2.29 | Switch to citester → chat "cibob" → chat info: note the host under "Receiving via"; tap "Change receiving address" → the alert "Change receiving address?" → "Change". Go back to the chat and wait up to 120 s for "you changed address". Open chat info again and note "Receiving via". Send `after my switch`; switch to cibob, check it arrived and reply `got it` | The chat shows "changing address…" and then "you changed address"; "Receiving via" shows a different server host than before (if it is the same host, note it as a finding, not a failure); `after my switch` arrives on cibob and `got it` arrives on citester |
-| R2.30 | As cibob → chat "citester" → chat info → "Change receiving address" → "Change"; wait up to 120 s for "you changed address". Switch to citester → chat "cibob"; send `after bob switch`; switch to cibob and check it, reply `ok bob` | citester's chat shows "changed address for you"; both messages arrive |
-| R2.31 | Switch to citester → chat "cibob" → chat info → "Change receiving address" → "Change", then at once find "Abort changing address" in chat info and tap it → the alert "Abort changing address?" → "Abort" | While the change is in progress, "Abort changing address" shows in chat info and the alert says "Address change will be aborted. Old receiving address will be used."; after "Abort" no "you changed address" appears for this change. Both profiles run in one app, so the change can complete before the tap: if "Abort changing address" is gone or disabled before you tap it, mark SKIPPED with that reason |
-| R2.32 | As cibob → chat "citester": the same as R2.31 from cibob's side; then switch to citester and look at the chat | As R2.31, from the contact's side; citester's chat shows no "changed address for you" for the aborted change (SKIPPED under the same condition) |
+| R55.16 | Switch to citester → "Compose" → "Create 1-time link" → set the profile to "Incognito", then back to "citester" → copy the link; close. Switch to cibob → make sure new links start Incognito: "Compose" → "Create 1-time link" → set the profile to "Incognito"; close (tap "Delete" for this unused link). Paste citester's link → "Open new chat" | After switching to Incognito and back, citester's link shows "citester" under "Share profile" without the footer about a random profile; cibob's paste opens a new chat with "citester" (the result of the connection is recorded in R55.18) |
+| R55.18 | Continue as cibob in the new chat: look at "Your profile" (do not change it), tap "Connect"; wait for the connection. Switch to citester and open the chat list | cibob's "Your profile" shows "Incognito" before connecting. cibob's chat shows "citester" (citester's own profile was shared: record this under R55.16) with the mask icon; citester's new chat has a random name (not "cibob"), without a mask |
+| R55.15 | Still as citester: "Compose" → "Create 1-time link" (it starts with "citester") → set the profile to "Incognito" → copy the link; close | The footer says "A new random profile will be shared." (the connection is checked in R55.17) |
+| R55.17 | As citester: "Compose" → "Create 1-time link" → set the profile back to "citester" (this turns the remembered incognito choice off); close and tap "Delete" for this unused link. Switch to cicarol: paste the link copied in R55.15 → "Open new chat"; check "Your profile" shows "cicarol" → "Connect"; wait for the connection | cicarol's new chat has a random name, not "citester": the link made incognito keeps sharing the incognito profile after the choice was turned off (record this under R55.15 too) |
+| R55.5 | Switch to citester and look at the chats "cicarol" and the random-named one from R55.18 | Incognito link (R55.15): citester's chat "cicarol" has the mask icon and cicarol sees a random name. Non-incognito link (R55.16): cibob sees "citester" |
+| R55.2 | As citester: open the chat "cicarol" → chat info; go back; open the chat with cibob's random name | The chat list row "cicarol" and the chat's top bar show the mask icon; chat info shows "Incognito" with "Your random profile" and a random name. The other chat has no mask icon (citester's own profile there) |
+| R55.4 | Switch to cibob: make sure new links start with "cibob" ("Compose" → "Create 1-time link" → profile "cibob"); copy this link; close. Switch to cicarol: paste it → "Open new chat" → tap "Your profile" → "Incognito" → "Connect"; wait. Switch to cibob | cibob's new chat has a random name (not "cicarol"); cicarol's chat with "cibob" shows the mask icon. (The non-incognito paste is R55.17: cicarol pasted with "cicarol") |
 
-## Delivery receipts
-
-| ID | Do | Expect |
-|----|----|--------|
-| R7.9 | Switch to citester → chat "cibob": send `receipt one`; wait 20 s | `receipt one` shows two checkmarks (cibob's app confirmed delivery) |
-| R7.1 | Switch to cibob → delivery receipts settings: turn "Contacts" off. Switch to citester → chat "cibob": send `no receipt`; wait 20 s. Switch to cibob → turn "Contacts" on. Switch to citester: send `receipt again`; wait 20 s | No alert when switching (no contact overrides). `no receipt` keeps one checkmark; `receipt again` shows two |
-| R7.3 | Switch to cibob → chat "citester" → chat info → "Send receipts" → "no". Switch to citester → chat "cibob": send `override no`; wait 20 s. Switch to cicarol → chat "cibob": send `carol to bob`; wait 20 s | `override no` keeps one checkmark; `carol to bob` shows two checkmarks (the override affects only citester) |
-| R7.5 | Switch to cibob → delivery receipts settings: turn "Contacts" off (no alert: the override is "no" too), then on again | Turning on shows the dialog "Sending receipts is disabled for 1 contacts" with "Enable (keep overrides)", "Enable for all" and "Cancel"; tap "Enable (keep overrides)". cibob's chat info for citester still shows "Send receipts" "no" |
-| R7.6 | As cibob: turn "Contacts" off, then on again; in the dialog tap "Enable for all". Open the chat "citester" → chat info | "Send receipts" now shows "default (yes)" |
-| R7.11 | Switch to citester → chat "cibob": send `keep my receipt`; wait 20 s; edit it to `keep my receipt edited`. Then with the field empty tap the lightning button right of the microphone (confirm "Send" in the alert "Live message!" if it shows), type `live receipt`, wait 5 s, tap the checkmark; wait 20 s | `keep my receipt edited` still shows two checkmarks after the edit; the finished live message shows two checkmarks |
-| R7.10 | Open "ci team": send `group receipt`; wait 30 s; message menu → "Info" → "Delivery" | The tab lists cibob and cicarol, each with a delivery status icon showing received (two checkmarks) |
-| R7.2 | As citester → delivery receipts settings: turn "Small groups (max 20)" off; open "ci g1" → group info → "Send receipts"; go back. Turn "Small groups (max 20)" on again; look at "Send receipts" of "ci g1" again | No alert either way. "Send receipts" reads "default (no)" while the switch is off and "default (yes)" after it is on |
-| R7.4 | "ci g1" → group info → "Send receipts" → "no". Open "ci g2" → group info | "ci g1" shows "no"; "ci g2" still shows "default (yes)" |
-| R7.7 | Delivery receipts settings: turn "Small groups (max 20)" off, then on again; in the dialog tap "Enable (keep overrides)". Open "ci g1" → group info | Turning on shows the dialog "Sending receipts is disabled for 1 groups" with "Enable (keep overrides)", "Enable for all" and "Cancel"; afterwards "ci g1" still shows "no" |
-| R7.8 | Turn "Small groups (max 20)" off, then on again; in the dialog tap "Enable for all". Open "ci g1" → group info | "ci g1" shows "default (yes)" |
-
-## Voice messages (chat citester–cibob and "ci team")
+## Group link, member address and contact requests
 
 | ID | Do | Expect |
 |----|----|--------|
-| R40.4 | As citester → chat "cibob": `ui long-press` on the microphone button. Read the system alert with `ui point` at its centre (it can be outside the tree) | iOS asks for microphone access with the app's text "SimpleX needs microphone access for audio and video calls, and to record voice messages."; tap its button that denies access ("Don't Allow"; find it with `ui point`) |
-| R40.6 | `ui long-press` on the microphone button again | The app shows the alert "No permission to record voice message" with "To record voice message please grant permission to use Microphone." and "Open Settings"; tap "Cancel" |
-| R40.38 | Switch to cibob → chat "citester" → chat info → "Contact preferences" → "Voice messages": set "You allow" to "no" → "Save and notify contact". Switch to citester → chat "cibob": tap the microphone button once | The microphone button is grey; the alert "Voice messages prohibited!" says "Please ask your contact to enable sending voice messages." |
-| R40.39 | Switch to cibob → chat "citester": tap the microphone button once; tap "Allow" in the alert. Switch to citester → chat "cibob" and look at the microphone button (do not tap it) | On cibob the alert "Allow voice messages?" says "You need to allow your contact to send voice messages to be able to send them."; after "Allow" cibob's microphone button is no longer grey; on citester the button is no longer grey either. (The change cannot arrive while the same profile has the chat open: one app) |
-| R40.40 | As citester → "ci team" → group info → "Group preferences" → turn "Voice messages" off → "Save and notify group members". Switch to cibob → "ci team": tap the microphone button once | The alert "Voice messages prohibited!" says "Only group owners can enable voice messages." (The alerts for a user's own and a contact's prohibition were seen in R40.39 and R40.38) |
+| S2 | Switch to citester. Create the group `ci link` with "Incognito" off and "Skip" on the invite screen; group info → "Create group link" → copy the link (see "Group link"); go back | The link screen shows the link and "Share link" |
+| R55.6 | Switch to cibob: paste the group link → the alert names "ci link" with "Open group" → tap it → set "Your profile" to "Incognito" → "Join group"; wait up to 120 s until the message field is enabled. Switch to cidan: paste the same link → "Open group" → "Your profile" "cidan" → "Join group"; wait. Switch to citester → "ci link" → group info | citester's member list shows cidan as "cidan" and cibob under a random name; cibob's "ci link" shows the mask icon, cidan's does not. (Scanning the link's QR code needs a camera: not checked) |
+| R55.13 | Switch to cibob → "ci link" → group info → "cidan" → member info: under "Address" tap "Connect" → "Open new chat" → set "Your profile" to "Incognito" → "Connect" → "Send request without message". Switch to citester → "ci link" → group info → "cidan" → "Connect" → "Open new chat" → "Your profile" "citester" → "Connect" → "Send request without message". Switch to cidan and open the chat list | cidan's member info, seen by cibob and by citester, has the section "Address" with "Connect". cidan's chat list shows two requests: one from a random name (cibob incognito) and one from "citester" |
+| R55.10 | As cidan: swipe the random-named request's row to the left | The swipe shows "Accept" and "Reject" and no "Accept incognito" (every address of this version holds profile data); tap "Accept"; the chat connects. Accepting incognito cannot be checked: SKIPPED part, not a failure |
+| R55.11 | As cidan: tap the "citester" request's row; tap "Accept" at the bottom of the chat; wait for the connection | The chat shows "Reject" and "Accept" and no incognito option; after "Accept" the chat connects and shows the encryption notice |
 
-## Large messages (compression)
+## Contact address (cicarol to cidan)
 
 | ID | Do | Expect |
 |----|----|--------|
-| R6.3 | Switch to citester: picker → tap your own name at the top of the picker → the camera button on the profile image → "Choose from library" → the test card → confirm the picker (and any crop screen) → "Save (and notify contacts)"; close. Then chat "cibob": put on the clipboard one line of 14000 characters: `START` followed by the ten characters `abcdefghij` repeated 1399 times and then `END` (`ui clipboard "START…END"`), paste it into the message field, check the field's value starts with `START` and ends with `END`, and send it. Switch to cibob → chat "citester" | citester's profile image shows the test card; cibob's chat list shows citester with the new image. The long message is sent without an error and arrives on cibob whole: it starts with `START` and ends with `END`. The same in a chat without post-quantum encryption cannot be checked: the app offers no way to turn it off |
+| R55.20 | As cidan: picker → "Your SimpleX address" → "Share address" → copy; close. Switch to cicarol: make new chats start incognito ("Compose" → "Create 1-time link" → "Incognito"; close, "Delete"). Paste cidan's address → "Open new chat"; look at "Your profile" → "Connect" → "Send request without message". Switch to cidan: accept the request (tap the row → "Accept"); wait | cicarol's "Your profile" shows "Incognito" before connecting; cidan's new contact has a random name, not "cicarol"; cicarol's chat with "cidan" shows the mask icon |
+| R55.9 | Compare the address connections | Incognito: R55.20 (cidan sees a random name). Not incognito: citester's connection in R55.13 used cidan's address with "citester" and cidan sees "citester". Then, as cicarol, set new links back to "cicarol" ("Compose" → "Create 1-time link" → "cicarol"; close, "Delete") |
+
+## Links in messages and group invitations
+
+| ID | Do | Expect |
+|----|----|--------|
+| R55.8 | Switch to citester. Create the group `ci item` ("Incognito" off, "Skip"), group info → "Create group link" → copy it. Open the chat with cibob's random name: paste the link into the message field and send it. Open the chat "cicarol": paste and send it. Switch to cibob → chat "citester": tap the link in the message → "Open group" → "Your profile" "cibob" → "Join group". Switch to cicarol → the chat with citester's random name: tap the link → "Open group" → "Your profile" "Incognito" → "Join group". Wait; switch to citester → "ci item" → group info | Each message shows the group link; tapping it shows the alert for "ci item". The member list shows "cibob" and a random name for cicarol; cicarol's "ci item" shows the mask icon |
+| R55.22 | As citester: create the group `ci invite` ("Incognito" off), inviting cibob's random-named contact and cidan (role member). Switch to cibob → chat "citester": look at the invitation; open the chat list row "ci invite" and look at the dialog; tap outside to close it. Switch to cidan → chat "citester": look at the invitation | citester's chats show "You sent group invitation". cibob (incognito contact): "You are invited to group" with "Tap to join incognito", and the row's dialog "Group invitation" offers "Join incognito". cidan: "You are invited to group" with "Tap to join" |
+| R55.23 | As cidan: tap the chat list row "ci invite" → "Join group" in the dialog. Switch to cibob → chat "citester": tap "Tap to join incognito" in the invitation. Wait; switch to citester → "ci invite" → group info | Both join: the member list shows "cidan" and cibob's random name (the incognito invitee joined with the same random profile as its contact); cibob's chat shows the invitation as "You joined this group" |
