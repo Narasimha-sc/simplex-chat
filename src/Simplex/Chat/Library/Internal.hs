@@ -2220,13 +2220,13 @@ fullyDeleteMemberRecordIO db user gInfo m = do
     else deleteGroupMember db user m'
   pure gInfo'
 
-updateMemberRecordDeleted :: User -> GroupInfo -> GroupMember -> GroupMemberStatus -> CM GroupInfo
+updateMemberRecordDeleted :: User -> GroupInfo -> GroupMember -> GroupMemberStatus -> CM (GroupInfo, GroupMember)
 updateMemberRecordDeleted user@User {userId} gInfo m newStatus =
   withStore' $ \db -> do
     (gInfo', m') <- deleteSupportChatIfExists db user gInfo m
     updateGroupMemberStatus db userId m' newStatus
     deactivateRelay_ db m
-    pure gInfo'
+    pure (gInfo', m' {memberStatus = newStatus})
 
 deactivateRelay_ :: DB.Connection -> GroupMember -> IO ()
 deactivateRelay_ db m =
