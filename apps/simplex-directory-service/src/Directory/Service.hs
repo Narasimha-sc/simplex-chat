@@ -77,7 +77,7 @@ import Simplex.Messaging.Protocol (ErrorType (..))
 import Simplex.Messaging.SimplexName (SimplexNameInfo (..), SimplexNameType (..), shortNameInfoStr)
 import Simplex.Messaging.TMap (TMap)
 import qualified Simplex.Messaging.TMap as TM
-import Simplex.Messaging.Util (eitherToMaybe, raceAny_, safeDecodeUtf8, tshow, unlessM, (<$$>))
+import Simplex.Messaging.Util (eitherToMaybe, raceAny_, safeDecodeUtf8, tshow, unlessM, whenM, (<$$>))
 import System.Directory (getAppUserDataDirectory, removeFile)
 import System.Exit (exitFailure)
 import System.Process (readProcess)
@@ -674,18 +674,23 @@ directoryServiceEvent opts@DirectoryOpts {adminUsers, superUsers, serviceName, o
       isJust (voiceCaptchaGenerator opts)
         && (groupFeatureUserAllowed SGFVoice gInfo || supportsVersion m memberSupportVoiceVersion)
 
+    stillPendingApproval :: GroupInfo -> GroupMember -> IO Bool
+    stillPendingApproval GroupInfo {groupId} m =
+      either (const False) (== Just GSMemPendingApproval) <$> getMemberStatus cc user groupId (groupMemberId' m)
+
     approvePendingMember :: DirectoryMemberAcceptance -> GroupInfo -> GroupMember -> IO ()
     approvePendingMember a g@GroupInfo {groupId} m@GroupMember {memberProfile = LocalProfile {displayName, image}} = do
       gli_ <- join . eitherToMaybe <$> withDB' "getGroupLinkInfo" cc (\db -> getGroupLinkInfo db userId groupId)
       let role = if alwaysObserver || useMemberFilter image (makeObserver a) then GRObserver else maybe GRMember (\GroupLinkInfo {memberRole} -> memberRole) gli_
           gmId = groupMemberId' m
-      sendChatCmd cc (APIAcceptMember groupId gmId role) >>= \case
-        Right CRMemberAccepted {member} -> do
-          atomically $ TM.delete gmId $ pendingCaptchas env
-          if memberStatus member == GSMemPendingReview
-            then logInfo $ "Member " <> viewName displayName <> " accepted and pending review, group " <> tshow groupId <> ":" <> viewGroupName g
-            else logInfo $ "Member " <> viewName displayName <> " accepted, group " <> tshow groupId <> ":" <> viewGroupName g
-        r -> logError $ "unexpected accept member response: " <> tshow r
+      whenM (stillPendingApproval g m) $
+        sendChatCmd cc (APIAcceptMember groupId gmId role) >>= \case
+          Right CRMemberAccepted {member} -> do
+            atomically $ TM.delete gmId $ pendingCaptchas env
+            if memberStatus member == GSMemPendingReview
+              then logInfo $ "Member " <> viewName displayName <> " accepted and pending review, group " <> tshow groupId <> ":" <> viewGroupName g
+              else logInfo $ "Member " <> viewName displayName <> " accepted, group " <> tshow groupId <> ":" <> viewGroupName g
+          r -> logError $ "unexpected accept member response: " <> tshow r
 
     dePendingMemberMsg :: GroupInfo -> GroupMember -> ChatItemId -> Text -> IO ()
     dePendingMemberMsg g@GroupInfo {groupId, groupProfile = GroupProfile {displayName = n}} m@GroupMember {memberProfile = LocalProfile {displayName}} ciId msgText
