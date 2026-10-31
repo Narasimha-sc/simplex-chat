@@ -10,11 +10,6 @@ import chat.simplex.common.model.CIFile
 import chat.simplex.common.model.readCryptoFile
 import chat.simplex.common.platform.*
 import chat.simplex.common.simplexWindowState
-import org.jetbrains.skia.Bitmap
-import org.jetbrains.skia.Codec
-import org.jetbrains.skia.ColorAlphaType
-import org.jetbrains.skia.Data
-import org.jetbrains.skia.EncodedImageFormat
 import java.awt.image.BufferedImage
 import java.io.ByteArrayInputStream
 import java.io.File
@@ -167,11 +162,11 @@ actual fun getFileSize(uri: URI): Long? = uri.toFile().length()
 
 actual fun getBitmapFromUri(uri: URI, withAlertOnException: Boolean): ImageBitmap? =
   try {
-    // No dimension cap here except for WebP: this path decodes user-picked local files (image picker, compose, save),
+    // No dimension cap here: this path decodes user-picked local files (image picker, compose, save),
     // not untrusted received attachments. The cap is applied in getBitmapFromByteArray (auto-rendered content).
-    val data = uri.toFile().readBytes()
-    if (ImageFileType.WEBP.matches(data)) decodeBoundedWebp(data, MAX_IMAGE_DIMENSION)
-    else ImageIO.read(ByteArrayInputStream(data)).toComposeImageBitmap()
+    uri.inputStream().use {
+      ImageIO.read(it).toComposeImageBitmap()
+    }
   } catch (e: Exception) {
     Log.e(TAG, "Error while decoding drawable: ${e.stackTraceToString()}")
     if (withAlertOnException) showImageDecodingException()
@@ -190,31 +185,7 @@ actual fun getBitmapFromByteArray(data: ByteArray, withAlertOnException: Boolean
   }
 
 private fun decodeBoundedImage(data: ByteArray, maxDimension: Int): ImageBitmap =
-  if (ImageFileType.WEBP.matches(data)) decodeBoundedWebp(data, maxDimension)
-  else decodeBoundedBufferedImage(data, maxDimension).toComposeImageBitmap()
-
-private fun decodeBoundedWebp(data: ByteArray, maxDimension: Int): ImageBitmap {
-  val encoded = Data.makeFromBytes(data)
-  val codec = try {
-    Codec.makeFromData(encoded)
-  } finally {
-    encoded.close()
-  }
-  try {
-    if (codec.encodedImageFormat != EncodedImageFormat.WEBP) throw IOException("Unsupported image format")
-    val width = codec.width
-    val height = codec.height
-    if (!sourceDimensionsWithinLimits(width, height)) throw IOException("Image dimensions exceed limit")
-    val sampleSize = imageSampleSize(width, height, maxDimension)
-    val bitmap = Bitmap()
-    val info = codec.imageInfo.withWidthHeight(width / sampleSize, height / sampleSize).withColorAlphaType(ColorAlphaType.PREMUL)
-    if (!bitmap.allocPixels(info)) throw IOException("Unable to decode image")
-    codec.readPixels(bitmap)
-    return bitmap.asComposeImageBitmap()
-  } finally {
-    codec.close()
-  }
-}
+  decodeBoundedBufferedImage(data, maxDimension).toComposeImageBitmap()
 
 // Decodes downloaded/auto-rendered image bytes with bounded memory: rejects absurd source dimensions,
 // then downsamples (like Android's inSampleSize) so even large legitimate images decode to a bounded raster.
