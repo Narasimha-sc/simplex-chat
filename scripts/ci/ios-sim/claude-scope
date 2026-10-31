@@ -2,9 +2,10 @@
 # A case runs in both layouts only when the layouts render it differently; the rest run in one.
 # entries-<layout> (optional) tells that session which directory entries and names its cases use, so none meets an entry already known.
 # backend: yes when the cases use the test backend; a run that asks for Claude must then start it too.
-backend: no
+backend: yes
 model: claude-haiku-5-5
 layouts: reachable
-cases-reachable: S2, S3, A1, A2, A3, A4, A5, J1, J2, A6, B1, B2, B3, J3, J4, J5, B4, B5, B6, B7, I1-I4
-max-turns: 390
+cases-reachable: S1, R4.3, R4.7, R4.4, R4.5, R60.1, R64.8
+entries-reachable: cibobby.testing (R4.3, R4.7), cinews.testing (R4.4), cinone.testing (R4.5), ci_group found with "ci seed" (R60.1)
+max-turns: 600
 max-budget-usd: 5
