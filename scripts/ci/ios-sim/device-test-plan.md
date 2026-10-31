@@ -1,4 +1,4 @@
-# Device test plan: replies, reactions, editing and deletion (part 1)
+# Device test plan: live and disappearing messages, message info, link previews (part 1)
 
 ## Anything unusual
 
@@ -15,9 +15,9 @@ You are looking for regressions, not only running checks. Besides each case's ch
 Record each in `report.md` under a heading `## Unusual`, with the case it happened in and the screenshot names, even when every check passes. A case passes only when its checks pass and nothing unusual happened in it; otherwise mark it FAIL and say why. Never stop at a failure: go on with the next case.
 
 
-The app as the scripted smoke test leaves it: the profile "citester", without conversations. The cases run in the order of the tables and build on each other: three profiles of this app, "citester", "cibob" and "cicarol"; citester is connected with cibob and with cicarol by 1-time links, and owns the group "ci team" that cibob and cicarol join. All messages go through the app's preset servers on the internet: after switching profile, wait up to 30 s for a message from another profile (`ui wait "<text>" 30`).
+The app as the scripted smoke test leaves it: the profile "citester", without conversations. The cases run in the order of the tables and build on each other: three profiles of this app, "citester", "cibob" and "cicarol"; citester is connected with cibob and with cicarol by 1-time links, and owns the group "ci team" that both join. The chat citester–cibob has no chat-level timer; the chat citester–cicarol gets one in R10.39. All messages go through the app's preset servers on the internet: after switching profile, wait up to 30 s for a message from another profile (`ui wait "<text>" 30`).
 
-Case IDs `R<row>` are rows of the manual test table; `S<n>` are setup steps. "Expect" says what to check; when a row asks to check after reopening a chat, reopen it as described under "Reopening a chat".
+Case IDs `R<row>` are rows of the manual test table; `S<n>` are setup steps.
 
 ## How to do things (iOS)
 
@@ -39,39 +39,64 @@ Case IDs `R<row>` are rows of the manual test table; `S<n>` are setup steps. "Ex
 - **Inviting later:** group info → "Invite members" → tap the contacts' rows → "Invite to group". The "New member role" picker sets their role.
 - **Joining a group by invitation** (as the invitee): in the chat list, tap the group's row → the dialog "Group invitation" → "Join group" (or "Join incognito" for an incognito contact). Open the group and wait up to 120 s until the message field is enabled.
 - **Settings:** picker → "Settings". Close Settings by swiping it down.
+- **Live message from an empty field:** while the message field is empty, a lightning button shows right of the microphone at the right end of the field (find it with `ui tree`); tap it. The first time, the alert "Live message!" asks to confirm with "Send". Then type: the message is sent at once and updated about every 3 s while you type; the send button turns into a checkmark; tap it to finish the live message.
+- **Send button menu:** with text (or an attachment) in the compose area, `ui long-press` on the send button opens its menu: "Send live message" and "Disappearing message". "Disappearing message" opens the dialog "Send disappearing message" with "30 seconds", "1 minute", "5 minutes" and "Custom time"; "Custom time" opens a sheet with two wheels (the number, and the unit: seconds, minutes, hours, days, weeks, months), "Cancel" and "Send" at the top. Turn a wheel with `ui swipe` over it (a short upward swipe moves to the next value); check the selected values in the tree.
+- **Timer mark:** a disappearing message shows a timer icon next to its time; when its time differs from the chat's timer it also shows the time in short form ("30s", "5m", "2h", "12mth").
+- **Message info:** message menu → "Info" opens a sheet titled "Sent message" or "Received message" with "Sent at" / "Received at", "Disappears at" for a disappearing message, "File servers" for a file, and tabs at the bottom such as "History", "In reply to" and "Delivery". Close it by swiping down.
+- **Attaching the test card:** tap the paperclip button left of the message field → "Choose from library" → the test card's thumbnail (colour bars, "1080" at the top) → the picker's "Add" button. The compose area then shows the image above the field.
+- **Waiting a fixed time:** `ui wait "<a text that never shows>" <secs>` returns after <secs> seconds; its "not shown" result is expected there.
 
-## Direct chats
+## Setup
 
 | ID | Do | Expect |
 |----|----|--------|
 | S1 | Add the profile `cibob`, then the profile `cicarol`; switch back to citester | The picker of citester lists cibob and cicarol |
-| S2 | Connect citester (A) and cibob (B) by a 1-time link | cibob's chat "citester" and citester's chat "cibob" both show the encryption notice and a message field |
-| S3 | As cibob, in the chat "citester": send `bob one`, then send `*bold* and _italic_` | Both show as sent; the second shows "bold" in bold and "italic" in italics, without the `*` and `_` characters |
-| R8.1 | Switch to citester → chat "cibob": open the menu of `bob one` → "Reply", send `reply one`; reopen the chat | `reply one` shows with a quote of `bob one` above its text, also after reopening. (cibob's side is checked in R8.2) |
-| R8.6 | As citester: open the menu of the message "bold and italic" → "Reply", send `markdown reply` | The quote above `markdown reply` shows "bold" in bold and "italic" in italics, without `*` and `_` (judge from a screenshot). (cibob's side is checked in R8.2) |
-| R8.2 | As citester: send `own one`; open its menu → "Reply", send `quote own`; reopen the chat. Then switch to cibob → chat "citester" and reopen it | citester: `quote own` shows a quote of `own one`, also after reopening. cibob: after reopening, `reply one` quotes `bob one`, `markdown reply` quotes the formatted message and `quote own` quotes `own one`; record the cibob results of R8.1 and R8.6 in their rows |
-| R8.5 | As cibob (chat "citester"): send the emoji `😀` alone (see "Typing an emoji"). Then open the menu of `😀` → "Reply", send `smile reply`. Then open the menu of `own one` → "Reply", send `😂` alone | `😀` alone shows much larger than text messages; in `smile reply` the quoted `😀` is small (quote size); the reply that is only `😂` shows the emoji large, larger than its quote's text (screenshots) |
-| R8.7 | As cibob: open the menu of `own one` (citester's message) and tap 👍; open the menu of `smile reply` (cibob's own) and tap 👍. Then tap the 👍 reaction under `smile reply` | After adding, a 👍 reaction shows under each of the two messages; after tapping the one under `smile reply`, it is gone there and stays under `own one` |
-| R8.8 | Switch to citester → chat "cibob": tap the 👍 reaction under `own one` (cibob's reaction) | Before: 👍 without a count; after: 👍 with the count "2" next to it |
-| R10.3 | Switch to cibob → chat "citester": open the menu of `quote own` → "Delete" → "Delete for me". Switch to citester → chat "cibob": edit `quote own` to `quote own edited`. Switch to cibob → chat "citester" | On cibob, `quote own` disappears after the deletion; after citester's edit, `quote own edited` arrives on cibob as a new message at the bottom of the chat |
-| R10.4 | Switch to citester → chat "cibob": send `plain words`, then edit it to `now *bold*` | citester shows "now bold" with "bold" in bold and an edited mark (a pencil icon next to the time). (cibob's side is checked in R10.5) |
-| R10.5 | As citester: send `steady text`; open its menu → "Edit" and, without changing the text, tap the send button. Then switch to cibob → chat "citester" | No error alert; `steady text` on citester has no edited mark. On cibob: `steady text` has no edited mark, and `now bold` shows "bold" in bold with an edited mark (record this under R10.4) |
+| S2 | Connect citester (A) and cibob (B) by a 1-time link; then, as cibob in the chat "citester", send `bob hi` | citester's chat "cibob" shows `bob hi` |
+| S3 | Switch to citester. Connect citester (A) and cicarol (B) by a 1-time link | cicarol's chat "citester" shows the encryption notice and a message field |
+| S4 | Switch to citester. Create the group `ci team`, inviting cibob and cicarol (role member). Switch to cibob and join "ci team"; switch to cicarol and join "ci team" | cibob and cicarol each have "ci team" with an enabled message field |
 
-## The group "ci team"
+## Live messages (chat citester–cibob)
 
 | ID | Do | Expect |
 |----|----|--------|
-| S4 | Switch to citester. Connect citester (A) and cicarol (B) by a 1-time link | cicarol's chat "citester" shows the encryption notice and a message field |
-| S5 | Switch to citester. Create the group `ci team`, inviting cibob and cicarol (role member); in its chat send `owner note`. Switch to cibob and join "ci team"; switch to cicarol and join "ci team" | Each of cibob and cicarol has the chat "ci team" with an enabled message field, and shows `owner note` (the group sends recent history to new members) |
-| S6 | As cicarol in "ci team": open the menu of `owner note` and tap 👍; send `carol note`. Switch to cibob → "ci team": open the menu of `owner note` and tap 👍; send `group hello` | The 👍 under `owner note` shows the count "2" on cibob |
-| R8.4 | Switch to cicarol → "ci team": open the menu of `carol note` (her own) → "Reply", send `carol self quote`; reopen the chat | `carol self quote` shows a quote of `carol note`, also after reopening. (citester's and cibob's sides are checked in R8.3) |
-| R8.3 | Switch to citester → "ci team": open the menu of `group hello` (cibob's) → "Reply", send `reply in group`; reopen the chat. Switch to cicarol → "ci team" and reopen it. Switch to cibob → "ci team" and reopen it | On all three profiles after reopening: `reply in group` quotes `group hello`, and `carol self quote` quotes `carol note` (record the latter under R8.4 too) |
-| R8.9 | Switch to citester → "ci team": `ui long-press` on the 👍 reaction under `owner note`; then tap "cibob" in the menu that opens | The menu lists the members who reacted: cibob and cicarol (their names, with their profile images). Tapping cibob opens cibob's member info (name cibob, role member). Go back to the chat |
-| R10.1 | As citester: in "ci team" edit `owner note` to `owner note edited`; in the chat "cibob" edit `own one` to `own one edited`. Switch to cibob: open "ci team", then the chat "citester" | On cibob: "ci team" shows `owner note edited` and the chat "citester" shows `own one edited`, each with the edited mark (pencil icon next to the time) |
-| R10.6 | As cibob: in the chat "citester" delete `smile reply` (cibob's own) and `steady text` (received) with "Delete for me"; in "ci team" delete `group hello` (own) and `carol note` (cicarol's) with "Delete for me". Switch to citester: open the chat "cibob" and "ci team" | On cibob the four messages are gone. On citester `smile reply` is still in the chat "cibob" and `group hello` and `carol note` are still in "ci team" |
-| R10.7 | As citester: in the chat "cibob" send `bye direct`, then delete it with "Mark deleted for everyone"; in "ci team" send `bye group`, then delete it the same way. Switch to cibob: open the chat "citester", then the menu of the deleted message → "Reveal"; open "ci team" and check the same | On citester each deleted message shows "marked deleted". On cibob each shows "marked deleted" in place of its text; after "Reveal" the text (`bye direct`, `bye group`) shows again |
-| R10.8 | As cibob in the chat "citester": open the menu of `bye direct` (deleted by citester) → "Delete" → "Delete for me" | The message is gone from cibob's chat |
-| R10.9 | As cibob in "ci team": send `spam one`. Switch to citester → "ci team": open the menu of `spam one` → "Moderate" → the alert "Delete member message?" says "The message will be marked as moderated for all members." → "Delete" | On citester `spam one` shows "moderated by citester" in place of its text |
-| R10.10 | Switch to cicarol → "ci team" | `spam one` shows "moderated by citester" in place of its text |
-| R10.11 | As cicarol: open the menu of the moderated `spam one` → "Reveal". Switch to citester → "ci team" → group info → "Group preferences" → turn "Delete for everyone" on → "Save and notify group members"; go back to the chat. Switch to cibob → "ci team": send `spam two`. Switch to citester: moderate `spam two` ("Moderate" → "Delete"). Switch to cicarol → "ci team": open the menu of `spam two` | With the preference off, "Reveal" shows `spam one`'s text. After the preference is on, the "Moderate" alert says "The message will be deleted for all members."; on cicarol `spam two` shows "moderated by citester", and its menu has no "Reveal" |
-| R10.12 | As cicarol: open the menu of `spam two` → "Delete" → "Delete for me" | The moderated message is gone from cicarol's chat |
+| R10.19 | Switch to citester → chat "cibob". With the message field empty, tap the lightning button | The alert "Live message!" says "Send a live message - it will update for the recipient(s) as you type it" and offers "Send" and "Cancel". Tap "Send" |
+| R10.20 | Continue the live message: `ui type "live hello"`; wait 5 s; `ui shot`. Then open the live message's menu (long-press its text) and look at the items; close the menu | The live message shows in the chat with the header "LIVE" and animated dots after its text (the typing indicator; judge from two screenshots taken a second apart). Its menu has no "Edit", no "Delete" and no "Reply" (record this under R10.22, R10.23 and R10.24 too). The recipient's side cannot be watched while citester types (one app): that part is not checked |
+| R10.18 | Continue: `ui type " world"`; wait 5 s; tap the send button (a checkmark) to finish. (The recipient is checked in R10.21.) | The message shows `live hello world` without the "LIVE" header |
+| R10.27 | Type `typed then live` (do not send), long-press the send button → "Send live message". Type ` more`, wait 5 s, tap the checkmark | No alert this time; while live the message shows "LIVE"; finished, it reads `typed then live more` |
+| R10.28 | Attach the test card (see "Attaching the test card"); long-press the send button → "Send live message"; type `live with image`; wait 5 s; tap the checkmark | The menu offers "Send live message" with an image attached; the chat then shows the image with the text `live with image` |
+| R10.21 | Switch to cibob → chat "citester" | cibob shows `live hello world`, `typed then live more` and the image with `live with image` (record these under R10.18, R10.27 and R10.28), each without "LIVE" and without an edited mark (pencil icon); citester's copies have no edited mark either (seen before switching) |
+| R10.22 | Switch to citester → chat "cibob": edit `live hello world` to `live edited` | After the live message was finished, "Edit" is in its menu and the edit works: `live edited` shows with an edited mark. (While live, "Edit" was absent: R10.20) |
+| R10.24 | Open the menu of `live edited` → "Reply", send `quote live` | `quote live` shows a quote of `live edited`. (While live, "Reply" was absent: R10.20) |
+| R10.23 | Open the menu of `typed then live more` → "Delete" → "Delete for me" | The message is gone. (While live, "Delete" was absent: R10.20) |
+
+## Disappearing messages
+
+| ID | Do | Expect |
+|----|----|--------|
+| R10.37 | As citester: chat "cibob" → chat info → "Contact preferences": look at "Disappearing messages"; go back to the chat. Type `custom check`, long-press the send button | "You allow" is on and "Delete after" is "off" (no chat timer is set), and messages sent normally (`bob hi`, `quote live`) have no timer icon; the send button's menu still offers "Disappearing message" |
+| R10.36 | Continue: "Disappearing message" → "Custom time" → set the wheels to 2 and "minutes" → "Send" | `custom check` shows the timer icon and "2m" |
+| R10.38 | Type `year message`, long-press the send button → "Disappearing message" → "Custom time" → set the unit wheel to "months" and the number wheel to 12 → "Send". Open its menu → "Info" | The message shows "12mth"; its info shows "Disappears at" about 360 days after "Sent at" |
+| R10.29 | Type `vanish 30`, long-press the send button → "Disappearing message" → "30 seconds". Wait 40 s. Then switch to cibob → chat "citester"; wait 40 s | On citester `vanish 30` shows the timer and "30s", then is gone after 40 s. On cibob it shows when the chat is opened (read), then is gone 30–40 s later |
+| R10.39 | Switch to citester → chat "cicarol" → chat info → "Contact preferences" → "Disappearing messages": "You allow" on, "Delete after" → "custom" → wheels 2 and "hours" → "Select" → "Save and notify contact"; go back to the chat. Then "ci team" → group info → "Group preferences" → turn "Disappearing messages" on → "Delete after" → "custom" → wheels 3 and "hours" → "Select" → "Save and notify group members"; go back to the chat | "Delete after" shows "2 hours" for the contact and "3 hours" for the group; the chat "cicarol" shows the event "Disappearing messages: 2 hours" and "ci team" shows "Disappearing messages: 3 hours" |
+| R10.31 | Chat "cicarol": send `default ttl` normally; type `custom ttl`, long-press the send button → "Disappearing message" → "5 minutes" | `default ttl` shows the timer icon without a time text (it uses the chat's 2 hours); `custom ttl` shows the timer icon and "5m" |
+| R10.32 | Edit `custom ttl` to `custom ttl edited` (within 5 minutes of sending it) | The text changes and the message keeps the timer icon and "5m", with an edited mark |
+| R10.34 | Open the menu of `custom ttl edited` → "Reply", send `quote timed` | `quote timed` shows a quote of `custom ttl edited` and the timer icon |
+| R10.33 | Open the menu of `default ttl` → "Delete" → "Delete for me" | `default ttl` is gone |
+| R10.35 | With the field empty tap the lightning button; type `live timed`; wait 5 s; open its menu → "Info"; close it; tap the checkmark to finish; open its menu → "Info" again | While live, the info has no "Disappears at"; after finishing, it shows "Disappears at" about 2 hours after "Sent at" |
+
+## Message info
+
+| ID | Do | Expect |
+|----|----|--------|
+| R10.40 | Chat "cibob": open the menu of `live edited` (own, edited) → "Info"; open the "History" tab; tap "Copy"; close. Open the menu of `bob hi` (cibob's) → "Info"; close | Own: title "Sent message", "Sent at", and under "History" two versions (`live edited` marked "(current)" and `live hello world`); "Copy" works without an error. Other's: title "Received message", with "Sent at" and "Received at" |
+| R10.42 | Open the menu of `quote live` → "Info" → the "In reply to" tab | It shows the quoted message `live edited` |
+| R10.43 | Open the menu of the image with `live with image` → "Info" | It shows "File servers" with at least one server host name |
+| R10.41 | "ci team": send `status check`; wait 30 s; open its menu → "Info" → the "Delivery" tab | The tab lists cibob and cicarol, each with a delivery status icon |
+
+## Link previews and restart (chat citester–cibob)
+
+| ID | Do | Expect |
+|----|----|--------|
+| R11.1 | Chat "cibob": type `https://example.com`; wait up to 10 s; if the alert "Enable link previews?" shows, tap "Enable"; wait up to 20 s for the preview above the field; send. Reopen the chat. Switch to cibob → chat "citester", reopen it | Before sending, the compose area shows a preview with the page title "Example Domain"; the sent message shows the preview on citester and on cibob, also after reopening |
+| R11.2 | Switch to citester → chat "cibob": type `https://www.iana.org/about` and tap the send button at once, before a preview appears | The message is sent without a link preview. If a preview was attached anyway (it loaded before the tap), mark SKIPPED: the timing cannot be controlled here |
+| R10.30 | Type `vanish after restart`, long-press the send button → "Disappearing message" → "1 minute"; at once `ui relaunch`. Wait 70 s (see "Waiting a fixed time"); open the chat "cibob" | After the restart the message is gone once its minute has passed. (Returning from background cannot be tested: the iOS helper has no home action) |
