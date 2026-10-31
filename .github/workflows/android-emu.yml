@@ -394,8 +394,13 @@ jobs:
       - name: Boot emulator
         run: scripts/ci/android/emulator.sh start "$RUNNER_TEMP/claude-test/screens"
 
+      # shared storage is mounted some seconds after boot completes; a push before that is refused
       - name: Add test images
         run: |
+          for _ in $(seq 60); do
+            adb shell 'mkdir -p /sdcard/Pictures && touch /sdcard/Pictures/.ready' 2> /dev/null && break
+            sleep 2
+          done
           adb push tests/fixtures/test.jpg /sdcard/Pictures/test-card.jpg
           adb push tests/fixtures/logo-large-rgba.png /sdcard/Pictures/simplex-logo.png
           for image in test-card.jpg simplex-logo.png; do
