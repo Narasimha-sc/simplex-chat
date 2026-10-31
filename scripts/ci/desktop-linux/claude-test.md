@@ -1,4 +1,4 @@
-# Test: channel message signing, channel moderators and sending images in the SimpleX Chat desktop app
+# Test: operators, servers and chat relays (part 2) in the SimpleX Chat desktop app
 
 You are testing the SimpleX Chat desktop app, which runs on a virtual display on this machine. Drive it only with the `ui` helper, through Bash, one command per call: `ui <command> [args]`. Anything else is refused; don't look for ways around that, and if something blocks the test, report it. The commands are listed at the end.
 
@@ -8,74 +8,84 @@ Your working directory is where your output goes. `ui shot <name>` saves `screen
 
 - The app is already running, on its first screen, with a new, empty database: never run `ui start` or `ui stop`. Begin with `ui shot start` to see it.
 - After onboarding, the chat list is in the left pane (x 1 to 389) and chats open in the right pane. An empty chat list shows only its toolbar, with the profile picture at about 27,730 and a pencil (New chat) at about 363,730: the search field "Search or paste SimpleX link" appears once there is a chat. The toolbar is at the bottom of the left pane.
-- The channel uses the app's preset chat relays, on the internet. Creating it and joining it wait for them: wait up to 120 s there (`ui wait "<text>" 120`).
-- The folder `images` in your working directory has two images for part I: `test-card.jpg`, a TV test card 1280×720 (colour bars, a large circle, "1080" at the top and "TVB" at the bottom), and `simplex-logo.png`, the dark blue and turquoise SimpleX logo on a transparent background. You can Read them to compare with what the app shows.
+- The app was started with developer tools on and private routing set to unknown servers only. The preset operators' servers ("SimpleX Chat", "Flux") and chat relays are on the internet. No test backend runs.
+- Use only this app's own profiles and the preset servers. Never click "Follow SimpleX network news", "Chat with the founder" or any other link that contacts the SimpleX team, and never click web links (no browser runs here).
+- Addresses used below (all checked in the app's sources):
+  - SMP7 = `smp://8Af90NX2TTkKEJAF1RCg69P_Odg2Z-6_J6DOKUqK3rQ=@smp7.simplex.im` — a SimpleX Chat server that is not preset in the app.
+  - SMP8 = `smp://0YuTwO05YJWS8rkjn9eLJDjQhFKvIYd8d4xG8X1blIU=@smp8.simplex.im` — the address of the preset server "smp8.simplex.im".
+  - FAKE1 = `smp://8Af90NX2TTkKEJAF1RCg69P_Odg2Z-6_J6DOKUqK3rQ=@smp7.example.invalid` and XFAKE1 = `xftp://8Af90NX2TTkKEJAF1RCg69P_Odg2Z-6_J6DOKUqK3rQ=@xftp7.example.invalid` — valid addresses on a domain no operator has; the host never resolves. Never save them with "Use for new connections" on.
+  - RELAY1 = `https://smp5.simplex.im/r#Fp5RWXkiRFg-hgcDwC2v-MWnPfvEf42RgCqREntW0mw` — the address of the preset chat relay "SimpleX Chat Relay 1".
 
 ## How to do things in the app
 
-- **Send a message:** click the message field at the bottom of the right pane (its placeholder is "Broadcast" for the channel's owner, "Message" for others), `ui type "<text>"`, then `ui key Return`. Check the message then shows in the chat.
-- **Channel info:** click the channel name at the top of the right pane. Press Escape to close it and other panes (preferences, member info, a message's info) and get back to the chat.
-- **Message menu:** `ui right-click <x> <y>` on the message's text (centre from `ui find`) opens its menu ("Info", "Moderate", …).
-- **Signatures are read as text, never from the seal icons:** a message's "Info" shows "Signed" (your own message), "Signed & verified" (someone else's, checked) or "Signature missing".
-- **Switch profile:** click the profile picture (about 27,730); the menu lists your other profiles by name: click the one you want. The chat list then shows that profile's chats; click "ci signing" in it.
+- **Settings:** click the profile picture (about 27,730), then "Settings". Settings and its screens open in the left pane. **Network & servers:** Settings → "Network" (OCR reads "Network & servers" as two phrases). It lists "Preset servers" ("SimpleX Chat", "Flux"), "Your servers", "Save servers" (grey when it can't be used; errors show under it), and "WebRTC ICE servers". A switch is at the right end of its row (x about 335, at the row's y).
+- **Going back:** Escape closes the top screen of the left pane. Leaving "Network & servers" with unsaved valid changes shows the alert "Save servers?" with "Save" and "Exit without saving".
+- **Operator page:** click "SimpleX Chat" or "Flux". It is titled "SimpleX Chat servers" and has the sections "Operator" (the logo row, the switch "Use servers", and errors or warnings below them), "Chat relays" (the preset relays "SimpleX Chat Relay 1", "…2", "…3"), "Use for messages" (switches "To receive", "For private routing", "To resolve names"), "Message servers" (preset servers by host name), "Added message servers", "Use for files" (switch "To send"), "Media & file servers", and "Test servers". Scroll with `ui scroll 195 400 down`.
+- **A server's page:** click its host name in a list. A preset server shows "Preset server address"; a server you added shows "Your server address", "Use server" ("Test server", the switch "Use for new connections"), "Delete server" and, while it is in use, "Use for messages" with three menus, "To receive", "For private routing" and "To resolve names", each showing "default (yes)", "default (no)", "yes" or "no". Clicking a menu's value opens a list "default (…)", "yes", "no"; OCR misreads the short "no": it is the item about 48 px below "yes". Escape closes the page and keeps the edits.
+- **Add a server:** Network & servers → "Your servers" → "Add server" → in the alert, "Enter server manually". On "New server", click the field about 50 px below the text "Your server address", type the address, and press Escape to add it. A server on an operator's domain then shows the alert "Operator server" with "Server added to operator SimpleX Chat." (click "OK") and goes to that operator's "Added message servers"; any other goes to "Your servers" under "Message servers" (or "Media & file servers"). A server added this way has "Use for new connections" off.
+- **A server in error** shows a red error icon left of its host name instead of the test status; Network & servers then shows "Errors in servers configuration." (or a specific error) under "Save servers", which is grey.
+- **Add a chat relay:** Network & servers → "Your servers" → "Add server" → "Chat relay". "New chat relay" has a field below "Your relay address" and the field "Enter relay name…" below "Your relay name", then "Use relay" ("Test relay", the switch "Use for new channels"). Escape adds the relay to "Your servers" → "Chat relays", or shows an alert when the name or address is invalid. A relay's page has "Delete relay" for relays you added; preset relays show "Preset relay address" and "Preset relay name" instead.
 - **Add a profile:** profile picture → "Your chat profiles" → "Add profile". On "Create profile", click the field about 40 px below the text "Enter your name:", type the name, and click the "Create profile" button (the lower of the two "Create profile" texts; the upper one is the title). The new profile becomes the active one; press Escape until the chat list shows.
-- **Join by the copied link** (from a profile without chats): the pencil (about 363,730) → "Paste link" → "Tap to paste link". An alert names the channel with "Open channel": click it. The channel opens with "Tap Join channel" and a "Join channel" bar at the bottom: click the bar, and wait up to 120 s until the bottom of the chat shows "you are subscriber".
+- **Switch profile:** click the profile picture (about 27,730); the menu lists your other profiles by name: click the one you want.
 
 ## The test
 
-The parts build on each other: run them in this order. cisub must join only after cimod has become a moderator (B2), so that cimod learns about cisub.
+Run the parts in this order: later cases use the state earlier ones leave.
 
 **S. Setup.**
 
 1. (S1) Onboarding. Each screen waits for the one before it; wait for a text before clicking it. The first screen has "Create your profile": click it. On "Create profile", click the field "Enter profile name", type `citester`, and click "Create profile". The next screen offers a database passphrase: click "Use random passphrase", then "OK" in the alert that follows. Click "Continue", then "Accept" on the screen after it. Wait up to 60 s for the chat list: the right pane shows "Talk to someone".
-2. (S2) Click the pencil, then "Create public channel". Click the field about 40 px below the text "Channel name", type `ci signing`, and click the "Create public channel" button (the lower of the two texts with that name). Wait up to 120 s for "Share link": the channel opens and its "Channel link" pane shows over it. If "N/M relays active" stays below M for 120 s with N at least 1, click "Continue", and "Continue" in the alert. On "Channel link", click "Continue". Check: the chat "ci signing" is open.
-3. (S3) Send `before signing`. Check: it shows in the chat.
+2. (S2) Network & servers → "Flux" → switch "Use servers" off → Escape → "Save servers". Check: "Flux" is grey.
 
-**A. "Sign messages" (as citester).**
+**V. Validation (as citester).** Network & servers is open unless a step says otherwise.
 
-1. (A1) Channel info → "Channel preferences". Check: the first row is "Sign messages", and its footer says "Do not require signing messages." (the switch is off).
-2. (A2) Click the switch of "Sign messages", at the right end of its row. Check: the alert "Sign messages?" says "Messages sent before will show "signature missing" to subscribers who join later." and has "Enable" and "Cancel". Click "Cancel". Check: the footer says "Do not require signing messages." again.
-3. (A3) Click the switch again, then "Enable". Check: the footer says "Require signing messages.". Click "Save and notify channel subscribers", then press Escape until the chat shows. Check: the chat shows "Sign messages: on".
-4. (A4) Send `after signing`, right-click it → "Info". Check: the info says "Signed".
-5. (A5) Channel info → "Channel preferences". Check: the footer of "Chat with admins" says "Prohibit chats with admins." (saving in A3 did not turn it on). Press Escape until the chat shows.
+1. (R24.23) Validation of operators and servers. Take a shot at each check.
+   - "SimpleX Chat" → switch "Use servers" off. Check: below the "Operator" section an error ending in "No message servers." (and one in "No media & file servers.") shows at once. Escape. Check: the same errors show under "Save servers", which is grey. Click "SimpleX Chat", turn "Use servers" on. Check: the errors are gone at once.
+   - Switch "To receive" off. Check: "No servers to receive messages." shows (below "Use for messages" and under "Operator"). Turn it on: gone.
+   - Switch "For private routing" off. Check: "No servers for private message routing." shows. Turn it on: gone.
+   - Switch "To send" off. Check: "No servers to send files." shows. Turn it on: gone. Escape.
+   - "Your servers": add FAKE1, click it, turn "Use for new connections" on, Escape twice. Click "SimpleX Chat", turn "Use servers" off, Escape. Check: under "Save servers" only the media error ("No media & file servers.") shows, no message-server error (FAKE1 covers messages). "Your servers" → "smp7.example.invalid" → "Delete server". Escape. Check: "No message servers." shows again at once. Add FAKE1 again with "Use for new connections" on: the message error is gone again.
+   - Restore: "SimpleX Chat" → "Use servers" on; "Your servers" → delete "smp7.example.invalid"; leave Network & servers with Escape and click "Exit without saving" if the alert shows.
+   - Disabling every server of a protocol one by one and duplicate host names are covered by R24.26 and R24.27; report this case PASS only if every check above passed.
+2. (S3) Leave Settings. Add the profile `cibob`, then switch back to citester. (Only now: with cibob, R24.23's checks would show cibob's errors too.)
+3. (R24.24) Operators are global. Network & servers → "Your servers": add FAKE1 and XFAKE1, turn "Use for new connections" on for both (Escape after each). Click "SimpleX Chat", turn "Use servers" off. Check: the errors now name the other profile: "For chat profile cibob:" followed by "No message servers." (and the media error), and none name citester; "Save servers" is grey. Turn "Use servers" on, then "To receive" off. Check: "For chat profile cibob: No servers to receive messages." (citester's FAKE1 receives). Turn "To receive" on. Delete both fake servers, Escape, and "Exit without saving".
+4. (R24.26) "Your servers": add FAKE1 twice. Check: both rows "smp7.example.invalid" show the red error icon; Escape: "Errors in servers configuration." under a grey "Save servers". Delete one of them. Check: the error is gone. Delete the other; Escape; "Exit without saving" if asked.
+5. (R24.27) Add SMP8 (the preset server's own address) as a server. Check: the alert "Operator server" says "Server added to operator SimpleX Chat."; click "OK", Escape, open "SimpleX Chat". Check: "Added message servers" lists "smp8.simplex.im" with the red error icon, and the preset "smp8.simplex.im" under "Message servers" shows it too (duplicate host); Network & servers shows an error under a grey "Save servers". This is the app's answer to "what should happen": the copy can't be saved. Delete the added "smp8.simplex.im" (its page has "Delete server"; the preset one has none). Check: the errors are gone.
+6. (R24.29) Add SMP7; click "OK"; open "SimpleX Chat" → "smp7.simplex.im" (under "Added message servers") → switch "Use for new connections" on. Check: "Use for messages" shows "To receive", "For private routing" and "To resolve names", each with a "default (…)" value (the operator's setting). Set "To receive" to "no", "For private routing" to "no" and "To resolve names" to "yes". Escape twice, "Save servers". Leave Settings, reopen Network & servers → "SimpleX Chat" → "smp7.simplex.im". Check: "no", "no" and "yes" are kept. Escape twice.
+7. (R24.25) "SimpleX Chat" → "Message servers" (scroll). Check: it lists the preset hosts smp4.simplex.im, smp5.simplex.im and smp6.simplex.im (grey: not used) and smp8.simplex.im to smp19.simplex.im without smp13 (in use), and none of their pages has "Delete server" (open one to check). The app has no control that removes a preset server, so "restored if any is absent" can't be set up: report that part as SKIPPED.
 
-**J. A subscriber joins.**
+**R. Chat relays (as citester).**
 
-1. (J1) Channel info → "Channel link" → "Share link". Check: the toast "Copied to clipboard". Press Escape until the chat list shows.
-2. (J2) Add the profile `cimod`, and as cimod join by the copied link. Check: "you are subscriber".
-3. (A6) As cimod in "ci signing": click the message "before signing". Check: the alert "Signature missing" says "The message was sent before the channel started signing messages, or it is fake." Close it, right-click "before signing" → "Info". Check: "Signature missing". Then right-click "after signing" → "Info". Check: "Signed & verified".
+1. (R25.2) "Your servers" → "Add server" → "Chat relay". Type `https://example.invalid/r` into the address field and `#relay` into "Enter relay name…"; Escape. Check: the alert "Invalid relay name!" says "Check relay name and try again."; close it; "Your servers" lists no new relay. Again: address `https://example.invalid/r`, name `cirelay`; Escape. Check: the alert "Invalid relay address!" says "Check relay address and try again."; no relay is added.
+2. (R25.3) "Add server" → "Chat relay": type RELAY1 into the address field (leave the name empty), click "Test relay", wait up to 60 s. Check: a green tick shows right of "Test relay", the name field now holds the relay's name (quote it), it can no longer be edited (clicking it and typing changes nothing), and the hint "Test relay to retrieve its name." is gone. Escape: the relay is added to "Your servers" → "Chat relays". If the test fails ("Relay test failed!"), quote the reason: that is a FAIL.
+3. (R25.1) Relays are edited, deleted and validated like servers. Check: the relay added in R25.3 and "SimpleX Chat Relay 1" (in "SimpleX Chat" → "Chat relays") both show the red error icon (same address), and Network & servers shows an error under a grey "Save servers". Open the added relay in "Your servers" → "Delete relay". Check: the errors are gone. Open "SimpleX Chat" → "SimpleX Chat Relay 2". Check: "Preset relay address", "Preset relay name", "Test relay" and "Use for new channels" show, and no "Delete relay". Switch "Use for new channels" off, Escape. Check: the row is grey. Do the same for "SimpleX Chat Relay 1" and "SimpleX Chat Relay 3". Check: a warning "No chat relays enabled." shows (below "Operator", and on Network & servers). Turn all three on again. Check: the warning is gone. Escape, "Exit without saving".
+4. (R25.4) "SimpleX Chat" → turn "Use for new channels" off for "SimpleX Chat Relay 2" and "SimpleX Chat Relay 3" (keep Relay 1 on). Escape, "Save servers", leave Settings. Click the pencil, then "Create public channel". Click the field about 40 px below the text "Channel name", type `ci relays`, and click the "Create public channel" button (the lower of the two texts with that name), and take a shot at once. Check: "Creating channel" shows "…/1 relays active" (one relay in total). Wait up to 120 s for "Share link" or "Continue"; on "Channel link" click "Continue". Then click the channel name at the top of the right pane → "Chat relays". Check: exactly one relay is listed. Escape until the chat shows.
 
-**B. A moderator.**
+You have at most 600 turns, and the whole test fits in about 150 if you chain steps whose outcome you can predict with `ui do` and look at the screen after each chain. For example:
 
-1. (B1) Switch to citester → "ci signing" → channel info → "Subscribers" → "cimod". Click the "Change role" row. Check: the list offers exactly "subscriber", "contributor" and "moderator" (no admin, no owner).
-2. (B2) Click "moderator", then "Change" in the alert "Change role?". Check: cimod's role shows moderator, and the section above it is titled "Moderator". Press Escape until the chat shows. Check: the chat shows "you changed role of cimod to moderator".
-3. (B3) Switch to cimod → "ci signing". Check: the chat shows "changed your role to moderator". Send `moderator post`. Check: it shows in the chat.
-4. (J3) Add the profile `cisub`, and as cisub join by the same link (it is still on the clipboard; if not, copy it again as citester as in J1). Check: "you are subscriber".
-5. (J4) Switch to citester → "ci signing" → channel info → "Subscribers" → "cisub" → "Change role" → "contributor" → "Change". Check: cisub's role shows contributor, in the section titled "Contributor".
-6. (J5) Switch to cisub → "ci signing". Send `contributor post`. Check: it shows in the chat.
-7. (B4) Switch to cimod → "ci signing" → channel info. Check: it shows "Subscribers"; click it: the list includes "cisub".
-8. (B5) Click "cisub". Check: its info offers "Block for all" (don't click it yet). Press Escape until the chat shows.
-9. (B6) Right-click "contributor post" → "Moderate" → "Delete" in the alert "Delete member message?". Check: the message shows "moderated by cimod" in its place.
-10. (B7) Channel info → "Subscribers" → "cisub" → "Block for all" → "Block for all" in the alert "Block subscriber for all?". Check: cisub's info now offers "Unblock for all". Press Escape until the chat shows. Check: the chat shows "you blocked cisub".
+- `ui do click 27 730 -- click-text "Settings" 10 -- click-text "Network" 10 -- wait "Preset servers" -- shot network`
+- `ui do click-text "Your servers" 10 -- click-text "Add server" 10 -- click-text "Enter server manually" 10 -- wait "Your server address" -- shot new-server`
+- `ui do click-text "Add server" 10 -- click-text "Chat relay" 10 -- wait "Your relay address" -- shot new-relay`
+- `ui do key Escape -- wait "Save servers" -- shot back-on-network`
 
-**I. Sending images (as citester).**
+`ui do` stops at the first command that fails, so a failed chain tells you where it stopped. Take a shot at each check, named after its case (`ui shot R24-23`).
 
-1. (I1) Switch to citester, and press Escape until the chat list shows. Click the pencil (about 363,730), then "Create group". Click the name field, about 40 px below the text "Enter group name", type `image notes`, and click "Create group". If "Skip inviting members" shows, click it. Check: the group "image notes" is open in the right pane.
-2. (I2) Click the attachment button, the paperclip icon at the left end of the message field at the bottom of the right pane, then "Image". A file dialog opens: click its "File Name" field, type the absolute path of `images/test-card.jpg` in your working directory, and press Return. Back in the app, the compose area shows the image above the message field before it is sent. Take a shot. Check: the preview shows the whole test card, upright, not stretched.
-3. (I3) Press Return or click the send button at the right end of the message field. Check: the chat shows the sent test card. Click the image: it opens larger, and "1080" and "TVB" are sharp and readable. Take a shot, then close the image with Escape.
-4. (I4) Repeat I2 and I3 with `images/simplex-logo.png`. Check: the preview and the sent image show the whole logo, and the area around its letters shows the chat's background, not black or grey.
+## Anything unusual
 
-You have at most 330 turns, and the whole test fits in about 170 if you chain steps whose outcome you can predict with `ui do` and look at the screen after each chain. For example:
+You are looking for regressions, not only running checks. Besides each case's checks, watch for anything a user would consider wrong, on every screen you pass through:
 
-- `ui do click-text "Create your profile" -- wait "Enter profile name" -- click-text "Enter profile name" -- type citester -- shot profile`
-- `ui do click 363 730 -- click-text "Create public channel" 10 -- wait "Channel name" -- shot new-channel`
-- `ui do click-text "Broadcast" -- type "after signing" -- key Return -- wait "after signing" -- shot after-signing`
-- `ui do click 27 730 -- click-text "Your chat profiles" 10 -- click-text "Add profile" 10 -- wait "Enter your name" -- shot add-profile`
+- a crash, the app closing or restarting, a frozen screen;
+- an error alert or dialog of any kind ("View crashed", "Error", "Unexpected error", "Connection error", an error code or exception text);
+- an action that takes over 30 s, or a spinner that never ends;
+- text cut off, overlapping, garbled, untranslated or showing a raw key (such as `chat_item_…`), wrong plurals, empty labels;
+- a control that does nothing, a duplicated or missing item, an item in the wrong place or order;
+- a state that differs after a restart or after switching profile;
+- anything that differs from how the row or the step describes it.
 
-`ui do` stops at the first command that fails, so a failed chain tells you where it stopped. Take a shot at each check, named after its step (`ui shot A2`).
+Record each in `report.md` under a heading `## Unusual`, with the case it happened in and the screenshot names, even when every check passes. A case passes only when its checks pass and nothing unusual happened in it; otherwise mark it FAIL and say why. Never stop at a failure: go on with the next case.
 
 ## Report
 
-Write `report.md` in your working directory as you go, so a session that is cut short still leaves its results: one row per step (S1 to S3, A1 to A5, J1, J2, A6, B1 to B3, J3 to J5, B4 to B7, I1 to I4), each check you ran as PASS or FAIL with its evidence (the text OCR read, screenshot names), and anything else unexpected. End your final message with one line: `CLAUDE-TEST: PASS` if every check you ran passed, otherwise `CLAUDE-TEST: FAIL` followed by the steps that failed.
+Write `report.md` in your working directory as you go, so a session that is cut short still leaves its results: one row per case ID (S1, S2, R24.23, S3, R24.24, R24.26, R24.27, R24.29, R24.25, R25.2, R25.3, R25.1, R25.4), each as PASS, FAIL or SKIPPED (with the reason) and its evidence (the text OCR read, screenshot names), and anything else unexpected. A case, or a part of one, that the app cannot do on this platform is SKIPPED, not FAIL. End your final message with one line: `CLAUDE-TEST: PASS` if no case failed, otherwise `CLAUDE-TEST: FAIL` followed by the IDs of the cases that failed.
 
 ## The ui helper
