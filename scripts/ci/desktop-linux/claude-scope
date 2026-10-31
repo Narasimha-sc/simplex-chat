@@ -1,7 +1,7 @@
 # What the Claude job needs for the session claude-test.md describes.
 # backend: yes when the prompt uses the test backend; a run that asks for Claude must then start it too.
 # max-turns and max-budget-usd (optional) bound the session; claude-test.sh uses 60 and 3 when they're absent.
-# Shared by desktop and Android (both run desktop-linux/claude-test.sh): B01 needs about 120 (desktop) and 125 (Android) turns.
+# Shared by desktop and Android (both run desktop-linux/claude-test.sh): B02-1 needs about 300 (desktop) and 250 (Android) turns.
 backend: no
 max-turns: 600
 max-budget-usd: 5
