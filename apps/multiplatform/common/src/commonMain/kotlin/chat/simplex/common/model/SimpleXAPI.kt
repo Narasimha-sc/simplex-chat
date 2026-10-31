@@ -192,6 +192,7 @@ class AppPreferences {
   val networkTCPKeepIdle = mkIntPreference(SHARED_PREFS_NETWORK_TCP_KEEP_IDLE, KeepAliveOpts.defaults.keepIdle)
   val networkTCPKeepIntvl = mkIntPreference(SHARED_PREFS_NETWORK_TCP_KEEP_INTVL, KeepAliveOpts.defaults.keepIntvl)
   val networkTCPKeepCnt = mkIntPreference(SHARED_PREFS_NETWORK_TCP_KEEP_CNT, KeepAliveOpts.defaults.keepCnt)
+  val networkTCPUnackedDataTimeout = mkBoolPreference(SHARED_PREFS_NETWORK_TCP_UNACKED_DATA_TIMEOUT, KeepAliveOpts.defaults.unackedDataTimeout == true)
   val incognito = mkBoolPreference(SHARED_PREFS_INCOGNITO, false)
   val liveMessageAlertShown = mkBoolPreference(SHARED_PREFS_LIVE_MESSAGE_ALERT_SHOWN, false)
   val signMessageAlertShown = mkBoolPreference(SHARED_PREFS_SIGN_MESSAGE_ALERT_SHOWN, false)
@@ -478,6 +479,7 @@ class AppPreferences {
     private const val SHARED_PREFS_NETWORK_TCP_KEEP_IDLE = "NetworkTCPKeepIdle"
     private const val SHARED_PREFS_NETWORK_TCP_KEEP_INTVL = "NetworkTCPKeepIntvl"
     private const val SHARED_PREFS_NETWORK_TCP_KEEP_CNT = "NetworkTCPKeepCnt"
+    private const val SHARED_PREFS_NETWORK_TCP_UNACKED_DATA_TIMEOUT = "NetworkTCPUnackedDataTimeout"
     private const val SHARED_PREFS_INCOGNITO = "Incognito"
     private const val SHARED_PREFS_LIVE_MESSAGE_ALERT_SHOWN = "LiveMessageAlertShown"
     private const val SHARED_PREFS_SIGN_MESSAGE_ALERT_SHOWN = "SignMessageAlertShown"
@@ -3912,7 +3914,8 @@ object ChatController {
       val keepIdle = appPrefs.networkTCPKeepIdle.get()
       val keepIntvl = appPrefs.networkTCPKeepIntvl.get()
       val keepCnt = appPrefs.networkTCPKeepCnt.get()
-      KeepAliveOpts(keepIdle = keepIdle, keepIntvl = keepIntvl, keepCnt = keepCnt)
+      val unackedDataTimeout = if (appPrefs.networkTCPUnackedDataTimeout.get()) true else null
+      KeepAliveOpts(keepIdle = keepIdle, keepIntvl = keepIntvl, keepCnt = keepCnt, unackedDataTimeout = unackedDataTimeout)
     } else {
       null
     }
@@ -3958,6 +3961,7 @@ object ChatController {
       appPrefs.networkTCPKeepIdle.set(cfg.tcpKeepAlive.keepIdle)
       appPrefs.networkTCPKeepIntvl.set(cfg.tcpKeepAlive.keepIntvl)
       appPrefs.networkTCPKeepCnt.set(cfg.tcpKeepAlive.keepCnt)
+      appPrefs.networkTCPUnackedDataTimeout.set(cfg.tcpKeepAlive.unackedDataTimeout == true)
     } else {
       appPrefs.networkEnableKeepAlive.set(false)
     }
@@ -5523,7 +5527,8 @@ enum class TransportSessionMode {
 data class KeepAliveOpts(
   val keepIdle: Int, // seconds
   val keepIntvl: Int, // seconds
-  val keepCnt: Int // times
+  val keepCnt: Int, // times
+  val unackedDataTimeout: Boolean? = null
 ) {
   companion object {
     val defaults: KeepAliveOpts =
