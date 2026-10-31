@@ -3364,6 +3364,7 @@ func toggleChatFavorite(_ chat: Chat, favorite: Bool) {
 }
 
 func updateChatSettings(_ chat: Chat, chatSettings: ChatSettings) {
+    let chatInfoBefore = ChatModel.shared.getChat(chat.id)?.chatInfo ?? chat.chatInfo
     Task {
         do {
             try await apiSetChatSettings(type: chat.chatInfo.chatType, id: chat.chatInfo.apiId, chatSettings: chatSettings)
@@ -3371,6 +3372,7 @@ func updateChatSettings(_ chat: Chat, chatSettings: ChatSettings) {
                 let wasFavorite = chat.chatInfo.chatSettings?.favorite ?? false
                 ChatTagsModel.shared.updateChatFavorite(favorite: chatSettings.favorite, wasFavorite: wasFavorite)
                 let wasUnread = chat.unreadTag
+                let userUnreadBefore = ChatModel.shared.getChat(chat.id)?.copy(chatInfo: chatInfoBefore).userUnreadCount ?? 0
                 switch chat.chatInfo {
                 case var .direct(contact):
                     contact.chatSettings = chatSettings
@@ -3381,6 +3383,7 @@ func updateChatSettings(_ chat: Chat, chatSettings: ChatSettings) {
                 default: ()
                 }
                 ChatTagsModel.shared.updateChatTagRead(chat, wasUnread: wasUnread)
+                ChatModel.shared.changeUserUnreadCounter(before: userUnreadBefore, after: ChatModel.shared.getChat(chat.id)?.userUnreadCount ?? 0)
             }
         } catch let error {
             logger.error("apiSetChatSettings error \(responseError(error))")
