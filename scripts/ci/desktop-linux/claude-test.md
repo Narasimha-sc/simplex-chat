@@ -1,4 +1,4 @@
-# Test: the contact address and its settings in the SimpleX Chat desktop app (checklist batch B02-2)
+# Test: short links, connection plans and pending connections in the SimpleX Chat desktop app (checklist batch B03)
 
 You are testing the SimpleX Chat desktop app, which runs on a virtual display on this machine. Drive it only with the `ui` helper, through Bash, one command per call: `ui <command> [args]`. Anything else is refused; don't look for ways around that, and if something blocks the test, report it. The commands are listed at the end.
 
@@ -8,9 +8,10 @@ Each case ID is `R<row>`, the row of the manual checklist it comes from; `S<n>` 
 
 ## What is set up
 
-- The app is already running, on its first screen, with a new, empty database. Begin with `ui shot start` to see it. Never run `ui start` or `ui stop`, except in R17.13, which restarts the app exactly as it says.
-- After onboarding, the chat list is in the left pane (x 1 to 389) and chats open in the right pane. The toolbar is at the bottom of the left pane: the profile picture at about 27,730 and the pencil (New chat) at about 363,730. Settings, the address and New chat open in the left pane; while one is open, a click anywhere in the right pane (about 900,400) closes it.
-- The test uses four profiles of this app: citester, cibob, cicarol and cidan. They talk through the app's preset servers on the internet: a connection takes a few seconds to a minute, so wait up to 60 s for it (`ui wait "<text>" 60`).
+- The app is already running, on its first screen, with a new, empty database: never run `ui start` or `ui stop`. Begin with `ui shot start` to see it.
+- After onboarding, the chat list is in the left pane (x 1 to 389) and chats open in the right pane. The toolbar is at the bottom of the left pane: the profile picture at about 27,730 and the pencil (New chat) at about 363,730. Once a profile has a conversation, the left pane shows the search field "Search or paste SimpleX link".
+- The test uses four profiles of this app: citester, cibob, cicarol and cidan. citester owns a 1-time link, an address and a group link; cidan owns a business address. They talk through the app's preset servers on the internet: a connection takes a few seconds to a minute, so wait up to 60 s for it (`ui wait "<text>" 60`).
+- Links are copied by the app to the clipboard and pasted by the other profile. Scanning a QR code can't be done here: every "scanning" row of the checklist is tested by pasting the same link.
 - Never open, connect to or message "Ask SimpleX Team" (listed in "New chat") or any other preset contact, group or channel: they reach real people.
 
 ## How to do things in the app
@@ -18,51 +19,75 @@ Each case ID is `R<row>`, the row of the manual checklist it comes from; `S<n>` 
 - **User menu:** click the profile picture (about 27,730). It shows your profile at the top, then "Create SimpleX address" (or "Your SimpleX address"), "Chat preferences", your other profiles by name (below a line), "Your chat profiles" and "Settings".
 - **Add a profile:** user menu → "Your chat profiles" → "Add profile". On "Create profile", click the field about 40 px below the text "Enter your name:", type the name, and click the "Create profile" button (the lower of the two "Create profile" texts). The new profile becomes the active one; press Escape until the left pane shows its chat list. If the alert "Make profile private!" shows, click "OK".
 - **Switch profile:** user menu → click the other profile's name.
-- **The address:** user menu → "Your SimpleX address". It shows a QR code, "Share address" (copies the address and shows "Copied to clipboard"), "Address settings", and further down "Create 1-time link" and "Delete address". "Address settings" holds the switches "Share with SimpleX contacts" and "Auto-accept" (each switch is at the right end of its row, about x 335), the field "Enter welcome message… (optional)" under "Welcome message", and "Save".
-- **Copy a new 1-time link:** pencil → "Create 1-time link". Click the link text under "Share this 1-time invite link": the app copies it and shows "Copied to clipboard". Press Escape until the chat list shows (the link view and "New chat" close one at a time).
-- **Connect by a copied 1-time link:** pencil → "Paste link" → "Tap to paste link" → "Open new chat" in the alert → "Connect" at the bottom of the chat; wait up to 60 s until the message field "Message" shows. (The chat already holds an item "Messages, files and calls are protected…", so a wait for the text "Message" passes at once: check in the screenshot that "Connect" is gone and the message field is at the bottom.)
-- **Send a request by the copied address:** pencil → "Paste link" → "Tap to paste link". The alert names citester, with "Open new chat": click it. The chat shows "Tap Connect to send request", the field "Add message" and "Connect": click "Connect" (at the bottom of the right pane), then "Send request without message" in the alert "Send contact request?".
+- **Paste a link by "New chat":** pencil → "Paste link" → "Tap to paste link". The app checks the link and shows an alert (the "open chat" alert), which names the contact, group or business, with a button such as "Open new chat", "Open chat" or "Open group".
+- **Paste into a search field:** click the field ("Search or paste SimpleX link" in the chat list, or the same field at the top of "New chat"), then `ui key ctrl+v`.
+- **Copy:** a 1-time link: click the link text under "Share this 1-time invite link" (or "Share 1-time link" in a pending connection); an address: "Share address"; a group link: "Share link". Each copies and shows "Copied to clipboard".
+- **The prepared chat** (after "Open new chat" or "Open group"): before connecting, the bottom shows "Connect" (a 1-time link), the field "Add message" with "Connect" (an address; for a business address "Connect" connects at once, without an alert), or "Join group" (a group link). The chat already holds an item "Messages, files and calls are protected…", so a wait for the text "Message" passes at once: after connecting, check in the screenshot that "Connect" is gone and the message field "Message" is at the bottom.
 - **Send a message:** click the message field at the bottom of the right pane ("Message"), `ui type "<text>"`, then `ui key Return`.
-- **Chat info:** click the chat's name at the top of the right pane. Escape closes it. A group's info lists its members; clicking one opens the member's info.
-- **Chat menu:** `ui right-click <x> <y>` on a chat's name in the left pane (for a contact request: "Accept", "Reject").
+- **Chat info:** click the chat's name at the top of the right pane. Escape closes it.
 
 ## The test
 
 Run the parts in this order; each builds on the ones before.
 
-**A. Setup.**
+**A. Setup and the 1-time link (citester).**
 
 1. (S1) Onboarding. Each screen waits for the one before it; wait for a text before clicking it. The first screen has "Create your profile": click it. On "Create profile", click the field "Enter profile name", type `citester`, and click "Create profile". The next screen offers a database passphrase: click "Use random passphrase", then "OK" in the alert that follows. Click "Continue", then "Accept" on the screen after it. Wait up to 60 s for the chat list: the right pane shows "Talk to someone".
-2. (S2) As citester, copy a new 1-time link. Add the profile `cibob`; as cibob connect by the link and send `hello citester`. Switch to citester. Check: the chat list shows "cibob".
+2. (S2) Create the group `ci link group` (citester's first conversation, so that the chat list, with pending connections, shows): pencil → "Create group"; click the field about 40 px below "Enter group name", type `ci link group`, click "Create group" (the lower one); if "Skip inviting members" shows, click it. Press Escape until the left pane shows the chat list with "ci link group" and the search field.
+3. (R62.1) Pencil → "Create 1-time link"; copy the link; press Escape. Paste it by "New chat". Check: the alert "Connect to yourself?" says "This is your own one-time link!" with "Use current profile", "Use new incognito profile" and "Cancel". Click "Cancel".
+4. (R56.2) Check: the chat list shows the pending connection "invited to connect". Click it. Check: it shows "You invited a contact", "One-time invitation link" with the QR code and "Share 1-time link": the link can be opened again.
+5. (R56.1a) In that view click the field "Set contact name…", type `bob link` and press Return. Press Escape. Check: the pending connection is now listed as "bob link".
 
-**B. Creating and sharing the address (citester).**
+**B. Joining by the 1-time link.**
 
-1. (R17.15) User menu → "Create SimpleX address" → "Create SimpleX address". Check: the alert "Share address with SimpleX contacts?" says "Add address to your profile, so that your SimpleX contacts can share it with other people. Profile update will be sent to your SimpleX contacts." and has "Share" and "Cancel". Click "Share". Check: the address view shows the QR code.
-2. (R17.16) Click "Address settings". Check: "Share with SimpleX contacts" is on. Click its switch. Check: the alert "Stop sharing address?" says "Profile update will be sent to your SimpleX contacts." with "Stop sharing" and "Cancel"; click "Cancel". Check: the switch is on again. Click it again and then "Stop sharing". Check: it is off. Click it once more. Check: the alert "Share address with SimpleX contacts?" with "Share"; click "Share". Check: it is on.
-3. (R17.14) Still in "Address settings", click the field "Enter welcome message… (optional)" and type `hello from the address`. Press Escape. Check: the alert "Save settings?" with "Save SimpleX address settings" and "Exit without saving"; click "Exit without saving". Open it again (user menu → "Your SimpleX address" → "Address settings"), type `hello again` in the field, and this time click in the right pane (about 900,400). Check: the same alert shows; click "Exit without saving" (this closes the address screens). Open user menu → "Your SimpleX address" → "Address settings" once more. Check: the field is empty (nothing was saved).
-4. (R17.18) Press Escape to the address view ("Your SimpleX address"), scroll down and click "Create 1-time link". Check: a 1-time link view opens. Press Escape without copying. Check: the alert "Keep unused invitation?" with "Delete" and "Keep"; click "Delete". Click "Create 1-time link" again, then click in the right pane (about 900,400). Check: the view closes and the same alert shows; click "Delete" (this closes the address screens too). (The view's closing when another client scans the link needs a second device: not tested.)
+1. (S3) Add the profile `cibob` (the copied 1-time link stays on the clipboard).
+2. (R3.1) As cibob, paste the link by "New chat". Check: the alert names citester with "Open new chat"; click it. Before clicking "Connect", check the chat: it already shows the encryption item ("…protected by end-to-end encryption…" or "…quantum resistant e2e encryption…") and items naming chat features (for example "Disappearing messages" or "Voice messages"). Take a shot.
+3. (R3.2) Click "Connect" and wait until "Message" shows. Send `hi from bob`. Switch to citester.
+4. (R56.1b) Check: citester's chat list lists the new contact as "bob link" (the alias set on the pending connection), not "cibob". Open it. Check: `hi from bob` is there. Send `hi bob`; switch to cibob and check `hi bob` arrived (this completes R3.2).
 
-**C. Auto-accept and a known address.**
+**C. The address (citester).**
 
-1. (R17.13) User menu → "Your SimpleX address" → "Address settings"; click the switch "Auto-accept". Check: it is on. Press Escape, click "Share address" (Check: "Copied to clipboard") and press Escape until the chat list shows. Add the profile `cicarol`; as cicarol send a request by the copied address. Check: within 60 s cicarol's chat with citester shows the message field "Message": citester accepted it without any action. Switch to citester. Check: "cicarol" is a contact in the chat list, not a request. Restart the app: `ui stop`, then `ui start /home/runner/work/_temp/app/simplex`, then `ui wait "Search or paste SimpleX link" 120`. Open user menu → "Your SimpleX address" → "Address settings". Check: "Auto-accept" is still on. Click its switch. Check: it is off. Press Escape.
-2. (R17.12) In the address view click "Share address" (the restart cleared the clipboard). Press Escape until the chat list shows. Switch to cicarol and paste the address (pencil → "Paste link" → "Tap to paste link"). Check: the alert names citester with "Open chat" (the contact already exists), not "Open new chat". Click "Open chat". Check: the existing chat with citester opens.
+1. (R62.2) Switch to citester. User menu → "Create SimpleX address" → "Create SimpleX address" (if "Share address with SimpleX contacts?" shows, click "Share"). Click "Share address" ("Copied to clipboard"); press Escape until the chat list shows. Paste the address by "New chat". Check: the alert "Connect to yourself?" says "This is your own SimpleX address!"; click "Cancel".
+2. (S4) Add the profile `cicarol`.
+3. (R3.5) As cicarol, paste the address by "New chat". Check: the alert names citester with "Open new chat"; click it. Click the field "Add message", type `hi via address`, press Return. Check: the alert "Send contact request?" with "Send request" and "Cancel"; click "Send request". Switch to citester. Check: the chat list shows "cicarol" as a request (a contact on the address owner's side). Click it, then "Accept" at the bottom (if the alert "Accept contact request" shows, click "Accept"). Check: `hi via address` is in the chat. Send `welcome cicarol`; switch to cicarol and check it arrived.
+4. (S5) Add the profile `cidan`.
+5. (R3.6) As cidan, paste the address by "New chat" → "Open new chat" → click "Connect" (at the bottom) → "Send request without message" in "Send contact request?". Switch to citester, click "cidan", then "Accept". Send `welcome cidan`; switch to cidan and check it arrived; reply `thanks` and check citester gets it.
+6. (R3.8) Switch to cibob; send a request by the same address ("Open new chat" → "Connect" → "Send request without message"). Switch to citester. Check: the request shows in the chat list as a contact (cibob's name, possibly with a number). Click it, click "Reject", then "Reject" in "Reject contact request". Check: it is gone from the chat list. (The checklist's "accept (another request); send messages" is covered by R3.5 and R3.6.)
 
-**D. Rejecting by the chat menu.**
+**D. A known address.**
 
-1. (R17.11) Add the profile `cidan`; as cidan send a request by the copied address. Switch to citester. Check: "cidan" shows in the chat list as a request. Right-click it → "Reject". Check: "cidan" is gone from citester's chat list.
+1. (R62.3) Switch to cicarol; paste the address by "New chat". Check: the alert names citester with "Open chat" (not "Open new chat"); click it. Check: the existing chat with citester opens.
+2. (R62.4) Paste the address into cicarol's chat list search field. Check: the list shows only "citester"; click it. Check: the chat opens. Clear the search: press Escape (Escape empties the search field first), and check the field shows "Search or paste SimpleX link" again.
+3. (R62.5) Pencil; paste the address into the search field of "New chat". Check: the contacts list shows only "citester"; click it. Check: the chat opens.
+4. (R62.6) Switch to cidan, open "citester", open chat info → "Delete contact" → "Only delete conversation" → "OK" in "Conversation deleted!". Pencil; paste the address into the search field of "New chat". Check: "citester" is listed; click it. Check: the chat with citester opens.
 
-**E. The address in contact and member info.**
+**E. The group link.**
 
-1. (R17.17a) Switch to cibob, open "citester", open chat info. Check: the info has the section "Address" with a QR code and "Share address" (citester shares the address with contacts since R17.16).
-2. (R17.17b) Switch to citester. Pencil → "Create group". Click the field about 40 px below "Enter group name", type `ci addr group`, click "Create group" (the lower one). In "Invite members" click "cibob" to select it, then click "Invite to group". Switch to cibob, open "citester": the chat shows "You are invited to group" with "Tap to join"; click "Tap to join" and wait up to 60 s until "ci addr group" is in cibob's chat list. Open "ci addr group", open its info, click the member "citester". Check: the member's info has the section "Address" (cibob has citester as a contact).
-3. (R17.17c) Switch to citester, open "ci addr group" → info → "Create group link" → "Create link" → "Share link" (Check: "Copied to clipboard"). Press Escape until the chat list shows. Switch to cidan; pencil → "Paste link" → "Tap to paste link". Check: the alert names "ci addr group" with "Open group"; click it. The chat shows "Tap Join group" and "Join group" at the bottom: click "Join group" and wait up to 60 s until the bottom shows the message field "Message". Open the group's info and click the member "citester". Check: the member's info has no "Address" section (cidan has no contact with citester).
+1. (S6) Switch to citester. Open "ci link group" (created in S2), open its info → "Create group link" → "Create link" → "Share link" ("Copied to clipboard"). Press Escape until the chat list shows.
+2. (R62.7) As citester, paste the group link by "New chat". Check: the alert "Join your group?" says "This is your link for group ci link group!" with "Open group", "Use current profile", "Use new incognito profile" and "Cancel". Click "Open group". Check: the group chat opens.
+3. (R3.12) Switch to cicarol; paste the group link by "New chat". Check: the alert names "ci link group" with "Open group"; click it. Check: the chat shows "Tap Join group" and "Join group" at the bottom; click "Join group" and wait until "Message" shows. Send `hi group`. Switch to citester, open "ci link group". Check: `hi group` is there; send `welcome to the group`; switch to cicarol and check it arrived.
+4. (R62.8) As cicarol, paste the group link by "New chat". Check: the alert names "ci link group", says "You are a member" and has "Open group"; click it. Check: the group chat opens.
+5. (R62.9) Paste the group link into cicarol's chat list search field. Check: the list shows only "ci link group"; click it. Check: the chat opens. Clear the search with Escape.
+6. (R62.10) Pencil; paste the group link into the search field of "New chat". Check: the alert names "ci link group", says "You are a member" and has "Open group" (groups are not listed in "New chat", so the link shows the alert); click "Open group". Check: the group chat opens.
 
-You have at most 600 turns, and the whole test fits in about 130 if you chain steps whose outcome you can predict with `ui do` and look at the screen after each chain. For example:
+**F. The business address (cidan).**
 
-- `ui do click 27 730 -- click-text "Your SimpleX address" 10 -- click-text "Address settings" 10 -- shot address-settings`
-- `ui do click 363 730 -- click-text "Paste link" 10 -- click-text "Tap to paste link" 10 -- wait "Open" 60 -- shot alert`
+1. (S7) Switch to cidan. User menu → "Create SimpleX address" → "Create SimpleX address" (click "Share" if asked). Click the switch of "Business address" (at the right end of its row, about x 335). Check: it is on. Click "Share address"; press Escape until the chat list shows.
+2. (R3.10) Switch to cibob; paste the business address by "New chat". Check: the alert names cidan with "Open new chat"; click it. Click "Connect" at the bottom and wait until "Message" shows. Send `hi business`. Switch to cidan. Check: the chat list shows a chat with cibob holding `hi business`; open it, send `hello customer`; switch to cibob and check it arrived.
+3. (R62.11) As cibob, paste the business address by "New chat". Check: the alert names cidan with "Open chat"; click it. Check: the business chat with cidan opens.
+4. (R62.12) Paste the business address into cibob's chat list search field. Check: the list shows only the business chat with cidan; click it. Check: it opens.
 
-`ui do` stops at the first command that fails, so a failed chain tells you where it stopped. Take a shot at each check, named after its case (`ui shot R17-16`).
+**G. Incognito (last: it changes an app-wide setting).**
+
+1. (R56.3) Switch to citester. Pencil → "Create 1-time link". Check: under "Share profile" the row shows citester. Click that row. Check: "Select chat profile" lists the profiles and "Incognito", the latter with an info icon. Click the info icon. Check: "Incognito mode" says "Incognito mode protects your privacy by using a new random profile for each contact.". Press Escape, click "Incognito". Check: the link view shows "Incognito" under "Share profile" and the note "A new random profile will be shared.". Then click the "Incognito" row again, and in "Select chat profile" click citester (this turns the app-wide Incognito setting off again). Check: the row under "Share profile" shows citester. Press Escape until the chat list shows.
+
+You have at most 600 turns, and the whole test fits in about 270 if you chain steps whose outcome you can predict with `ui do` and look at the screen after each chain. For example:
+
+- `ui do click 363 730 -- click-text "Paste link" 10 -- click-text "Tap to paste link" 10 -- wait "Open" 60 -- shot alert` (for your own link or address the alert has no "Open": wait for "Connect to yourself" instead)
+- `ui do click 27 730 -- click-text "Your chat profiles" 10 -- click-text "Add profile" 10 -- wait "Enter your name" -- shot add-profile`
+- `ui do click-text "Search or paste" -- key ctrl+v -- shot search-pasted`
+
+`ui do` stops at the first command that fails, so a failed chain tells you where it stopped. Take a shot at each check, named after its case (`ui shot R62-1`).
 
 ## Anything unusual
 
@@ -80,6 +105,6 @@ Record each in `report.md` under a heading `## Unusual`, with the case it happen
 
 ## Report
 
-Write `report.md` in your working directory as you go, so a session that is cut short still leaves its results. It has one row per case ID, in this order: S1, S2, R17.15, R17.16, R17.14, R17.18, R17.13, R17.12, R17.11, R17.17a, R17.17b, R17.17c; each with PASS, FAIL or SKIPPED (with the reason) and its evidence (the text OCR read, screenshot names). A case the app cannot do on this platform is SKIPPED, not FAIL. Add anything else unexpected below the table. End your final message with one line: `CLAUDE-TEST: PASS` if no case failed, otherwise `CLAUDE-TEST: FAIL` followed by the IDs of the failed cases.
+Write `report.md` in your working directory as you go, so a session that is cut short still leaves its results. It has one row per case ID, in this order: S1, S2, R62.1, R56.2, R56.1a, S3, R3.1, R3.2, R56.1b, R62.2, S4, R3.5, S5, R3.6, R3.8, R62.3, R62.4, R62.5, R62.6, S6, R62.7, R3.12, R62.8, R62.9, R62.10, S7, R3.10, R62.11, R62.12, R56.3; each with PASS, FAIL or SKIPPED (with the reason) and its evidence (the text OCR read, screenshot names). A case the app cannot do on this platform is SKIPPED, not FAIL. Add anything else unexpected below the table. End your final message with one line: `CLAUDE-TEST: PASS` if no case failed, otherwise `CLAUDE-TEST: FAIL` followed by the IDs of the failed cases.
 
 ## The ui helper
