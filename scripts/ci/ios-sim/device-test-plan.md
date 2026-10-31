@@ -1,4 +1,4 @@
-# Device test plan: short links, connection plans and pending connections (checklist batch B03)
+# Device test plan: settings, appearance and chat layouts
 
 ## Anything unusual
 
@@ -15,85 +15,56 @@ You are looking for regressions, not only running checks. Besides each case's ch
 Record each in `report.md` under a heading `## Unusual`, with the case it happened in and the screenshot names, even when every check passes. A case passes only when its checks pass and nothing unusual happened in it; otherwise mark it FAIL and say why. Never stop at a failure: go on with the next case.
 
 
-The app as the scripted smoke test leaves it: the profile "citester" (use the name the user picker shows), without conversations, in the one-hand UI. The cases run in the order of the tables and build on each other: four profiles of this app, citester, cibob, cicarol and cidan; citester owns a 1-time link, an address and a group link, cidan owns a business address. They connect through the app's preset servers on the internet. Case IDs are `R<row>` of the manual checklist; `S<n>` is a setup step.
+The app as the scripted smoke test leaves it: the profile "citester", without conversations. The cases run in the order of the tables and build on each other: a contact "cibob" (a second profile in this app, connected by a 1-time link), then a third profile "cicarol" that creates an address in the chat console. Developer options start off on iOS.
 
-## Setup and conventions
+## Setup
 
-- **Shot names** take only letters, digits, `-` and `_`: write a case ID with `-` for the dot (`ui shot R1-10-reachable`).
-- **Camera:** if iOS asks for camera access when "Scan / Paste link" or "Connect via link or QR code" opens, tap "Don’t Allow" (`ui point` / `ui tap-xy` if the alert is not in the tree); pasting does not need the camera.
-- Never open, connect to or message "Ask SimpleX Team" (listed in "New chat") or any other preset contact, group or channel: they reach real people.
-- A connection takes a few seconds to a minute: wait up to 60 s for it (`ui wait "<text>" 60`).
-- Scanning a QR code can't be done here: every "scanning" row of the checklist is tested by pasting the same link.
-- The keyboard may capitalize a typed profile name ("Cibob"): use each name as the tree shows it.
-- **User picker:** your profile image in the toolbar (`Image "Account"`, tap its centre with `ui tap-xy`). It shows the profiles by name in a row at the top (tap another name to switch to it), "Create SimpleX address" (or "Your SimpleX address"), "Chat preferences", "Your chat profiles" and "Settings".
-- **Adding a profile:** picker → "Your chat profiles" → "Add profile" → `ui tap-value "Enter your name…"`, type the name, check the value, tap "Create profile". If the alert "Make profile private!" shows, tap "Ok". The new profile becomes the active one; close "Your chat profiles" by swiping it down.
-- **Copying:** a new 1-time link: "Compose" → "Create 1-time link" → the share button right of the link (`ui find Share`) → "Copy" in the share sheet. An address: "Share address" → "Copy"; a group link: "Share link" → "Copy"; a pending connection: "Share 1-time link" → "Copy". If "Copy" is not in the tree, `ui tap-xy` at its place in the screenshot.
-- **Pasting a link by "New chat":** "Compose" → "Scan / Paste link" → "Tap to paste link" (if iOS asks to allow pasting, tap "Allow Paste"). The app checks the link and shows an alert (the "open chat" alert) naming the contact, group or business, with a button such as "Open new chat", "Open chat" or "Open group".
-- **Pasting into a search field** (the chat list's or the one in "New chat", "Search or paste SimpleX link"): tap the field once to focus it and once more for its menu, then tap "Paste" (`ui tap-xy` on the menu's "Paste"). To clear the chat list's search field, tap it and then "Cancel" next to it.
-- **The prepared chat** (after "Open new chat" or "Open group"): before connecting, the bottom shows "Connect" (a 1-time link), the field "Add message" with "Connect" (an address; for a business address "Connect" connects at once, without an alert), or "Join group" (a group link).
-- **Sending a message:** tap the message field, `ui type "<text>"`, tap the send button at the right end of the field (its label contains "arrow").
-- **Chat info:** tap the chat's name at the top of the chat (`ui find <name>`, the element with the smallest y).
-
-## The 1-time link (citester)
+- **Profiles:** all profiles are in this one app, which shows one profile at a time. A profile that is not shown still receives messages and profile updates; its chats show them once you switch to it. Messages go through the preset servers on the internet: after an action in one profile, wait up to 60 s for its effect in another (`ui wait "<text>" 60`).
+- **Sending a message:** in the chat, tap the message field at the bottom (find it in `ui tree`: the text view next to the send button; its placeholder is "Message"), `ui type "<text>"`, then tap the send button at the right end of the field. Check the message then shows in the chat. Go back to the chat list with the navigation back button.
+- **Chat info:** tap the chat's name at the top of the chat (`ui find <name>`, the element with the smallest y; tap it with `ui tap-xy`). Go back with the navigation back buttons; close a sheet by swiping it down.
+- **Message menu:** `ui long-press <x> <y>` on the message's text (centre from `ui find`) opens its menu ("Reply", "Info", …). "Info" opens the message's details; close them by swiping down.
+- **Settings:** open the picker with your profile image (`Image "Account"`), then "Settings". Close Settings by swiping it down.
+- **Developer:** Settings → scroll to the bottom → the app version row ("v…") → "Developer". It holds "Chat console", the switch "Show developer options" and, while that is on, "Storage".
+- **Chat console:** Developer → "Chat console". Put each command on the clipboard with `ui clipboard "<command>"` (the keyboard would capitalize and autocorrect a typed one), tap the input field at the bottom twice and tap "Paste" in its menu (`ui find Paste`, then `ui tap-xy`), check the field's value in the tree, then tap the send button at its right end. The console lists the command as "> <command>" and the answer as "< <type>"; tap an answer to read its details.
+- **Your profile:** picker → tap your own name in the row at the top of the picker: the profile opens with the field "Enter your name…", "Bio", "Add description" (or "Edit description"), "Reset" and "Save (and notify contacts)".
+- **Switching profile:** open the picker, then tap the other profile's name in the row at the top of the picker (`ui find <name>`, then `ui tap-xy`; the picker's elements are in the tree even while it is closed, so open it first).
+- **Adding a profile:** picker → "Your chat profiles" → "Add profile" → tap the field "Enter your name…" (`ui tap-value "Enter your name…"`), type the name, check the field's value in the tree (the keyboard may capitalize it: then fix it), tap "Create profile". The new profile becomes the active one; close "Your chat profiles" by swiping it down.
+- **Copying a 1-time link:** "Compose" → "Create 1-time link". Under "Share this 1-time invite link" the link is a text element (its label in the tree is the whole link, starting with "https://"); tap the share button right of it, then "Copy" in the share sheet (`ui find Copy`; if it is not in the tree, `ui tap-xy` at its position in the screenshot). If the share sheet does not work, read the link from the tree and run `ui clipboard "<link>"`. Close the sheet and go back to the chat list.
+- **Opening a copied link** (as another profile): "Compose" → "Scan / Paste link" → "Tap to paste link". If iOS asks to allow pasting, tap "Allow Paste". An alert names the other profile with "Open new chat": tap it; the chat opens with a "Connect" button at the bottom: tap it. For an address, the chat shows "Connect" at the right of the message field: tap it, then "Send request without message" in the alert "Send contact request?".
+- **Pickers** (for example "Chat layout", "Color mode"): tap the row; a menu lists the values: tap one.
 
 | ID | Do | Expect |
 |----|----|--------|
-| S2 | "Compose" → "Create group" → `ui tap-value "Enter group name…"`, type `ci link group`, tap the "Create group" button, then "Skip" if it shows; go back to the chat list | The chat list shows "ci link group" and the search field (citester has a conversation, so pending connections are listed too) |
-| R62.1 | Copy a new 1-time link; close "New chat"; paste it by "New chat" | A sheet titled "Connect to yourself?" and "This is your own one-time link!" (two lines of one title) offers "Use current profile", "Use new incognito profile" and "Cancel". Tap "Cancel" |
-| R56.2 | Close "New chat"; in the chat list tap the pending connection "invited to connect" | It shows "You invited a contact", the QR code and "Share 1-time link": the link can be opened again |
-| R56.1a | In that view tap "Set contact name…", type `bob link`, `ui key return`; go back | The pending connection is listed as "bob link" |
-
-## Joining by the 1-time link
-
-| ID | Do | Expect |
-|----|----|--------|
-| S3 | Add the profile `cibob` (the copied link stays on the clipboard) | cibob is active, without conversations |
-| R3.1 | As cibob paste the link by "New chat"; tap "Open new chat"; look at the chat before tapping "Connect" | The alert names citester. The chat already shows the encryption item ("…protected by end-to-end encryption…" or "…quantum resistant e2e encryption…") and items naming chat features (for example "Disappearing messages" or "Voice messages") |
-| R3.2 | Tap "Connect", wait for the message field, send `hi from bob`; switch to citester, open the new contact, send `hi bob`; switch to cibob | Both messages arrive |
-| R56.1b | Look at citester's chat list after R3.2 | The new contact is listed as "bob link" (the pending connection's alias), not as cibob |
-
-## The address (citester)
-
-| ID | Do | Expect |
-|----|----|--------|
-| R62.2 | Switch to citester; picker → "Create SimpleX address" → the "Create SimpleX address" button (tap "Share" if "Share address with SimpleX contacts?" asks); copy the address; close the sheet; paste it by "New chat" | A sheet titled "Connect to yourself?" and "This is your own SimpleX address!" (two lines of one title) with "Cancel": tap it |
-| S4 | Add the profile `cicarol` | cicarol is active |
-| R3.5 | As cicarol paste the address by "New chat" → "Open new chat"; tap "Add message", type `hi via address`, tap the send button; tap "Send request" in "Send contact request?". Switch to citester, tap cicarol's row, tap "Accept" (and "Accept" if an alert asks); send `welcome cicarol`; switch to cicarol | The alert names citester; citester's chat list shows cicarol as a request (a contact on the owner's side); after "Accept" the chat shows `hi via address`, and cicarol receives `welcome cicarol` |
-| S5 | Add the profile `cidan` | cidan is active |
-| R3.6 | As cidan paste the address → "Open new chat" → "Connect" → "Send request without message"; switch to citester, tap cidan's row, "Accept", send `welcome cidan`; switch to cidan, reply `thanks` | Both messages arrive |
-| R3.8 | Switch to cibob; send a request by the address the same way; switch to citester; tap the request (cibob's name, maybe with a number); "Reject" → "Reject" in the alert | The request shows as a contact in citester's list; the alert is "Reject contact request"; after it the request is gone. ("accept (another request); send messages" is covered by R3.5 and R3.6) |
-
-## A known address
-
-| ID | Do | Expect |
-|----|----|--------|
-| R62.3 | Switch to cicarol; paste the address by "New chat" | The alert names citester with "Open chat" (not "Open new chat"); "Open chat" opens the existing chat |
-| R62.4 | Go back to the chat list; paste the address into the chat list's search field; tap the listed chat; go back and clear the search | The list shows only citester, and the chat opens |
-| R62.5 | "Compose"; paste the address into the search field of "New chat"; tap the listed contact | Only citester is listed; its chat opens |
-| R62.6 | Switch to cidan; open citester → chat info → "Delete contact" → "Only delete conversation" (tap "Ok" in "Conversation deleted!"); "Compose"; paste the address into the search field of "New chat"; tap the listed contact | citester is listed and its chat opens |
-
-## The group link
-
-| ID | Do | Expect |
-|----|----|--------|
-| S6 | Switch to citester; open "ci link group" → chat info → "Create group link" → "Create link" → "Share link" → "Copy"; go back to the chat list | The link is copied |
-| R62.7 | As citester paste the group link by "New chat" | A sheet titled "Join your group?" and "This is your link for group ci link group!" (two lines of one title) offers "Open group", "Use current profile", "Use new incognito profile" and "Cancel"; "Open group" opens the group |
-| R3.12 | Switch to cicarol; paste the group link by "New chat" → "Open group"; tap "Join group"; wait for the message field; send `hi group`; switch to citester, open the group, send `welcome to the group`; switch to cicarol | The alert names "ci link group"; the chat shows "Tap Join group" before joining; both messages arrive |
-| R62.8 | As cicarol paste the group link by "New chat" | The alert names "ci link group", says "You are a member" and has "Open group"; it opens the group chat |
-| R62.9 | Go back to the chat list; paste the group link into the chat list's search field; tap the listed chat; go back and clear the search | The list shows only "ci link group", and it opens |
-| R62.10 | "Compose"; paste the group link into the search field of "New chat" | The alert names "ci link group", says "You are a member" and has "Open group" (groups are not listed in "New chat", so the link shows the alert); "Open group" opens the group chat |
-
-## The business address (cidan)
-
-| ID | Do | Expect |
-|----|----|--------|
-| S7 | Switch to cidan; picker → "Create SimpleX address" → the "Create SimpleX address" button (tap "Share" if asked); turn "Business address" on; "Share address" → "Copy"; close the sheet | "Business address" is on; the address is copied |
-| R3.10 | Switch to cibob; paste the business address by "New chat" → "Open new chat"; tap "Connect"; wait for the message field; send `hi business`; switch to cidan, open the chat with cibob, send `hello customer`; switch to cibob | The alert names cidan; both messages arrive (cidan's chat list shows a chat with cibob) |
-| R62.11 | As cibob paste the business address by "New chat" | The alert names cidan with "Open chat"; it opens the business chat |
-| R62.12 | Go back to the chat list; paste the business address into the chat list's search field; tap the listed chat | The list shows only the business chat with cidan, and it opens |
-
-## Incognito (last: it changes an app-wide setting)
-
-| ID | Do | Expect |
-|----|----|--------|
-| R56.3 | Switch to citester; "Compose" → "Create 1-time link"; tap the profile row under "Share profile"; in "Select chat profile" tap the info icon of the "Incognito" row; close that sheet; tap "Incognito"; back in the link view check it; then open "Select chat profile" again and tap citester (this turns the app-wide Incognito setting off again); close "New chat" | "Select chat profile" lists the profiles and "Incognito"; the info sheet "Incognito mode" says "Incognito mode protects your privacy by using a new random profile for each contact."; after choosing "Incognito" the link view shows "Incognito" and "A new random profile will be shared."; after choosing citester the row shows citester again |
+| S1 | As citester, copy a 1-time link. Add the profile `cibob`; as cibob, open the copied link; wait up to 120 s until cibob's chat "citester" shows the message field. Send `bob one`, then `bob two` | Both messages show as sent in cibob's chat "citester" |
+| S2 | Switch to citester → the chat "cibob"; send `tester one`, then `tester two` | "cibob" is listed within 60 s; its chat shows "bob one", "bob two", "tester one", "tester two" |
+| R19.7 | Developer → "Chat console"; run `/v` | The console shows "> /v" and an answer line starting with "<" (the version info); tapping it shows the core version |
+| R19.18 | Developer → turn "Show developer options" on; open "cibob" → chat info; then turn "Show developer options" off and open chat info again; turn it on again | With the option on, the footer starts with "Show:" and chat info has the section "For console" with "Local name" and "Database ID"; with it off, the footer starts with "Hide:" and the section is gone |
+| R19.19 | In "cibob", long-press "bob one" → "Info"; close; turn "Show developer options" off and open the same "Info" again; turn the option on again | With the option on, the info shows "Database ID" and "Record updated at"; with it off, both are gone |
+| R13.0 | Settings → "Appearance" → set "Chat layout" to "Terminal"; open "cibob" | Messages are drawn without bubbles; "cibob" shows once above "bob one" and "bob two", "citester" once above "tester one" and "tester two"; each message's time is at the end of its line (judge from a screenshot) |
+| R15.0 | In "cibob" (terminal layout): long-press "bob two" → "Reply", type `quoted reply`, send; send `*bold* _italic_ ~strike~ #secret#` (put it on the clipboard and paste it, so the keyboard does not change it); paperclip → "Choose from library" → the test card → "Add" → send | The reply shows the quoted "bob two" above "quoted reply"; the markdown message shows bold, italic and struck-through words without the markup characters and "secret" hidden; the test card shows whole, not stretched. Voice messages and files are out of scope here (no microphone, no document to pick) |
+| R14.0 | Settings → "Appearance": set "Apply to" to "citester"; set "Chat layout" to "Classic"; open "cibob"; then chat info → "Chat theme" → set "Chat layout" to "Terminal"; go back to the chat. Then switch back: in "Chat theme" set "Chat layout" to "Classic (default)"; in Appearance set "Apply to" to "citester" again (it shows "All profiles" each time Appearance opens) and "Chat layout" to "Terminal (default)"; set "Apply to" to "All profiles" and "Chat layout" to "Classic" | With "Apply to" citester, "Chat layout" offers "Terminal (default)" and "Classic"; after "Classic", "cibob" shows bubbles (the profile overrides the app); "Chat theme" first shows "Classic (default)"; after "Terminal" there, "cibob" shows the terminal layout (the chat overrides the profile); at the end "cibob" shows bubbles |
+| R16.0 | Add the profile `cicarol`; in its chat console run `/ad`, then `/auto_accept on layout=terminal` (the address settings of the row's `/_address_settings` command, for the active profile), then `/sa`. Switch to citester and back to cicarol (this reloads the address); picker → "Your SimpleX address" → "Share address" → "Copy" in the share sheet. Switch to citester and open the copied link | Each command gets an answer that is not an error and `/sa` lists the address; citester's chat "cicarol" opens in terminal layout (no bubbles, sender names above messages) and within 60 s becomes a contact (the message field replaces "Connect") without cicarol accepting by hand |
+| R19.1 | Switch to cibob; in its chat console run `/_profile 2 {"displayName":"cibob","fullName":"Bob Fuller"}` (cibob is the second profile created, so its ID is 2; use `ui clipboard`). Switch to citester → "cibob" → chat info. Switch to cibob → Your profile: append `x` to the name in "Enter your name…" (it becomes "cibobx"), tap "Save (and notify contacts)". Switch to citester. Switch to cibob; run `/_profile 2 {"displayName":"cibob","fullName":"Robert Bob"}`. Switch to citester → "cibob" → chat info | Within 60 s citester's chat info of cibob shows "Bob Fuller" (full name); after the rename the chat list shows "cibobx" (display name); after the last command it shows "cibob" and chat info shows "Robert Bob" (both) |
+| R19.2 | Switch to cibob → Your profile → "Add description" → type `This is a long description of the profile cibob written to check that contacts receive descriptions longer than one hundred characters in full.` in "Enter description (optional)" (check the value) → back → "Save (and notify contacts)". Switch to citester → "cibob" → chat info → tap "Read more" | Within 60 s the info shows the start of the description ending with "…" and "Read more"; "Read more" opens "Description" with the whole text |
+| R19.9 | Switch to cibob → Your profile → tap the camera button on the profile image → "Profile image" dialog → "Choose from library" → the test card → confirm if the picker asks → "Save (and notify contacts)". Switch to citester | Within 60 s the row "cibob" in the chat list shows the test card as its picture (screenshot) |
+| R19.11 | Switch to cibob → Your profile → tap the small × at the top right of the profile image → "Save (and notify contacts)". Switch to citester | Within 60 s the row "cibob" shows the default icon again (screenshot) |
+| R19.8 | Settings → "Audio & video calls" → "WebRTC ICE servers" | "Your ICE servers" opens with the switch "Configure ICE servers" off and the text "Using SimpleX Chat servers." |
+| R19.12 | Settings → "Appearance" → "App icon": tap the right icon; close the system alert that follows (`ui point` reads it, it is not in the tree); then tap the left icon and close the alert | A system alert confirms each icon change; take a shot of each. The home screen icon itself is not checked |
+| R19.13 | "Appearance" → "Customize theme" → tap the color row "Accent"; in iOS's color picker choose a red swatch (Grid), close the picker | The accent color of the app (buttons, links) turns red; "Reset colors" appears |
+| R19.24 | In "Customize theme": tap "Export theme" → in the share sheet choose "Save to Files" and save `simplex.theme`; tap "Reset colors"; tap "Import theme" → in the file picker choose `simplex.theme`; then tap "Reset colors" again | After "Reset colors" the accent is the default blue; after the import, no error alert and the accent is red again. If the share sheet or the file picker cannot save or find the file here, mark the case skipped with what was missing |
+| R19.14 | "Appearance": set "Color mode" to "Dark"; set "Dark mode colors" to the last value offered; set "Color mode" to "Light" | The app turns dark, then the dark colors change, then the app is light again (screenshots) |
+| R19.16 | "Appearance" → "Toolbar opacity": choose "Ultra thin", look at the chat list toolbar; then "Thick"; then "Regular" | Each value shows as the picker's value; the toolbar's background changes between them (screenshots) |
+| R19.17 | "Appearance" → "Message shape": drag the "Corner" slider's thumb to the left end (`ui swipe`); turn "Tail" off; open "cibob"; then drag "Corner" to the right and turn "Tail" on | The bubbles in "cibob" have square corners and no tails; afterwards they are rounded with tails |
+| R19.15 | "Appearance": turn "Reachable chat toolbar" off; look at the chat list; turn it on again | With it off, the toolbar ("Compose") and the search field are at the top (y under 437); with it on, at the bottom |
+| R19.25 | "Appearance": in the theme section, tap a wallpaper picture in the row of small chat previews (not the first and not the last); open "cicarol"; then "cibob" → chat info → "Chat theme" → tap a different wallpaper; go back to the chat | "cicarol" shows the chosen wallpaper; "cibob" shows the other one while "cicarol" keeps the global one (screenshots) |
+| R19.20 | Settings → "Network & servers"; scroll to "Network connection" | It shows one of "WiFi", "Wired ethernet", "Cellular", "Other" (the runner's network type, not "No network connection") with a status dot. Cellular cannot be reproduced |
+| R19.21 | "Network & servers" → "Advanced network settings": change "TCP connection timeout" to another value → "Save and reconnect" → "Ok" in "Update settings?"; go back and reopen; change it again → navigation back → in "Update network settings?" tap "Exit without saving"; reopen; tap "Reset to defaults" → "Save and reconnect" → "Ok". Then send `after reconnect` to cibob and switch to cibob | The saved value shows after reopening; the unsaved change is gone after "Exit without saving"; after the reset the default value shows; cibob receives "after reconnect" within 60 s (the client reconnected) |
+| R19.22 | "Advanced network settings": note "TCP connection timeout" and "Protocol timeout"; tap "Set timeouts for proxy/VPN"; then "Save and reconnect" → "Ok"; then "Reset to defaults" → "Save and reconnect" → "Ok" | "Set timeouts for proxy/VPN" changes both timeouts to larger values and becomes disabled; after the reset both show their default values again |
+| R19.23 | Settings → "Your privacy": turn "Protect app screen" on; go back and reopen "Your privacy"; turn it off | The switch stays on after reopening, then off. Hiding the app in the app switcher is out of reach here |
+| R19.27 | On the chat list, swipe down across the list (with the reachable toolbar the list is drawn bottom-up: if no alert shows, swipe up from just above the search field instead) | The alert "Reconnect servers?" with "Reconnect all connected servers to force message delivery. It uses additional traffic." shows; tap "Ok"; no error alert follows |
+| R19.29 | Settings → "Your privacy" → "More privacy": turn "Message draft" off. Open "cibob", type `draft off` (do not send), go back, open "cibob" again | The message field is empty |
+| R19.30 | Turn "Message draft" on. In "cibob" type `draft kept`, go back; then turn "Message draft" off and look at the chat list; open "cibob" | With it on, the row "cibob" shows "draft kept"; after turning it off, the row no longer shows it and the chat's field is empty |
+| R19.31 | Turn "Message draft" on and "Show last messages" off. Look at the chat list; in "cibob" type `draft shown`, go back | With "Show last messages" off the rows show no message text, yet the row "cibob" shows "draft shown" |
+| R19.32 | Settings → "Your privacy" → "Blur media": "Strong"; open "cibob"; then "Blur media": "Off" | With "Strong" the test card of R15.0 is blurred; with "Off" it is sharp |
+| R19.28 | "Show last messages" is off since R19.31: look at the chat list; run `ui relaunch`; look again, and at Settings → "Your privacy" → "More privacy" | Before and after the restart the rows show no message text; "Show last messages" is still off |
+| R20.0 | Developer → "Storage"; then Settings → "Chat data" → "Database passphrase & export" → turn "Chat is running" off → "Stop" in "Stop chat?"; Developer → "Storage" again; then turn the chat back on in "Database passphrase & export" | While the chat runs, "Delete temp data" is disabled and "Stop chat in Settings → Chat data → Database passphrase & export to delete temp data." shows; with the chat stopped, "Delete temp data" is enabled (do not tap it); the chat runs again at the end. If no "Delete temp data" row is listed (no temporary folder), say so |
