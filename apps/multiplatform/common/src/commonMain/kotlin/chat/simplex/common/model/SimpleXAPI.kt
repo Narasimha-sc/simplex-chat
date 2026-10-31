@@ -3363,6 +3363,9 @@ object ChatController {
             if (relaysModel.groupId.value == r.groupInfo.groupId) {
               relaysModel.set(r.groupInfo.groupId, r.groupRelays)
             }
+            if (chatModel.creatingChannelId.value == r.groupInfo.id) {
+              chatModel.creatingChannelRelays.value = r.groupRelays
+            }
           }
         }
       is CR.GroupRelayUpdated ->
@@ -3370,6 +3373,9 @@ object ChatController {
           withContext(Dispatchers.Main) {
             chatModel.chatsContext.upsertGroupMember(rhId, r.groupInfo, r.member)
             ChannelRelaysModel.updateRelay(r.groupInfo, r.groupRelay)
+            if (chatModel.creatingChannelId.value == r.groupInfo.id) {
+              chatModel.creatingChannelRelays.value = chatModel.creatingChannelRelays.value.filter { it.groupRelayId != r.groupRelay.groupRelayId } + r.groupRelay
+            }
           }
         }
       is CR.NewMemberContactReceivedInv ->
