@@ -3840,6 +3840,7 @@ object ChatController {
     chatModel.chatId.value = null
     ModalManager.center.closeModals()
     ModalManager.end.closeModals()
+    withContext(Dispatchers.Main) { chatModel.clearDroppedUpdates() }
     AlertManager.shared.hideAllAlerts()
     AlertManager.privacySensitive.hideAllAlerts()
     chatModel.currentRemoteHost.value = switchRemoteHost(rhId)
