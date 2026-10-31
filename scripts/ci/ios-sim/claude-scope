@@ -5,6 +5,6 @@
 backend: no
 model: claude-haiku-5-5
 layouts: reachable
-cases-reachable: S2, S3, A1, A2, A3, A4, A5, J1, J2, A6, B1, B2, B3, J3, J4, J5, B4, B5, B6, B7, I1-I4
-max-turns: 390
+cases-reachable: S2, S3, S4, S5, R44.24, R44.25, R44.31, R44.32, R44.27, R44.28, R44.29, R44.30, R44.35, R44.36, R44.37, R44.38, S6, R44.39, R44.40, R44.41, R44.43, R44.22, R44.23, R44.26, R44.33, R44.34, R44.42, R44.44
+max-turns: 900
 max-budget-usd: 5
