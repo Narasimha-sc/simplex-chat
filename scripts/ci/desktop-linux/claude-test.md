@@ -1,81 +1,84 @@
-# Test: channel message signing, channel moderators and sending images in the SimpleX Chat desktop app
+# Test: channels (creation, relays, roles, signing, verification) and preset chat list filters in the SimpleX Chat desktop app
 
 You are testing the SimpleX Chat desktop app, which runs on a virtual display on this machine. Drive it only with the `ui` helper, through Bash, one command per call: `ui <command> [args]`. Anything else is refused; don't look for ways around that, and if something blocks the test, report it. The commands are listed at the end.
 
-Your working directory is where your output goes. `ui shot <name>` saves `screens/NN-<name>.png` and prints the text read from it, one phrase per line after its centre `x,y` in screen pixels. Read the PNG to see the screen (1440×900, the app window at the top left). OCR can misread or split words and can't read icons; when the text and the picture disagree, trust the picture. "Above" means a smaller y.
+Your working directory is where your output goes. `ui shot <name>` saves `screens/NN-<name>.png` and prints the text read from it, one phrase per line after its centre `x,y` in screen pixels. Read the PNG to see the screen (1440×900, the app window at the top left). OCR can misread or split words and can't read icons or emojis; when the text and the picture disagree, trust the picture. "Above" means a smaller y.
 
 ## What is set up
 
 - The app is already running, on its first screen, with a new, empty database: never run `ui start` or `ui stop`. Begin with `ui shot start` to see it.
 - After onboarding, the chat list is in the left pane (x 1 to 389) and chats open in the right pane. An empty chat list shows only its toolbar, with the profile picture at about 27,730 and a pencil (New chat) at about 363,730: the search field "Search or paste SimpleX link" appears once there is a chat. The toolbar is at the bottom of the left pane.
-- The channel uses the app's preset chat relays, on the internet. Creating it and joining it wait for them: wait up to 120 s there (`ui wait "<text>" 120`).
-- The folder `images` in your working directory has two images for part I: `test-card.jpg`, a TV test card 1280×720 (colour bars, a large circle, "1080" at the top and "TVB" at the bottom), and `simplex-logo.png`, the dark blue and turquoise SimpleX logo on a transparent background. You can Read them to compare with what the app shows.
+- The channel uses the app's preset chat relays, on the internet. Creating it, joining it and adding relays wait for them: wait up to 120 s there (`ui wait "<text>" 120`).
+- The app has exactly three preset chat relays: "SimpleX Chat Relay 1", "SimpleX Chat Relay 2" and "SimpleX Chat Relay 3" (operator "SimpleX Chat"). A relay that was ever added to the channel can never be added to it again, even after it is removed. So R47.8 turns off relays 2 and 3 for new channels, the channel starts with relay 1 only, and S4 turns 2 and 3 back on for R47.14 and R47.15.
+- The folder `images` in your working directory has `test-card.jpg`, a TV test card 1280×720 (colour bars, a large circle, "1080" at the top and "TVB" at the bottom).
 
 ## How to do things in the app
 
 - **Send a message:** click the message field at the bottom of the right pane (its placeholder is "Broadcast" for the channel's owner, "Message" for others), `ui type "<text>"`, then `ui key Return`. Check the message then shows in the chat.
-- **Channel info:** click the channel name at the top of the right pane. Press Escape to close it and other panes (preferences, member info, a message's info) and get back to the chat.
-- **Message menu:** `ui right-click <x> <y>` on the message's text (centre from `ui find`) opens its menu ("Info", "Moderate", …).
+- **Channel info:** click the channel name at the top of the right pane. The subscriber count ("N subscribers") shows under that name. Press Escape to close the info and other panes (member info, a message's info, settings) one at a time, and get back to the chat.
+- **Message menu:** `ui right-click <x> <y>` on the message's text (centre from `ui find`) opens its menu: a row of reaction emojis at the top (the first is 👍), then "Reply", "Info", "Moderate", ….
 - **Signatures are read as text, never from the seal icons:** a message's "Info" shows "Signed" (your own message), "Signed & verified" (someone else's, checked) or "Signature missing".
-- **Switch profile:** click the profile picture (about 27,730); the menu lists your other profiles by name: click the one you want. The chat list then shows that profile's chats; click "ci signing" in it.
+- **Switch profile:** click the profile picture (about 27,730); the menu lists your other profiles by name: click the one you want. The chat list then shows that profile's chats.
 - **Add a profile:** profile picture → "Your chat profiles" → "Add profile". On "Create profile", click the field about 40 px below the text "Enter your name:", type the name, and click the "Create profile" button (the lower of the two "Create profile" texts; the upper one is the title). The new profile becomes the active one; press Escape until the chat list shows.
+- **Copy the channel link** (as citester): channel info → "Channel link" → "Share link". Check: the toast "Copied to clipboard". Press Escape until the chat shows.
 - **Join by the copied link** (from a profile without chats): the pencil (about 363,730) → "Paste link" → "Tap to paste link". An alert names the channel with "Open channel": click it. The channel opens with "Tap Join channel" and a "Join channel" bar at the bottom: click the bar, and wait up to 120 s until the bottom of the chat shows "you are subscriber".
+- **Member info in the channel:** channel info → "Subscribers" (as owner or moderator) or "Owners & contributors" (as subscriber) → click the member's name.
+- **Change a role** (as citester): member info → click the "Change role" row → click the role → "Change" in the alert "Change role?".
+- **Network & servers:** profile picture → "Settings" → "Network & servers". Under "Preset servers" click "SimpleX Chat"; its "Chat relays" section lists the three relays. Click a relay: its "Chat relay" pane has the switch "Use for new channels" at the right end of its row. Press Escape once to go back from the relay (the change is kept), and once more from "SimpleX Chat"; on "Network & servers" click "Save servers" before leaving it.
 
 ## The test
 
-The parts build on each other: run them in this order. cisub must join only after cimod has become a moderator (B2), so that cimod learns about cisub.
-
-**S. Setup.**
+The parts build on each other: run them in this order. cicarol must join only after cibob has become a moderator (R48.0), so that cibob learns about cicarol, and after signing is on (R50.0), for R51.0.
 
 1. (S1) Onboarding. Each screen waits for the one before it; wait for a text before clicking it. The first screen has "Create your profile": click it. On "Create profile", click the field "Enter profile name", type `citester`, and click "Create profile". The next screen offers a database passphrase: click "Use random passphrase", then "OK" in the alert that follows. Click "Continue", then "Accept" on the screen after it. Wait up to 60 s for the chat list: the right pane shows "Talk to someone".
-2. (S2) Click the pencil, then "Create public channel". Click the field about 40 px below the text "Channel name", type `ci signing`, and click the "Create public channel" button (the lower of the two texts with that name). Wait up to 120 s for "Share link": the channel opens and its "Channel link" pane shows over it. If "N/M relays active" stays below M for 120 s with N at least 1, click "Continue", and "Continue" in the alert. On "Channel link", click "Continue". Check: the chat "ci signing" is open.
-3. (S3) Send `before signing`. Check: it shows in the chat.
+2. (R47.8) Click the pencil, then "Create public channel". Click the field about 40 px below the text "Channel name", type `ci news`. Click "Configure relays". Check: "Network & servers" opens with "Preset servers" and "SimpleX Chat". Click "SimpleX Chat"; check: its "Chat relays" section lists "SimpleX Chat Relay 1", "SimpleX Chat Relay 2" and "SimpleX Chat Relay 3". Click "SimpleX Chat Relay 2", click the switch of "Use for new channels" (it turns off), press Escape; do the same for "SimpleX Chat Relay 3"; press Escape to "Network & servers" and click "Save servers". Check: relays 2 and 3 show the disabled mark (a grey minus sign left of the name, picture) when you open "SimpleX Chat" again. Press Escape until "Create public channel" shows. Check: the name `ci news` is kept.
+3. (R47.1) Click the "Create public channel" button (the lower of the two texts with that name). Take a shot at once. Check: the pane "Creating channel" shows "ci news" and "0/1 relays active" or "1/1 relays active". Wait up to 120 s for "Share link": the channel opens and its "Channel link" pane shows over it. If "N/M relays active" stays below M for 120 s with N at least 1, click "Continue", and "Continue" in the alert. On "Channel link", click "Continue". Copy the channel link. Add the profile `cibob`, and as cibob join by the copied link. Note the subscriber count under the channel name. Click the bottom area where the message field would be. Check: the bottom of the chat shows "you are subscriber" in place of a writable message field; a click shows the alert "You can't send messages!" or nothing, and typing does not start a message.
+4. (S2) Switch to citester, click "ci news" and send `before signing`. Check: it shows in the chat.
+5. (R47.7) As citester: open channel info and take a shot; open "Subscribers", shot, Escape; scroll down in the info (`ui scroll 1000 600 down`), open "Chat relays", shot, Escape until the chat shows. Switch to cibob → "ci news" → channel info, shot; open "Owners & contributors", shot, Escape; open "Chat relays", shot. Check: the owner's info has "Channel link", "Subscribers", "Channel preferences", "Chat relays", "Delete channel" and no group wording ("Group link", "Group preferences", "members"); "Subscribers" lists "cibob" and the owner's own row with "you", under a header "N subscribers"; the owner's "Chat relays" lists "SimpleX Chat Relay 1". The subscriber's info has "Owners & contributors", "Channel preferences", "Chat relays" and "Leave channel", and no "Subscribers"; "Owners & contributors" has the header "1 owner" and lists "citester" with the role "owner"; the subscriber's "Chat relays" lists one relay.
+6. (R47.18) As cibob: channel info → "Owners & contributors" → "citester" → "Verify security code". Check: "citester is not verified" and a code. Click "Mark verified". Check: "citester is verified" and "Clear verification"; after Escape, the member info offers "View security code", and the "Owners & contributors" row of citester shows a shield (picture).
+7. (R47.19) Switch to citester → "ci news" → channel info → "Subscribers" → "cibob" → "Verify security code" → "Mark verified". Check: "cibob is not verified" becomes "cibob is verified"; the member info offers "View security code"; cibob's row in "Subscribers" shows a shield.
+8. (R48.0) As citester: "Subscribers" → "cibob" → "Change role" → "moderator" → "Change". Check: cibob's role shows moderator, under the section titled "Moderator". Escape until the chat shows; check: "you changed role of cibob to moderator". Switch to cibob → "ci news" → channel info. Check: the chat shows "changed your role to moderator"; the info now has "Subscribers" (not "Owners & contributors"), and it lists the subscribers.
+9. (R50.0) Switch to citester → "ci news" → channel info → "Channel preferences". Click the switch of "Sign messages", at the right end of its row. Check: the alert "Sign messages?" says "Messages sent before will show "signature missing" to subscribers who join later." and has "Enable" and "Cancel". Click "Enable". Check: the footer says "Require signing messages.". Click "Save and notify channel subscribers", then Escape until the chat shows. Check: "Sign messages: on". Send `after signing`, right-click it → "Info". Check: "Signed". Switch to cibob → "ci news"; take a shot of "after signing" (check in the picture: a seal mark next to its time), right-click it → "Info". Check: "Signed & verified".
+10. (R47.5) Switch to citester → "ci news": note the subscriber count. Copy the channel link again. Add the profile `cicarol`, and as cicarol join by the copied link. Check: "you are subscriber". Switch to citester → "ci news". Check: the subscriber count is 1 higher than before.
+11. (R51.0) Switch to cicarol → "ci news": click the message "before signing". Check: the alert "Signature missing" says "The message was sent before the channel started signing messages, or it is fake.". Close it, right-click "before signing" → "Info". Check: "Signature missing". Right-click "after signing" → "Info". Check: "Signed & verified".
+12. (R47.6) Switch to cibob → click "ci news". Check: the count under the channel name is 1 higher than the count cibob saw in R47.1.
+13. (R47.2) Switch to citester → "ci news": send `broadcast one`. Switch to cibob → "ci news", then to cicarol → "ci news". Check: "broadcast one" is in both subscribers' chats.
+14. (R47.3) As citester in "ci news": click the attachment button, the paperclip icon at the left end of the message field, then "Image". A file dialog opens: click its "File Name" field, type the absolute path of `images/test-card.jpg` in your working directory, and press Return; send it with Return or the send button. Then paperclip → "File", type the absolute path of `prompt.md` in your working directory, Return, and send. Switch to cibob → "ci news". Check: the owner's chat shows the test card and the file "prompt.md"; cibob's chat shows the received test card and a file "prompt.md".
+15. (R47.4) Switch to cicarol → "ci news": right-click "broadcast one" and click the first emoji (👍) at the top of the menu. Check: "👍 1" (picture) under "broadcast one". Switch to citester → "ci news". Check: the same reaction under the message.
+16. (R47.17) As citester: "Subscribers" → "cicarol" → "Change role" → "contributor" → "Change". Check: cicarol's role shows contributor, in the section titled "Contributor". Switch to cicarol → "ci news": send `contributor post`. Check: it shows as sent. Switch to cibob → "ci news". Check: "contributor post" is received. Switch to citester → "Subscribers" → "cicarol" → "Change role" → "subscriber" → "Change". Switch to cicarol → "ci news". Check: the bottom shows "you are subscriber" again in place of the message field.
+17. (R49.0) Switch to cibob → "ci news": right-click "contributor post" → "Moderate" → "Delete" in the alert "Delete member message?". Check: the message shows "moderated by cibob". Switch to citester → "ci news", then to cicarol → "ci news". Check: both show "moderated by cibob" in place of "contributor post".
+18. (S4) As citester: Network & servers → "SimpleX Chat" → turn "Use for new channels" on for "SimpleX Chat Relay 2" and "SimpleX Chat Relay 3" → Escape → "Save servers". Escape until the chat list shows. Check: relays 2 and 3 no longer show the disabled mark.
+19. (R47.14) As citester → "ci news" → channel info → "Chat relays" → "Add relay". Check: "Add relays" offers "SimpleX Chat Relay 2" and "SimpleX Chat Relay 3", not relay 1. Click "SimpleX Chat Relay 2", then the "Add relays" button (the lower text with that name). Take a shot at once. Escape until the chat shows; shot of the bar above the message field. Wait up to 120 s. Switch to cibob → "ci news": shot at once, then wait up to 120 s and shot again. Check: "Chat relays" lists relay 2 with a status that moves to active; while it connects the owner's chat shows a bar such as "1/2 relays active"; cibob's chat shows a bar such as "1/2 relays connected" while connecting, which then disappears or shows "2/2 relays connected".
+20. (R47.13) As citester → channel info → "Chat relays" → click "SimpleX Chat Relay 1" → "Remove relay". Check: the alert "Remove relay?" says "Relay will be removed from channel - this cannot be undone!". Click "Remove". Escape until the chat shows; send `after removing relay 1`. Switch to cibob → "ci news", then cicarol → "ci news", waiting up to 120 s for the message. Check: both receive "after removing relay 1"; the owner's bar may show "1/2 relays active, 1 removed".
+21. (R47.15) As citester → "Chat relays" → "SimpleX Chat Relay 2" → "Remove relay". Check: the alert says "This is the last active relay. Removing it will prevent message delivery to subscribers.". Click "Remove"; Escape until the chat shows; shot. Check: the bar says "All relays removed" and the message field shows "can't broadcast". Switch to cibob → "ci news": shot, click the relay bar. Check: "All relays removed" and, expanded, "Waiting for channel owner to add relays.". Switch to citester → "Chat relays" → "Add relay" → "SimpleX Chat Relay 3" → "Add relays"; wait up to 120 s until it is active; send `after adding relay 3`. Switch to cibob → "ci news": shot at once, then wait up to 120 s. Check: the owner can send again; cibob's chat shows connection progress ("x/y relays connected") on opening, then "after adding relay 3".
+22. (S5) As citester: the pencil → "Create 1-time link". Click the link text about 30 px below "Share this 1-time invite link". Check: the toast "Copied to clipboard". Escape until the chat list shows. Switch to cibob: the pencil → "Paste link" → "Tap to paste link"; in the alert naming citester click "Open new chat", then click the "Connect" bar at the bottom of the chat; wait up to 60 s. Switch to citester: the pencil → "Create group"; click the field about 40 px below "Enter group name:", type `ci tags group`, click "Create group", and "Skip inviting members" if it shows. Escape until the chat list shows. Check: the list has "cibob", "ci tags group", "ci news" and "Private notes".
+23. (R52.1) As citester in the chat list: the row above the search field has "Add list"; left of it is a filter icon without text. Click that icon. Check: its menu offers "Contacts", "Groups", "Channels" and "Notes". Choose "Contacts", shot; open the menu again and choose "Groups", shot; then "Channels", shot; then "Notes", shot; then "All". Check: "Contacts" shows only cibob; "Groups" only "ci tags group"; "Channels" only "ci news"; "Notes" only "Private notes"; "All" shows all four again.
 
-**A. "Sign messages" (as citester).**
-
-1. (A1) Channel info → "Channel preferences". Check: the first row is "Sign messages", and its footer says "Do not require signing messages." (the switch is off).
-2. (A2) Click the switch of "Sign messages", at the right end of its row. Check: the alert "Sign messages?" says "Messages sent before will show "signature missing" to subscribers who join later." and has "Enable" and "Cancel". Click "Cancel". Check: the footer says "Do not require signing messages." again.
-3. (A3) Click the switch again, then "Enable". Check: the footer says "Require signing messages.". Click "Save and notify channel subscribers", then press Escape until the chat shows. Check: the chat shows "Sign messages: on".
-4. (A4) Send `after signing`, right-click it → "Info". Check: the info says "Signed".
-5. (A5) Channel info → "Channel preferences". Check: the footer of "Chat with admins" says "Prohibit chats with admins." (saving in A3 did not turn it on). Press Escape until the chat shows.
-
-**J. A subscriber joins.**
-
-1. (J1) Channel info → "Channel link" → "Share link". Check: the toast "Copied to clipboard". Press Escape until the chat list shows.
-2. (J2) Add the profile `cimod`, and as cimod join by the copied link. Check: "you are subscriber".
-3. (A6) As cimod in "ci signing": click the message "before signing". Check: the alert "Signature missing" says "The message was sent before the channel started signing messages, or it is fake." Close it, right-click "before signing" → "Info". Check: "Signature missing". Then right-click "after signing" → "Info". Check: "Signed & verified".
-
-**B. A moderator.**
-
-1. (B1) Switch to citester → "ci signing" → channel info → "Subscribers" → "cimod". Click the "Change role" row. Check: the list offers exactly "subscriber", "contributor" and "moderator" (no admin, no owner).
-2. (B2) Click "moderator", then "Change" in the alert "Change role?". Check: cimod's role shows moderator, and the section above it is titled "Moderator". Press Escape until the chat shows. Check: the chat shows "you changed role of cimod to moderator".
-3. (B3) Switch to cimod → "ci signing". Check: the chat shows "changed your role to moderator". Send `moderator post`. Check: it shows in the chat.
-4. (J3) Add the profile `cisub`, and as cisub join by the same link (it is still on the clipboard; if not, copy it again as citester as in J1). Check: "you are subscriber".
-5. (J4) Switch to citester → "ci signing" → channel info → "Subscribers" → "cisub" → "Change role" → "contributor" → "Change". Check: cisub's role shows contributor, in the section titled "Contributor".
-6. (J5) Switch to cisub → "ci signing". Send `contributor post`. Check: it shows in the chat.
-7. (B4) Switch to cimod → "ci signing" → channel info. Check: it shows "Subscribers"; click it: the list includes "cisub".
-8. (B5) Click "cisub". Check: its info offers "Block for all" (don't click it yet). Press Escape until the chat shows.
-9. (B6) Right-click "contributor post" → "Moderate" → "Delete" in the alert "Delete member message?". Check: the message shows "moderated by cimod" in its place.
-10. (B7) Channel info → "Subscribers" → "cisub" → "Block for all" → "Block for all" in the alert "Block subscriber for all?". Check: cisub's info now offers "Unblock for all". Press Escape until the chat shows. Check: the chat shows "you blocked cisub".
-
-**I. Sending images (as citester).**
-
-1. (I1) Switch to citester, and press Escape until the chat list shows. Click the pencil (about 363,730), then "Create group". Click the name field, about 40 px below the text "Enter group name", type `image notes`, and click "Create group". If "Skip inviting members" shows, click it. Check: the group "image notes" is open in the right pane.
-2. (I2) Click the attachment button, the paperclip icon at the left end of the message field at the bottom of the right pane, then "Image". A file dialog opens: click its "File Name" field, type the absolute path of `images/test-card.jpg` in your working directory, and press Return. Back in the app, the compose area shows the image above the message field before it is sent. Take a shot. Check: the preview shows the whole test card, upright, not stretched.
-3. (I3) Press Return or click the send button at the right end of the message field. Check: the chat shows the sent test card. Click the image: it opens larger, and "1080" and "TVB" are sharp and readable. Take a shot, then close the image with Escape.
-4. (I4) Repeat I2 and I3 with `images/simplex-logo.png`. Check: the preview and the sent image show the whole logo, and the area around its letters shows the chat's background, not black or grey.
-
-You have at most 330 turns, and the whole test fits in about 170 if you chain steps whose outcome you can predict with `ui do` and look at the screen after each chain. For example:
+You have at most 600 turns, and the whole test fits in about 300 if you chain steps whose outcome you can predict with `ui do` and look at the screen after each chain. For example:
 
 - `ui do click-text "Create your profile" -- wait "Enter profile name" -- click-text "Enter profile name" -- type citester -- shot profile`
 - `ui do click 363 730 -- click-text "Create public channel" 10 -- wait "Channel name" -- shot new-channel`
-- `ui do click-text "Broadcast" -- type "after signing" -- key Return -- wait "after signing" -- shot after-signing`
+- `ui do click-text "Broadcast" -- type "broadcast one" -- key Return -- wait "broadcast one" -- shot broadcast`
 - `ui do click 27 730 -- click-text "Your chat profiles" 10 -- click-text "Add profile" 10 -- wait "Enter your name" -- shot add-profile`
 
-`ui do` stops at the first command that fails, so a failed chain tells you where it stopped. Take a shot at each check, named after its step (`ui shot A2`).
+`ui do` stops at the first command that fails, so a failed chain tells you where it stopped. Take a shot at each check, named after its case (`ui shot R47-7-owner`).
+
+## Anything unusual
+
+You are looking for regressions, not only running checks. Besides each case's checks, watch for anything a user would consider wrong, on every screen you pass through:
+
+- a crash, the app closing or restarting, a frozen screen;
+- an error alert or dialog of any kind ("View crashed", "Error", "Unexpected error", "Connection error", an error code or exception text);
+- an action that takes over 30 s, or a spinner that never ends;
+- text cut off, overlapping, garbled, untranslated or showing a raw key (such as `chat_item_…`), wrong plurals, empty labels;
+- a control that does nothing, a duplicated or missing item, an item in the wrong place or order;
+- a state that differs after a restart or after switching profile;
+- anything that differs from how the row or the step describes it.
+
+Record each in `report.md` under a heading `## Unusual`, with the case it happened in and the screenshot names, even when every check passes. A case passes only when its checks pass and nothing unusual happened in it; otherwise mark it FAIL and say why. Never stop at a failure: go on with the next case.
 
 ## Report
 
-Write `report.md` in your working directory as you go, so a session that is cut short still leaves its results: one row per step (S1 to S3, A1 to A5, J1, J2, A6, B1 to B3, J3 to J5, B4 to B7, I1 to I4), each check you ran as PASS or FAIL with its evidence (the text OCR read, screenshot names), and anything else unexpected. End your final message with one line: `CLAUDE-TEST: PASS` if every check you ran passed, otherwise `CLAUDE-TEST: FAIL` followed by the steps that failed.
+Write `report.md` in your working directory as you go, so a session that is cut short still leaves its results: one row per case ID (S1, R47.8, R47.1, S2, R47.7, R47.18, R47.19, R48.0, R50.0, R47.5, R51.0, R47.6, R47.2, R47.3, R47.4, R47.17, R49.0, S4, R47.14, R47.13, R47.15, S5, R52.1) with PASS, FAIL or SKIPPED (with the reason) and its evidence (the text OCR read, screenshot names), and anything else unexpected. A case the app cannot do on this platform is SKIPPED, not FAIL. End your final message with one line: `CLAUDE-TEST: PASS` if every case you ran passed, otherwise `CLAUDE-TEST: FAIL` followed by the IDs of the cases that failed.
 
 ## The ui helper
