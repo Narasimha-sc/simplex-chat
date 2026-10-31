@@ -1,4 +1,4 @@
-# Device test plan: live and disappearing messages, message info, link previews (part 1)
+# Device test plan: receipts, post-quantum encryption, address change, voice preferences (part 1)
 
 ## Anything unusual
 
@@ -15,7 +15,7 @@ You are looking for regressions, not only running checks. Besides each case's ch
 Record each in `report.md` under a heading `## Unusual`, with the case it happened in and the screenshot names, even when every check passes. A case passes only when its checks pass and nothing unusual happened in it; otherwise mark it FAIL and say why. Never stop at a failure: go on with the next case.
 
 
-The app as the scripted smoke test leaves it: the profile "citester", without conversations. The cases run in the order of the tables and build on each other: three profiles of this app, "citester", "cibob" and "cicarol"; citester is connected with cibob and with cicarol by 1-time links, and owns the group "ci team" that both join. The chat citester–cibob has no chat-level timer; the chat citester–cicarol gets one in R10.39. All messages go through the app's preset servers on the internet: after switching profile, wait up to 30 s for a message from another profile (`ui wait "<text>" 30`).
+The app as the scripted smoke test leaves it: the profile "citester", without conversations. The cases run in the order of the tables and build on each other: three profiles of this app, "citester", "cibob" and "cicarol"; citester is connected with cibob, cibob with cicarol, and citester owns the group "ci team" (cibob and cicarol are members) and two groups without members, "ci g1" and "ci g2". All messages go through the app's preset servers on the internet: after switching profile, wait up to 30 s for a message from another profile (`ui wait "<text>" 30`).
 
 Case IDs `R<row>` are rows of the manual test table; `S<n>` are setup steps.
 
@@ -39,64 +39,59 @@ Case IDs `R<row>` are rows of the manual test table; `S<n>` are setup steps.
 - **Inviting later:** group info → "Invite members" → tap the contacts' rows → "Invite to group". The "New member role" picker sets their role.
 - **Joining a group by invitation** (as the invitee): in the chat list, tap the group's row → the dialog "Group invitation" → "Join group" (or "Join incognito" for an incognito contact). Open the group and wait up to 120 s until the message field is enabled.
 - **Settings:** picker → "Settings". Close Settings by swiping it down.
-- **Live message from an empty field:** while the message field is empty, a lightning button shows right of the microphone at the right end of the field (find it with `ui tree`); tap it. The first time, the alert "Live message!" asks to confirm with "Send". Then type: the message is sent at once and updated about every 3 s while you type; the send button turns into a checkmark; tap it to finish the live message.
-- **Send button menu:** with text (or an attachment) in the compose area, `ui long-press` on the send button opens its menu: "Send live message" and "Disappearing message". "Disappearing message" opens the dialog "Send disappearing message" with "30 seconds", "1 minute", "5 minutes" and "Custom time"; "Custom time" opens a sheet with two wheels (the number, and the unit: seconds, minutes, hours, days, weeks, months), "Cancel" and "Send" at the top. Turn a wheel with `ui swipe` over it (a short upward swipe moves to the next value); check the selected values in the tree.
-- **Timer mark:** a disappearing message shows a timer icon next to its time; when its time differs from the chat's timer it also shows the time in short form ("30s", "5m", "2h", "12mth").
-- **Message info:** message menu → "Info" opens a sheet titled "Sent message" or "Received message" with "Sent at" / "Received at", "Disappears at" for a disappearing message, "File servers" for a file, and tabs at the bottom such as "History", "In reply to" and "Delivery". Close it by swiping down.
-- **Attaching the test card:** tap the paperclip button left of the message field → "Choose from library" → the test card's thumbnail (colour bars, "1080" at the top) → the picker's "Add" button. The compose area then shows the image above the field.
-- **Waiting a fixed time:** `ui wait "<a text that never shows>" <secs>` returns after <secs> seconds; its "not shown" result is expected there.
+- **Message status:** a sent message shows a status icon after its time: one checkmark when sent, two checkmarks when the recipient's app confirmed delivery (a delivery receipt). Judge them from a screenshot, zoomed on the message.
+- **Delivery receipts settings:** picker → "Settings" → "Your privacy" → "More privacy" → the section "Send delivery receipts to" with the switches "Contacts" and "Small groups (max 20)". They belong to the active profile.
+- **Send receipts of one chat:** chat info (or group info) → the picker row "Send receipts" with the values "yes", "no" and "default (yes)" / "default (no)".
+- **Message info:** message menu → "Info"; the tab "Delivery" lists the group members with a status icon each. Close it by swiping down.
+- **Voice button:** with the message field empty, a microphone button shows at the right end of the field. When voice messages are not allowed it is grey; tapping it shows an alert. Never press and hold it except where a case says so (holding records).
 
 ## Setup
 
 | ID | Do | Expect |
 |----|----|--------|
 | S1 | Add the profile `cibob`, then the profile `cicarol`; switch back to citester | The picker of citester lists cibob and cicarol |
-| S2 | Connect citester (A) and cibob (B) by a 1-time link; then, as cibob in the chat "citester", send `bob hi` | citester's chat "cibob" shows `bob hi` |
-| S3 | Switch to citester. Connect citester (A) and cicarol (B) by a 1-time link | cicarol's chat "citester" shows the encryption notice and a message field |
-| S4 | Switch to citester. Create the group `ci team`, inviting cibob and cicarol (role member). Switch to cibob and join "ci team"; switch to cicarol and join "ci team" | cibob and cicarol each have "ci team" with an enabled message field |
+| S2 | Connect citester (A) and cibob (B) by a 1-time link; switch to citester and connect citester (A) and cicarol (B); then switch to cibob and connect cibob (A) and cicarol (B) | citester has the chats "cibob" and "cicarol"; cibob has "citester" and "cicarol"; cicarol has "citester" and "cibob" |
+| S3 | Switch to citester. Create the group `ci team`, inviting cibob and cicarol (role member). Switch to cibob and join "ci team"; switch to cicarol and join "ci team" | cibob and cicarol each have "ci team" with an enabled message field |
+| S4 | Switch to citester. Create the group `ci g1` and then `ci g2`, each with "Skip" on the invite screen | citester's chat list shows "ci g1" and "ci g2" |
 
-## Live messages (chat citester–cibob)
-
-| ID | Do | Expect |
-|----|----|--------|
-| R10.19 | Switch to citester → chat "cibob". With the message field empty, tap the lightning button | The alert "Live message!" says "Send a live message - it will update for the recipient(s) as you type it" and offers "Send" and "Cancel". Tap "Send" |
-| R10.20 | Continue the live message: `ui type "live hello"`; wait 5 s; `ui shot`. Then open the live message's menu (long-press its text) and look at the items; close the menu | The live message shows in the chat with the header "LIVE" and animated dots after its text (the typing indicator; judge from two screenshots taken a second apart). Its menu has no "Edit", no "Delete" and no "Reply" (record this under R10.22, R10.23 and R10.24 too). The recipient's side cannot be watched while citester types (one app): that part is not checked |
-| R10.18 | Continue: `ui type " world"`; wait 5 s; tap the send button (a checkmark) to finish. (The recipient is checked in R10.21.) | The message shows `live hello world` without the "LIVE" header |
-| R10.27 | Type `typed then live` (do not send), long-press the send button → "Send live message". Type ` more`, wait 5 s, tap the checkmark | No alert this time; while live the message shows "LIVE"; finished, it reads `typed then live more` |
-| R10.28 | Attach the test card (see "Attaching the test card"); long-press the send button → "Send live message"; type `live with image`; wait 5 s; tap the checkmark | The menu offers "Send live message" with an image attached; the chat then shows the image with the text `live with image` |
-| R10.21 | Switch to cibob → chat "citester" | cibob shows `live hello world`, `typed then live more` and the image with `live with image` (record these under R10.18, R10.27 and R10.28), each without "LIVE" and without an edited mark (pencil icon); citester's copies have no edited mark either (seen before switching) |
-| R10.22 | Switch to citester → chat "cibob": edit `live hello world` to `live edited` | After the live message was finished, "Edit" is in its menu and the edit works: `live edited` shows with an edited mark. (While live, "Edit" was absent: R10.20) |
-| R10.24 | Open the menu of `live edited` → "Reply", send `quote live` | `quote live` shows a quote of `live edited`. (While live, "Reply" was absent: R10.20) |
-| R10.23 | Open the menu of `typed then live more` → "Delete" → "Delete for me" | The message is gone. (While live, "Delete" was absent: R10.20) |
-
-## Disappearing messages
+## Post-quantum encryption and address change (chat citester–cibob)
 
 | ID | Do | Expect |
 |----|----|--------|
-| R10.37 | As citester: chat "cibob" → chat info → "Contact preferences": look at "Disappearing messages"; go back to the chat. Type `custom check`, long-press the send button | "You allow" is on and "Delete after" is "off" (no chat timer is set), and messages sent normally (`bob hi`, `quote live`) have no timer icon; the send button's menu still offers "Disappearing message" |
-| R10.36 | Continue: "Disappearing message" → "Custom time" → set the wheels to 2 and "minutes" → "Send" | `custom check` shows the timer icon and "2m" |
-| R10.38 | Type `year message`, long-press the send button → "Disappearing message" → "Custom time" → set the unit wheel to "months" and the number wheel to 12 → "Send". Open its menu → "Info" | The message shows "12mth"; its info shows "Disappears at" about 360 days after "Sent at" |
-| R10.29 | Type `vanish 30`, long-press the send button → "Disappearing message" → "30 seconds". Wait 40 s. Then switch to cibob → chat "citester"; wait 40 s | On citester `vanish 30` shows the timer and "30s", then is gone after 40 s. On cibob it shows when the chat is opened (read), then is gone 30–40 s later |
-| R10.39 | Switch to citester → chat "cicarol" → chat info → "Contact preferences" → "Disappearing messages": "You allow" on, "Delete after" → "custom" → wheels 2 and "hours" → "Select" → "Save and notify contact"; go back to the chat. Then "ci team" → group info → "Group preferences" → turn "Disappearing messages" on → "Delete after" → "custom" → wheels 3 and "hours" → "Select" → "Save and notify group members"; go back to the chat | "Delete after" shows "2 hours" for the contact and "3 hours" for the group; the chat "cicarol" shows the event "Disappearing messages: 2 hours" and "ci team" shows "Disappearing messages: 3 hours" |
-| R10.31 | Chat "cicarol": send `default ttl` normally; type `custom ttl`, long-press the send button → "Disappearing message" → "5 minutes" | `default ttl` shows the timer icon without a time text (it uses the chat's 2 hours); `custom ttl` shows the timer icon and "5m" |
-| R10.32 | Edit `custom ttl` to `custom ttl edited` (within 5 minutes of sending it) | The text changes and the message keeps the timer icon and "5m", with an edited mark |
-| R10.34 | Open the menu of `custom ttl edited` → "Reply", send `quote timed` | `quote timed` shows a quote of `custom ttl edited` and the timer icon |
-| R10.33 | Open the menu of `default ttl` → "Delete" → "Delete for me" | `default ttl` is gone |
-| R10.35 | With the field empty tap the lightning button; type `live timed`; wait 5 s; open its menu → "Info"; close it; tap the checkmark to finish; open its menu → "Info" again | While live, the info has no "Disappears at"; after finishing, it shows "Disappears at" about 2 hours after "Sent at" |
+| R6.1 | As citester → chat "cibob": look at the encryption notice; open chat info and find the row "E2E encryption". Switch to cibob → chat "citester" and do the same | On both: the notice says "Messages, files and calls are protected by quantum resistant e2e encryption …" and "E2E encryption" shows "Quantum resistant" |
+| R2.29 | Switch to citester → chat "cibob" → chat info: note the host under "Receiving via"; tap "Change receiving address" → the alert "Change receiving address?" → "Change". Go back to the chat and wait up to 120 s for "you changed address". Open chat info again and note "Receiving via". Send `after my switch`; switch to cibob, check it arrived and reply `got it` | The chat shows "changing address…" and then "you changed address"; "Receiving via" shows a different server host than before (if it is the same host, note it as a finding, not a failure); `after my switch` arrives on cibob and `got it` arrives on citester |
+| R2.30 | As cibob → chat "citester" → chat info → "Change receiving address" → "Change"; wait up to 120 s for "you changed address". Switch to citester → chat "cibob"; send `after bob switch`; switch to cibob and check it, reply `ok bob` | citester's chat shows "changed address for you"; both messages arrive |
+| R2.31 | Switch to citester → chat "cibob" → chat info → "Change receiving address" → "Change", then at once find "Abort changing address" in chat info and tap it → the alert "Abort changing address?" → "Abort" | While the change is in progress, "Abort changing address" shows in chat info and the alert says "Address change will be aborted. Old receiving address will be used."; after "Abort" no "you changed address" appears for this change. Both profiles run in one app, so the change can complete before the tap: if "Abort changing address" is gone or disabled before you tap it, mark SKIPPED with that reason |
+| R2.32 | As cibob → chat "citester": the same as R2.31 from cibob's side; then switch to citester and look at the chat | As R2.31, from the contact's side; citester's chat shows no "changed address for you" for the aborted change (SKIPPED under the same condition) |
 
-## Message info
+## Delivery receipts
 
 | ID | Do | Expect |
 |----|----|--------|
-| R10.40 | Chat "cibob": open the menu of `live edited` (own, edited) → "Info"; open the "History" tab; tap "Copy"; close. Open the menu of `bob hi` (cibob's) → "Info"; close | Own: title "Sent message", "Sent at", and under "History" two versions (`live edited` marked "(current)" and `live hello world`); "Copy" works without an error. Other's: title "Received message", with "Sent at" and "Received at" |
-| R10.42 | Open the menu of `quote live` → "Info" → the "In reply to" tab | It shows the quoted message `live edited` |
-| R10.43 | Open the menu of the image with `live with image` → "Info" | It shows "File servers" with at least one server host name |
-| R10.41 | "ci team": send `status check`; wait 30 s; open its menu → "Info" → the "Delivery" tab | The tab lists cibob and cicarol, each with a delivery status icon |
+| R7.9 | Switch to citester → chat "cibob": send `receipt one`; wait 20 s | `receipt one` shows two checkmarks (cibob's app confirmed delivery) |
+| R7.1 | Switch to cibob → delivery receipts settings: turn "Contacts" off. Switch to citester → chat "cibob": send `no receipt`; wait 20 s. Switch to cibob → turn "Contacts" on. Switch to citester: send `receipt again`; wait 20 s | No alert when switching (no contact overrides). `no receipt` keeps one checkmark; `receipt again` shows two |
+| R7.3 | Switch to cibob → chat "citester" → chat info → "Send receipts" → "no". Switch to citester → chat "cibob": send `override no`; wait 20 s. Switch to cicarol → chat "cibob": send `carol to bob`; wait 20 s | `override no` keeps one checkmark; `carol to bob` shows two checkmarks (the override affects only citester) |
+| R7.5 | Switch to cibob → delivery receipts settings: turn "Contacts" off (no alert: the override is "no" too), then on again | Turning on shows the dialog "Sending receipts is disabled for 1 contacts" with "Enable (keep overrides)", "Enable for all" and "Cancel"; tap "Enable (keep overrides)". cibob's chat info for citester still shows "Send receipts" "no" |
+| R7.6 | As cibob: turn "Contacts" off, then on again; in the dialog tap "Enable for all". Open the chat "citester" → chat info | "Send receipts" now shows "default (yes)" |
+| R7.11 | Switch to citester → chat "cibob": send `keep my receipt`; wait 20 s; edit it to `keep my receipt edited`. Then with the field empty tap the lightning button right of the microphone (confirm "Send" in the alert "Live message!" if it shows), type `live receipt`, wait 5 s, tap the checkmark; wait 20 s | `keep my receipt edited` still shows two checkmarks after the edit; the finished live message shows two checkmarks |
+| R7.10 | Open "ci team": send `group receipt`; wait 30 s; message menu → "Info" → "Delivery" | The tab lists cibob and cicarol, each with a delivery status icon showing received (two checkmarks) |
+| R7.2 | As citester → delivery receipts settings: turn "Small groups (max 20)" off; open "ci g1" → group info → "Send receipts"; go back. Turn "Small groups (max 20)" on again; look at "Send receipts" of "ci g1" again | No alert either way. "Send receipts" reads "default (no)" while the switch is off and "default (yes)" after it is on |
+| R7.4 | "ci g1" → group info → "Send receipts" → "no". Open "ci g2" → group info | "ci g1" shows "no"; "ci g2" still shows "default (yes)" |
+| R7.7 | Delivery receipts settings: turn "Small groups (max 20)" off, then on again; in the dialog tap "Enable (keep overrides)". Open "ci g1" → group info | Turning on shows the dialog "Sending receipts is disabled for 1 groups" with "Enable (keep overrides)", "Enable for all" and "Cancel"; afterwards "ci g1" still shows "no" |
+| R7.8 | Turn "Small groups (max 20)" off, then on again; in the dialog tap "Enable for all". Open "ci g1" → group info | "ci g1" shows "default (yes)" |
 
-## Link previews and restart (chat citester–cibob)
+## Voice messages (chat citester–cibob and "ci team")
 
 | ID | Do | Expect |
 |----|----|--------|
-| R11.1 | Chat "cibob": type `https://example.com`; wait up to 10 s; if the alert "Enable link previews?" shows, tap "Enable"; wait up to 20 s for the preview above the field; send. Reopen the chat. Switch to cibob → chat "citester", reopen it | Before sending, the compose area shows a preview with the page title "Example Domain"; the sent message shows the preview on citester and on cibob, also after reopening |
-| R11.2 | Switch to citester → chat "cibob": type `https://www.iana.org/about` and tap the send button at once, before a preview appears | The message is sent without a link preview. If a preview was attached anyway (it loaded before the tap), mark SKIPPED: the timing cannot be controlled here |
-| R10.30 | Type `vanish after restart`, long-press the send button → "Disappearing message" → "1 minute"; at once `ui relaunch`. Wait 70 s (see "Waiting a fixed time"); open the chat "cibob" | After the restart the message is gone once its minute has passed. (Returning from background cannot be tested: the iOS helper has no home action) |
+| R40.4 | As citester → chat "cibob": `ui long-press` on the microphone button. Read the system alert with `ui point` at its centre (it can be outside the tree) | iOS asks for microphone access with the app's text "SimpleX needs microphone access for audio and video calls, and to record voice messages."; tap its button that denies access ("Don't Allow"; find it with `ui point`) |
+| R40.6 | `ui long-press` on the microphone button again | The app shows the alert "No permission to record voice message" with "To record voice message please grant permission to use Microphone." and "Open Settings"; tap "Cancel" |
+| R40.38 | Switch to cibob → chat "citester" → chat info → "Contact preferences" → "Voice messages": set "You allow" to "no" → "Save and notify contact". Switch to citester → chat "cibob": tap the microphone button once | The microphone button is grey; the alert "Voice messages prohibited!" says "Please ask your contact to enable sending voice messages." |
+| R40.39 | Switch to cibob → chat "citester": tap the microphone button once; tap "Allow" in the alert. Switch to citester → chat "cibob" and look at the microphone button (do not tap it) | On cibob the alert "Allow voice messages?" says "You need to allow your contact to send voice messages to be able to send them."; after "Allow" cibob's microphone button is no longer grey; on citester the button is no longer grey either. (The change cannot arrive while the same profile has the chat open: one app) |
+| R40.40 | As citester → "ci team" → group info → "Group preferences" → turn "Voice messages" off → "Save and notify group members". Switch to cibob → "ci team": tap the microphone button once | The alert "Voice messages prohibited!" says "Only group owners can enable voice messages." (The alerts for a user's own and a contact's prohibition were seen in R40.39 and R40.38) |
+
+## Large messages (compression)
+
+| ID | Do | Expect |
+|----|----|--------|
+| R6.3 | Switch to citester: picker → tap your own name at the top of the picker → the camera button on the profile image → "Choose from library" → the test card → confirm the picker (and any crop screen) → "Save (and notify contacts)"; close. Then chat "cibob": put on the clipboard one line of 14000 characters: `START` followed by the ten characters `abcdefghij` repeated 1399 times and then `END` (`ui clipboard "START…END"`), paste it into the message field, check the field's value starts with `START` and ends with `END`, and send it. Switch to cibob → chat "citester" | citester's profile image shows the test card; cibob's chat list shows citester with the new image. The long message is sent without an error and arrives on cibob whole: it starts with `START` and ends with `END`. The same in a chat without post-quantum encryption cannot be checked: the app offers no way to turn it off |
