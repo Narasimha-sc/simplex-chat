@@ -1,4 +1,4 @@
-# Test: business chats with a customer's friend, messages and files in the SimpleX Chat Android app
+# Test: calls (outgoing screen and alerts) and supporter badges in the SimpleX Chat Android app
 
 You are testing the SimpleX Chat Android app, which runs in an Android emulator on this machine. Drive it only with the `ui` helper, through Bash, one command per call: `ui <command> [args]`. Anything else is refused; don't look for ways around that, and if something blocks the test, report it. The commands are listed at the end.
 
@@ -8,24 +8,22 @@ Your working directory is where your output goes. `ui shot <name>` saves `screen
 
 - The app is already running, on its first screen, with a new, empty database: never run `ui start` or `ui stop`. Begin with `ui shot start` to see it.
 - `ui type` types into the field that has the focus: tap a field before typing into it. `ui key BACK` is Android's back button.
-- Besides the chats, the chat list shows the app's own cards as list items until they are closed: "New 1-time link / Paste link / Scan" (once there is a conversation), "Bottom bar / Top bar", and "Invest in SimpleX Chat!". They are part of the list, not something drawn over it: leave them open.
-- Developer tools are on (the job starts the app with them).
-- All profiles are in this one app, which shows one profile at a time. A profile that is not shown still receives messages and events; its chats show them once you switch to it. Every message goes through the preset servers on the internet: after an action in one profile, wait up to 60 s for its effect in another (`ui wait "<text>" 60`).
-- The test uses three profiles: `citester` (the business), `cibob` (the customer) and `cidan` (cibob's friend).
-- The emulator's Pictures folder has two images: `test-card.jpg`, a TV test card 1280×720 (colour bars, a large circle, "1080" at the top and "TVB" at the bottom), and `simplex-logo.png`, the dark blue and turquoise SimpleX logo on a transparent background.
+- Besides the chats, the chat list shows the app's own cards as list items until they are closed: "New 1-time link / Paste link / Scan" (once there is a conversation), "Bottom bar / Top bar", and "Invest in SimpleX Chat!". They are part of the list, not something drawn over it: leave them open, except where step S3 says otherwise.
+- All profiles are in this one app, which shows one profile at a time. A profile that is not shown still receives messages, invitations and calls; its chats show them once you switch to it. Messages go through the preset servers on the internet: after an action in one profile, wait up to 60 s for its effect in another (`ui wait "<text>" 60`).
+- The emulator has no microphone and no camera, and one app plays both sides: a call can reach its outgoing screen, never connect. Never tap "Redeem" when it is enabled, and never open "Buy in browser": both reach the real SimpleX badge service or website.
 
 ## How to do things in the app
 
-- **Send a message:** tap the message field (text "Message"), `ui type "<text>"`, then tap "Send Message". Check the message then shows in the chat.
-- **Chat info:** tap the chat's name in the chat's toolbar. `ui key BACK` closes it and other screens (member info).
-- **Switch profile:** in the chat list, tap your profile image at the left end of the toolbar (an element "profile image placeholder"; chats have the same label, so take the one in the toolbar from the screenshot and tap it with `ui click`). The menu lists your other profiles by name: tap the one you want.
-- **Add a profile:** profile image → "Your chat profiles" → "Add profile". On "Create profile" the name field has the focus: type the name, then tap "Create profile". The new profile becomes the active one; `ui key BACK` until the chat list shows.
-- **Copy a link:**
-  - a 1-time link: "Start new chat" → "Create 1-time link"; under "Share this 1-time invite link" tap the copy icon right of the link (it has no text: find it with `ui tree`);
-  - the address: "Share address" opens Android's share sheet, which is not part of the app: tap its "Copy" action (find it with `ui text`), and `ui key BACK` if the sheet stays open.
-- **Open a copied link** (as another profile): "Start new chat" → "Paste link / Scan" → "Tap to paste link". An alert names the contact or the business with "Open new chat": tap it; the chat opens with a "Connect" button at the bottom: tap it. If the alert is "Connect via one-time link?" instead, tap "Use current profile".
-- **Attach a file:** tap "Attach" (left of the message field), then "Image" or "File". Android opens a picker that is not part of the app (the photo picker, or Files): find the file (under Pictures, Images, Downloads or Recent; a thumbnail shows an image) and choose it, then confirm if the picker has a button for it ("Add", "Select", "Done"). Back in the app, the compose area shows the attachment; tap "Send Message".
-- **Accept an invitation to a business chat:** tap the chat in the chat list ("You are invited to group" shows under its name); the alert "Join group?" offers "Join": tap it.
+- **Send a message:** tap the message field (placeholder "Message"), `ui type "<text>"`, then tap "Send Message". `ui key BACK` leaves the chat for the chat list.
+- **Chat info / group info:** tap the chat's name in the chat's toolbar. `ui key BACK` returns to the chat.
+- **Your profile menu:** tap your profile picture at the left end of the chat list's toolbar (with the default reachable toolbar it is at the bottom left; its element reads "profile image placeholder", as chat rows do, so pick it by position). The menu lists your profiles by name, "Your chat profiles" and "Settings".
+- **Settings:** profile menu → "Settings". `ui key BACK` goes back one screen.
+- **Switch profile:** profile menu → tap the other profile's name.
+- **Add a profile:** profile menu → "Your chat profiles" → "Add profile". On "Create profile" the name field under "Enter your name:" has the focus: type the name and tap "Create profile" (the button, not the title). The new profile becomes the active one; `ui key BACK` until the chat list shows.
+- **Copy a 1-time link:** "Start new chat" → "Create 1-time link"; under "Share this 1-time invite link" the link is shown with a copy icon at its right end (an unlabeled button: find it with `ui tree` on the link's row) — tap the copy icon (tapping the link text opens Android's share sheet instead). `ui key BACK` until the chat list shows.
+- **Open a copied link** (as another profile): "Start new chat" → "Paste link / Scan" → "Tap to paste link". An alert names the other profile with "Open new chat": tap it; the chat opens with a "Connect" button at the bottom: tap it. If the alert is "Connect via one-time link?" instead, tap "Use current profile".
+- **Create a group:** "Start new chat" → "Create group". The name field under "Enter group name:" has the focus: type the name and tap "Create group". A screen to invite members follows: tap "Skip inviting members", or tap a contact and then "Invite to group".
+- **Contact preferences:** chat info → "Contact preferences". The section "Audio/video calls" has the row "You allow" (tap its value to choose "default (yes)", "always", "yes" or "no") and "Contact allows"; "Save and notify contact" saves.
 
 ## The test
 
@@ -34,21 +32,31 @@ The cases build on each other: run them in this order. Write texts exactly as gi
 **S. Setup.**
 
 1. (S1) Onboarding. Each screen waits for the one before it; wait for a text before clicking it. The first screen has "Get started": click it. Click the field "Enter profile name…", type `citester`, and click "Create profile". On "Your network", click "Continue". The app explains instant notifications in an alert: click "Allow". Android then asks whether the app may always run in the background: click "Allow" again. Click "Accept" on the conditions screen. Wait up to 60 s for the chat list, which shows "Talk to someone" while there are no conversations.
-2. (S2) As citester: profile image → "Create SimpleX address" → "Create SimpleX address"; wait up to 60 s for "Share address". Tap the switch of "Business address" (right end of its row); the footer "Add your team members to the conversations." shows. Tap "Share address" → "Copy" in the share sheet. Add the profile `cibob`; as cibob, open the copied link ("Open new chat", then "Connect"). Check: within 60 s cibob's chat "citester" accepts messages (the "Connect" button is replaced by the message field).
-3. (S3) As cibob: "Start new chat" → "Create 1-time link"; tap the copy icon right of the link; `ui key BACK` until the chat list shows. Add the profile `cidan`; as cidan, open the copied link ("Open new chat", then "Connect"). Check: within 60 s cidan's chat "cibob" accepts messages; send `hi bob`.
+2. (S2) As citester, copy a 1-time link. Add the profile `cibob`; as cibob, open the copied link. Wait up to 120 s until cibob's chat "citester" shows the message field "Message"; send `hi tester`. Switch to citester. Check: within 60 s the chat list shows "cibob" and its chat shows "hi tester".
 
-**R. Cases.**
+**R. Cases, then more setup.**
 
-1. (R61.9) Switch to citester → the chat "cibob": send `hello customer`. Switch to cibob → the chat "citester". Check: it shows "hello customer". Send `hello shop`; attach "Image" `test-card.jpg` and send it; attach "File" `simplex-logo.png` and send it. Switch to citester → "cibob". Check: within 60 s the chat shows "hello shop", the test card image, and a file item named "simplex-logo.png"; tap the file item and check that it downloads (its icon or status changes; take a shot).
-2. (R61.8) As citester: chat "cibob" → chat info → tap cibob in the member list → tap the "Change role" row → "admin" → "Change" in the alert "Change role?". Check: cibob's role shows admin. Switch to cibob → chat "citester" → chat info. Check: it offers "Add friends". Tap it, tap cidan in the contact list, then "Invite to chat". Switch to cidan; tap the new invitation in the chat list → "Join". Check: within 60 s cidan's new chat is named "citester" and its picture is a briefcase icon (the business's; citester has no profile image), not a group icon or cibob's person icon. Take a shot of the chat list and of the chat.
+1. (R65.3) As citester → "cibob" → chat info → "Contact preferences": in "Audio/video calls" set "You allow" to "no", tap "Save and notify contact", go back to chat info. Tap "call" (the call button under the name). Check: the alert "Allow calls?" says "You need to allow your contact to call to be able to call them." and offers "Allow" and "Cancel". Tap "Allow". Open "Contact preferences" again. Check: "You allow" of "Audio/video calls" is no longer "no". Go back to the chat list. Then the member info: create the group `ci calls` and invite "cibob" ("Invite to group"). Switch to cibob; tap "ci calls" in the chat list → "Join" in the alert "Join group?". Switch to citester; set "You allow" for calls with cibob to "no" again ("Save and notify contact"). Open "ci calls" → group info → tap "cibob" in the member list → in cibob's member info tap "call". Check: the same alert "Allow calls?" shows; tap "Allow". Go back to the chat list.
+2. (R65.1) As citester → "cibob" → chat info → tap "call". Check: the call screen opens with "cibob" and a call state such as "starting…" or "waiting for answer…" (shot). Only the outgoing screen is in scope: nobody can answer here. If an incoming call alert for cibob shows on top ("Accept", "Reject", "Ignore"), tap "Reject". Tap "Hang up" (the red button). Check: the call screen closes and the chat shows a call item. Then repeat with "video" and hang up.
+3. (R71.0) Settings → "Supporter perks". Check: "Support SimpleX" opens with "How badges protect your privacy", "Buy in browser" and "Redeem badge code". Tap "Redeem badge code". Check: "Redeem code" with "Paste the code you received." and a field showing "SB-XXXXX-XXXXX-XXXXX-XXXXX" (a camera area for scanning may show below it without a picture: the emulator has no camera). Tap the field and type `SB-ABCDE-FGHIJ-KLMNO-PQRS` (one character short of a code). Check: the field shows the code in groups, and "Redeem" is disabled (`ui tree` shows its state). Only the app's own check of a wrong code is in scope: redeeming a code reaches the real badge service, and an already used code needs a real one. Go back to the chat list.
+
+**S. More setup for the chat list banner.** The "Support SimpleX" banner shows only with more than three chats and only from the next start of the app, since another banner holds its place until then.
+
+4. (S3) Create the groups `ci three` and `ci four` ("Skip inviting members"). The chat list now has "cibob", "ci calls", "ci three" and "ci four". If the chat list shows the banner "Invest in SimpleX Chat!": tap it, `ui key BACK` to close what it opens, then tap the × at the top right of the banner ("Close button" in the tree; it appears once the banner was opened). Check: the banner is gone.
+5. (S4) Run `ui relaunch`.
+
+**R. Banner cases.**
+
+6. (R69.0) Check: within 30 s the chat list shows the banner "Support SimpleX" with "Get badge + better files", and no "Close button" on it (shot and `ui tree`). Tap the banner. Check: "Support SimpleX" opens. Go back to the chat list. Check: the banner now has "Close button" at its top right. If the banner never shows, record FAIL with what the chat list shows in its place.
+7. (R68.0) Tap the banner → "Support SimpleX" → "How badges protect your privacy". Check: the screen "How badges protect your privacy" opens and starts with "A badge is an anonymous credential stored in your profile on your device. This credential is never sent to anyone.". Go back to the chat list. Settings → "Supporter perks". Check: "Support SimpleX" opens; tap "How badges protect your privacy": the same screen opens. Go back to the chat list.
 
 You have at most 600 turns, and the whole test fits in about 90 if you chain steps whose outcome you can predict with `ui do` and look at the screen after each chain. For example:
 
-- `ui do click-text "Your chat profiles" 10 -- click-text "Add profile" 10 -- wait "Create profile" -- type cibob -- shot add-profile`
-- `ui do click-text "Start new chat" -- click-text "Paste link / Scan" 10 -- click-text "Tap to paste link" 10 -- wait "Open new chat" 30 -- shot open-new-chat`
-- `ui do click-text "Message" -- type "hello shop" -- click-text "Send Message" -- wait "hello shop" -- shot R61-9`
+- `ui do click-text "Get started" -- click-text "Enter profile name" 30 -- type citester -- shot profile`
+- `ui do click-text "Start new chat" -- click-text "Paste link / Scan" 10 -- click-text "Tap to paste link" 10 -- wait "Open new chat" 60 -- shot open-new-chat`
+- `ui do click-text "Settings" 10 -- click-text "Supporter perks" 10 -- wait "Support SimpleX" -- shot support`
 
-`ui do` stops at the first command that fails, so a failed chain tells you where it stopped. Take a shot at each check, named after its case (`ui shot R61-8`).
+`ui do` stops at the first command that fails, so a failed chain tells you where it stopped. Take a shot at each check, named after its case (`ui shot R65-3`).
 
 ## Anything unusual
 
@@ -66,6 +74,6 @@ Record each in `report.md` under a heading `## Unusual`, with the case it happen
 
 ## Report
 
-Write `report.md` in your working directory as you go, so a session that is cut short still leaves its results: a table with one row per case ID (S1 to S3, R61.9, R61.8), each with PASS, FAIL or SKIPPED (with the reason) and its evidence (the text from the screen, screenshot names). A case the app cannot do on this platform is SKIPPED, not FAIL. Add anything else unexpected. End your final message with one line: `CLAUDE-TEST: PASS` if no case failed, otherwise `CLAUDE-TEST: FAIL` followed by the IDs of the cases that failed.
+Write `report.md` in your working directory as you go, so a session that is cut short still leaves its results: a table with one row per case ID (S1, S2, R65.3, R65.1, R71.0, S3, S4, R69.0, R68.0), each with PASS, FAIL or SKIPPED (with the reason) and its evidence (element texts and positions, screenshot names). A case the app cannot do on this platform is SKIPPED, not FAIL. Add anything else unexpected. End your final message with one line: `CLAUDE-TEST: PASS` if no case failed, otherwise `CLAUDE-TEST: FAIL` followed by the IDs of the cases that failed.
 
 ## The ui helper
