@@ -51,6 +51,9 @@ jobs:
         run: |
           docker run -d --name pg -p 5432:5432 -e POSTGRES_HOST_AUTH_METHOD=trust postgres:15 -c max_connections=500 -c fsync=off
           timeout 60 sh -c 'until pg_isready -h localhost; do sleep 1; done'
+          printf '#!/bin/sh\nexec docker exec pg pg_dump "$@"\n' | sudo tee /usr/local/bin/pg_dump > /dev/null
+          sudo chmod +x /usr/local/bin/pg_dump
+          pg_dump --version
       - name: Write test runner
         run: |
           cat > /tmp/run.sh <<'SH'
