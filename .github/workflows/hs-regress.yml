@@ -49,9 +49,12 @@ jobs:
       - name: Start PostgreSQL 15
         if: inputs.db == 'postgres'
         run: |
-          docker run -d --name pg -p 5432:5432 -e POSTGRES_HOST_AUTH_METHOD=trust postgres:15 -c max_connections=500 -c fsync=off
+          docker run -d --name pg -p 5432:5432 -e POSTGRES_HOST_AUTH_METHOD=trust postgres:15 -c max_connections=500 -c fsync=off -c timezone=Etc/GMT-4
           timeout 60 sh -c 'until pg_isready -h localhost; do sleep 1; done'
-          printf '#!/bin/sh\nexec docker exec pg pg_dump "$@"\n' | sudo tee /usr/local/bin/pg_dump > /dev/null
+          sudo tee /usr/local/bin/pg_dump > /dev/null <<'EOF'
+          #!/bin/sh
+          docker exec pg pg_dump "$@" | grep -v -E '^\\(un)?restrict '
+          EOF
           sudo chmod +x /usr/local/bin/pg_dump
           pg_dump --version
       - name: Write test runner
