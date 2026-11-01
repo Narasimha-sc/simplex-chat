@@ -71,7 +71,7 @@ import Simplex.Chat.Call
 import Simplex.Chat.Controller
 import Simplex.Chat.Delivery (DeliveryJobScope (..), DeliveryJobSpec (..), DeliveryWorkerScope (..))
 import Simplex.Chat.Files
-import Simplex.Chat.Image (decodeResizable, resizeImageDataUri)
+import Simplex.Chat.Image (cropToSquare, decodeResizable, resizeImageDataUri)
 import Simplex.Chat.Markdown
 import Simplex.Chat.Messages
 import Simplex.Chat.Messages.Batch (BatchMode, encodeBatchElement)
@@ -206,21 +206,21 @@ imageExtensions = [".jpg", ".jpeg", ".png", ".gif"]
 -- read a .png/.jpg/.jpeg image file and encode it as a data: URL ImageData, or return an error message
 loadImageData :: FilePath -> IO (Either String ImageData)
 loadImageData path = case map toLower (takeExtension path) of
-  ".png" -> readImage "image/png"
-  ".jpg" -> readImage "image/jpg"
-  ".jpeg" -> readImage "image/jpg"
+  ext | ext `elem` ([".png", ".jpg", ".jpeg"] :: [String]) -> readImage
   _ -> pure $ Left $ "unsupported image extension in " <> path <> " (only .png, .jpg, .jpeg)"
   where
-    readImage mime = do
+    readImage = do
       exists <- doesFileExist path
       if not exists
         then pure $ Left $ "image file not found: " <> path
         else do
           bs <- B.readFile path
-          pure $
-            if B.null bs
-              then Left $ "image file is empty: " <> path
-              else Right $ ImageData $ "data:" <> mime <> ";base64," <> safeDecodeUtf8 (B64.encode bs)
+          if B.null bs
+            then pure $ Left $ "image file is empty: " <> path
+            else first (\e -> "image file cannot be resized: " <> path <> " (" <> e <> ")") <$> (runExceptT (resize bs) `catchAll` (pure . Left . show))
+    resize bs = do
+      (img, profile) <- ExceptT $ decodeResizable bs
+      ImageData . safeDecodeUtf8 . LB.toStrict <$> ExceptT (resizeImageDataUri (fromIntegral maxProfileImageSize) (cropToSquare img) profile)
 
 readProfileImageFile :: FilePath -> CM ImageData
 readProfileImageFile path = liftIO (loadImageData path) >>= either throwCmdError pure
@@ -1340,12 +1340,12 @@ processChatCommand cxt nm = \case
         gInfo <- getGroupInfo db cxt user chatId
         pure (user, gInfo)
       chatScopeInfo <- mapM (getChatScopeInfo cxt user) scope
-      (timedItems, gInfo', chatScopeInfo') <- withFastStore $ \db -> do
-        (timedItems, gInfo', chatScopeInfo') <- updateGroupChatItemsReadList db cxt user gInfo chatScopeInfo itemIds
+      (timedItems, gInfo') <- withFastStore $ \db -> do
+        (timedItems, gInfo') <- updateGroupChatItemsReadList db cxt user gInfo chatScopeInfo itemIds
         timedItems' <- liftIO $ setGroupChatItemsDeleteAt db user chatId timedItems =<< getCurrentTime
-        pure (timedItems', gInfo', chatScopeInfo')
+        pure (timedItems', gInfo')
       forM_ timedItems $ \(itemId, deleteAt) -> startProximateTimedItemThread user (chatRef, itemId) deleteAt
-      pure $ CRItemsReadForChat user (AChatInfo SCTGroup $ GroupChat gInfo' chatScopeInfo')
+      pure $ CRItemsReadForChat user (AChatInfo SCTGroup $ GroupChat gInfo' Nothing)
     CTLocal -> throwCmdError "not supported"
     CTContactRequest -> throwCmdError "not supported"
     CTContactConnection -> throwCmdError "not supported"
@@ -1984,8 +1984,9 @@ processChatCommand cxt nm = \case
   APIGetUpdatedGroupLinkData groupId -> withUser $ \user -> do
     gInfo@GroupInfo {groupProfile = p} <- withFastStore $ \db -> getGroupInfo db cxt user groupId
     case p of
-      GroupProfile {publicGroup = Just PublicGroupProfile {groupLink = sLnk}} | useRelays' gInfo -> do
-        (_, cData@(ContactLinkData _ UserContactData {relays = currentRelayLinks}), _) <- getShortLinkConnReq' nm user sLnk
+      GroupProfile {publicGroup = Just PublicGroupProfile {groupLink = sLnk, publicGroupId}} | useRelays' gInfo -> do
+        (FixedLinkData {linkEntityId}, cData@(ContactLinkData _ UserContactData {relays = currentRelayLinks}), _) <- getShortLinkConnReq' nm user sLnk
+        unless ((B64UrlByteString <$> linkEntityId) == Just publicGroupId) $ throwChatError CEInvalidConnReq
         groupSLinkData_ <- liftIO $ decodeLinkUserData cData
         gInfo' <- case groupSLinkData_ of
           Just sLinkData -> fst <$> updateGroupFromLinkData user gInfo sLinkData Nothing
@@ -2220,7 +2221,7 @@ processChatCommand cxt nm = \case
                 groupPreferences = maybe defaultBusinessGroupPrefs businessGroupPrefs preferences
                 groupProfile = businessGroupProfile profile groupPreferences chatLayout
             gVar <- asks random
-            (gInfo, hostMember_) <- withStore $ \db -> createPreparedGroup db gVar cxt user groupProfile True ccLink welcomeSharedMsgId False GRMember Nothing verifiedDomain
+            (gInfo, hostMember_) <- withStore $ \db -> createPreparedGroup db gVar cxt user groupProfile True ccLink welcomeSharedMsgId False GRMember Nothing (unStrJSON <$> verifiedDomain)
             hostMember <- maybe (throwCmdError "no host member") pure hostMember_
             void $ createChatItem user (CDGroupSnd gInfo Nothing) False CIChatBanner Nothing Nothing (Just epochStart)
             let cd = CDGroupRcv gInfo Nothing hostMember
@@ -2249,7 +2250,7 @@ processChatCommand cxt nm = \case
   APIPrepareGroup userId ccLink direct verifiedDomain groupSLinkData -> withUserId userId $ \user -> do
     let GroupShortLinkData {groupProfile = GroupProfile {description}} = groupSLinkData
     welcomeSharedMsgId <- forM description $ \_ -> getSharedMsgId
-    (gInfo, hostMember_) <- preparedGroupFromLink user ccLink direct groupSLinkData welcomeSharedMsgId verifiedDomain
+    (gInfo, hostMember_) <- preparedGroupFromLink user ccLink direct groupSLinkData welcomeSharedMsgId (unStrJSON <$> verifiedDomain)
     void $ createChatItem user (CDGroupSnd gInfo Nothing) False CIChatBanner Nothing Nothing (Just epochStart)
     let cd = maybe (CDChannelRcv gInfo Nothing) (CDGroupRcv gInfo Nothing) hostMember_
         cInfo = GroupChat gInfo Nothing
@@ -2338,8 +2339,8 @@ processChatCommand cxt nm = \case
         groupSLinkData_ <- liftIO $ decodeLinkUserData cData
         -- Validate link entity ID matches group profile's publicGroupId (relay groups must have both)
         case groupSLinkData_ of
-          Just GroupShortLinkData {groupProfile = GroupProfile {publicGroup = Just PublicGroupProfile {publicGroupId}}}
-            | (B64UrlByteString <$> linkEntityId) == Just publicGroupId -> pure ()
+          Just sLinkData@GroupShortLinkData {groupProfile = GroupProfile {publicGroup = Just PublicGroupProfile {publicGroupId}}}
+            | (B64UrlByteString <$> linkEntityId) == Just publicGroupId -> void $ updateGroupFromLinkData user gInfo sLinkData Nothing
           _ -> throwChatError CEInvalidConnReq
         let publicGroupData_ = groupSLinkData_ >>= \GroupShortLinkData {publicGroupData} -> publicGroupData
             publicMemberCount_ = (\PublicGroupData {publicMemberCount} -> publicMemberCount) <$> publicGroupData_
@@ -4713,7 +4714,7 @@ processChatCommand cxt nm = \case
             _ -> processChatCommand cxt nm $ APIConnect userId incognito $ Just ccLink
       | otherwise = pure $ CRConnectionPlan user ccLink planSimplexName otherSimplexName plan
       where
-        vName = nameDomain <$> planSimplexName
+        vName = StrJSON . nameDomain <$> planSimplexName
         joinChannelViaRelays :: CreatedLinkContact -> GroupShortLinkData -> CM ChatResponse
         joinChannelViaRelays ccl gld = do
           GroupInfo {groupId} <- prepareChannelGroup
@@ -5003,7 +5004,7 @@ processChatCommand cxt nm = \case
           (chatMsgEvents, quotedItems_) <- L.unzip <$> prepareMsgs (L.zip cmrs fInvs_) timed_
           (msgs_, gsr) <- sendGroupMessages user g Nothing showGroupAsSender recipients signMsgs chatMsgEvents
           let itemsData = prepareSndItemsData (L.toList cmrs) (L.toList ciFiles_) (L.toList quotedItems_) (L.toList msgs_)
-          (sentChatInfo, cis_) <- saveSndChatItems' user (CDGroupSnd gInfo chatScopeInfo) showGroupAsSender itemsData timed_ live
+          cis_ <- saveSndChatItems user (CDGroupSnd gInfo chatScopeInfo) showGroupAsSender itemsData timed_ live
           when (length cis_ /= length cmrs) $ logError "sendGroupContentMessages: cmrs and cis_ length mismatch"
           createMemberSndStatuses cis_ msgs_ gsr
           let r@(_, cis) = partitionEithers cis_
@@ -5011,7 +5012,7 @@ processChatCommand cxt nm = \case
           forM_ (timed_ >>= timedDeleteAt') $ \deleteAt ->
             forM_ cis $ \ci ->
               startProximateTimedItemThread user (ChatRef CTGroup groupId scope, chatItemId' ci) deleteAt
-          pure $ CRNewChatItems user (map (AChatItem SCTGroup SMDSnd sentChatInfo) cis)
+          pure $ CRNewChatItems user (map (AChatItem SCTGroup SMDSnd (GroupChat gInfo chatScopeInfo)) cis)
           where
             setupSndFileTransfers :: Int -> CM (NonEmpty (Maybe FileInvitation, Maybe (CIFile 'MDSnd)))
             setupSndFileTransfers n =
@@ -6964,8 +6965,8 @@ chatCommandP =
       "/_contacts " *> (APIListContacts <$> A.decimal),
       "/contacts" $> ListContacts,
       "/_connect plan " *> (APIConnectPlan <$> A.decimal <* A.space <*> ((Just <$> strP) <|> A.takeTill (== ' ') $> Nothing) <*> ((" resolve=" *> planResolveModeP) <|> pure PRMUnknown) <*> optional (" sig=" *> jsonP)),
-      "/_prepare contact " *> (APIPrepareContact <$> A.decimal <* A.space <*> connLinkP <*> optional (" domain=" *> strP) <* A.space <*> jsonP),
-      "/_prepare group " *> (APIPrepareGroup <$> A.decimal <* A.space <*> connLinkP' <*> (" direct=" *> onOffP <|> pure True) <*> optional (" domain=" *> strP) <* A.space <*> jsonP),
+      "/_prepare contact " *> (APIPrepareContact <$> A.decimal <* A.space <*> connLinkP <*> optional (" domain=" *> (StrJSON <$> strP)) <* A.space <*> jsonP),
+      "/_prepare group " *> (APIPrepareGroup <$> A.decimal <* A.space <*> connLinkP' <*> (" direct=" *> onOffP <|> pure True) <*> optional (" domain=" *> (StrJSON <$> strP)) <* A.space <*> jsonP),
       "/_set contact user @" *> (APIChangePreparedContactUser <$> A.decimal <* A.space <*> A.decimal),
       "/_set group user #" *> (APIChangePreparedGroupUser <$> A.decimal <* A.space <*> A.decimal),
       "/_connect contact @" *> (APIConnectPreparedContact <$> A.decimal <*> incognitoOnOffP <*> optional (A.space *> msgContentP)),
