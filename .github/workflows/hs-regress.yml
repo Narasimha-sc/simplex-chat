@@ -86,6 +86,7 @@ jobs:
           mountpoint -q tests/tmp || { sudo mkdir -p tests/tmp; sudo mount -t tmpfs -o size=2G tmpfs tests/tmp; sudo chown $(id -u):$(id -g) tests/tmp; }
           echo "FIX = $(git rev-parse HEAD)" >> /tmp/summary
           bash -c 'source /tmp/run.sh fix'
+          git diff -- src/Simplex/Chat/Store/Postgres/Migrations/chat_schema.sql src/Simplex/Chat/Store/SQLite/Migrations/chat_schema.sql | cat -A | head -60
       - name: Save cache
         if: ${{ !cancelled() }}
         uses: actions/cache/save@v4
