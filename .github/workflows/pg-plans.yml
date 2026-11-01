@@ -1,0 +1,43 @@
+name: pg-plans
+on:
+  push:
+    branches: [ci/pg-plans]
+  workflow_dispatch:
+    inputs:
+      base: {description: base commit (full sha), type: string, required: true}
+      ref: {description: PR commit (full sha), type: string, required: true}
+run-name: pg-plans ${{ inputs.ref }} base=${{ inputs.base }}
+permissions:
+  contents: read
+jobs:
+  plans:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Fetch commits
+        run: git fetch -q origin ${{ inputs.base }} ${{ inputs.ref }}
+      - name: Start PostgreSQL 15
+        run: |
+          docker run -d --name pg -e POSTGRES_HOST_AUTH_METHOD=trust postgres:15 -c timezone=Etc/GMT-4 -c shared_buffers=256MB
+          timeout 60 sh -c 'until docker exec pg pg_isready -U postgres; do sleep 1; done'
+      - name: Plans on base and PR schemas
+        run: |
+          for side in base ref; do
+            sha=${{ inputs.base }}; [ $side = ref ] && sha=${{ inputs.ref }}
+            echo "===== $side $sha" | tee -a out.txt
+            docker exec pg psql -U postgres -q -c "CREATE DATABASE db_$side"
+            git show $sha:src/Simplex/Chat/Store/Postgres/Migrations/chat_schema.sql | docker exec -i pg psql -U postgres -q -d db_$side -v ON_ERROR_STOP=1 > /dev/null
+            docker exec -i pg psql -U postgres -d db_$side -v ON_ERROR_STOP=1 < ci/pg-plans/fixture.sql 2>&1 | tee -a out.txt
+            docker exec -i pg psql -U postgres -d db_$side -c "SELECT indexdef FROM pg_indexes WHERE indexname = 'idx_chat_items_user_id_item_status'" 2>&1 | tee -a out.txt
+            docker exec -i pg psql -U postgres -d db_$side -v ON_ERROR_STOP=1 < ci/pg-plans/queries.sql 2>&1 | tee -a out.txt
+            docker exec -i pg psql -U postgres -d db_$side -v ON_ERROR_STOP=1 < ci/pg-plans/queries.sql > /dev/null 2>&1
+            echo "===== $side warm (second run)" | tee -a out.txt
+            docker exec -i pg psql -U postgres -d db_$side -v ON_ERROR_STOP=1 < ci/pg-plans/queries.sql 2>&1 | tee -a out.txt
+          done
+      - name: Summary
+        if: always()
+        run: |
+          { echo '```'; cat out.txt; echo '```'; } >> $GITHUB_STEP_SUMMARY
