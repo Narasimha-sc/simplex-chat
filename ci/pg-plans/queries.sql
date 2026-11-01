@@ -17,10 +17,6 @@ EXPLAIN (ANALYZE, BUFFERS) SELECT MIN(chat_item_id) FROM chat_items WHERE user_i
 EXPLAIN (ANALYZE, BUFFERS) SELECT MIN(chat_item_id) FROM chat_items WHERE user_id = 1 AND item_status = 'rcv_new' GROUP BY user_id;
 \echo '### Q8 chat list ChatStats of contacts, user 1'
 EXPLAIN (ANALYZE, BUFFERS) SELECT contact_id, COUNT(1) AS UnreadCount, MIN(chat_item_id) AS MinUnread FROM chat_items WHERE user_id = 1 AND contact_id IS NOT NULL AND item_status = 'rcv_new' GROUP BY contact_id;
-\echo '### Q9 mark all read, user 2 (rolled back)'
-BEGIN;
-EXPLAIN (ANALYZE, BUFFERS) UPDATE chat_items SET item_status = 'rcv_read', item_viewed = 1, updated_at = now() WHERE user_id = 2 AND item_status = 'rcv_new';
-ROLLBACK;
 \echo '### Q10 files of a profile (no files: plan only)'
 EXPLAIN SELECT f.file_id FROM chat_items i JOIN files f ON f.chat_item_id = i.chat_item_id WHERE i.user_id = 1;
 \echo '### Q11 per-contact unread count, user 1, contact 13'
@@ -29,11 +25,3 @@ EXPLAIN (ANALYZE, BUFFERS) SELECT COUNT(1) FROM chat_items WHERE user_id = 1 AND
 EXPLAIN (ANALYZE, BUFFERS) SELECT chat_item_id FROM chat_items WHERE user_id = 1 AND contact_id = 13 AND item_status = 'rcv_new' ORDER BY created_at ASC, chat_item_id ASC LIMIT 1;
 \echo '### Q13 message search across chats, user 1, no match'
 EXPLAIN (ANALYZE, BUFFERS) SELECT chat_item_id, contact_id, group_id, group_scope_tag, group_scope_group_member_id, note_folder_id FROM chat_items WHERE user_id = 1 AND LOWER(item_text) LIKE '%' || LOWER('zzz') || '%' ORDER BY item_ts DESC, chat_item_id DESC LIMIT 100;
-\echo '### Q14 mark all read, user 1 (rolled back)'
-BEGIN;
-EXPLAIN (ANALYZE, BUFFERS) UPDATE chat_items SET item_status = 'rcv_read', item_viewed = 1, updated_at = now() WHERE user_id = 1 AND item_status = 'rcv_new';
-ROLLBACK;
-\echo '### Q15 user deletion, user 2 (rolled back)'
-BEGIN;
-EXPLAIN (ANALYZE, BUFFERS) DELETE FROM users WHERE user_id = 2;
-ROLLBACK;

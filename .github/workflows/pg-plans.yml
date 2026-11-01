@@ -34,8 +34,10 @@ jobs:
             docker exec -i pg psql -U postgres -d db_$side -c "SELECT indexdef FROM pg_indexes WHERE indexname = 'idx_chat_items_user_id_item_status'" 2>&1 | tee -a out.txt
             docker exec -i pg psql -U postgres -d db_$side -v ON_ERROR_STOP=1 < ci/pg-plans/queries.sql 2>&1 | tee -a out.txt
             docker exec -i pg psql -U postgres -d db_$side -v ON_ERROR_STOP=1 < ci/pg-plans/queries.sql > /dev/null 2>&1
-            echo "===== $side warm (second run)" | tee -a out.txt
+            echo "===== $side warm (third run)" | tee -a out.txt
             docker exec -i pg psql -U postgres -d db_$side -v ON_ERROR_STOP=1 < ci/pg-plans/queries.sql 2>&1 | tee -a out.txt
+            echo "===== $side writes (rolled back, after the reads)" | tee -a out.txt
+            docker exec -i pg psql -U postgres -d db_$side -v ON_ERROR_STOP=1 < ci/pg-plans/writes.sql 2>&1 | tee -a out.txt
           done
       - name: Summary
         if: always()
