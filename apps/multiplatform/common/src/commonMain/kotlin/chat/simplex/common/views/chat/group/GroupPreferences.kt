@@ -40,8 +40,8 @@ fun GroupPreferencesView(m: ChatModel, rhId: Long?, chatId: String, close: () ->
     if (g == null || ch.remoteHostId != rhId) null else g
   }}
   val gInfo = groupInfo.value ?: return
-  var preferences by rememberSaveable(gInfo.fullGroupPreferences, stateSaver = serializableSaver()) { mutableStateOf(gInfo.fullGroupPreferences) }
-  var currentPreferences by rememberSaveable(gInfo.fullGroupPreferences, stateSaver = serializableSaver()) { mutableStateOf(preferences) }
+  var preferences by rememberSaveable(gInfo, stateSaver = serializableSaver()) { mutableStateOf(gInfo.fullGroupPreferences) }
+  var currentPreferences by rememberSaveable(gInfo, stateSaver = serializableSaver()) { mutableStateOf(preferences) }
 
   fun savePrefs(afterSave: () -> Unit = {}) {
     withBGApi {
