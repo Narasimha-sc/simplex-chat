@@ -297,7 +297,6 @@ instance StrEncoding ReportReason where
     A.takeTill (== ' ') >>= \case
       "spam" -> pure RRSpam
       "content" -> pure RRContent
-      "illegal" -> pure RRContent
       "community" -> pure RRCommunity
       "profile" -> pure RRProfile
       "other" -> pure RROther
