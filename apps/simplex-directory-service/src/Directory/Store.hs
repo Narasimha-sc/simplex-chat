@@ -83,7 +83,7 @@ import Simplex.Messaging.Agent.Store.DB (BoolInt (..), fromTextField_)
 import qualified Simplex.Messaging.Agent.Store.DB as DB
 import Simplex.Messaging.Encoding.String
 import Simplex.Messaging.Parsers (defaultJSON, dropPrefix, enumJSON)
-import Simplex.Messaging.Util (eitherToMaybe, firstRow, maybeFirstRow, maybeFirstRow', safeDecodeUtf8)
+import Simplex.Messaging.Util (eitherToMaybe, firstRow, maybeFirstRow', safeDecodeUtf8)
 
 #if defined(dbPostgres)
 import Database.PostgreSQL.Simple (Only (..), Query, (:.) (..))
@@ -282,10 +282,10 @@ groupDBError = \case
   SEGroupNotFound _ -> "group not found"
   e -> show e
 
-getMemberStatus :: ChatController -> User -> GroupId -> GroupMemberId -> IO (Either String (Maybe GroupMemberStatus))
+getMemberStatus :: ChatController -> User -> GroupId -> GroupMemberId -> IO (Either String GroupMemberStatus)
 getMemberStatus cc User {userId} gId gmId =
-  withDB' "getMemberStatus" cc $ \db ->
-    maybeFirstRow fromOnly $
+  withDB "getMemberStatus" cc $ \db ->
+    ExceptT . firstRow fromOnly ("member not found: " <> show gmId) $
       DB.query db "SELECT member_status FROM group_members WHERE user_id = ? AND group_id = ? AND group_member_id = ?" (userId, gId, gmId)
 
 setGroupRegOwner :: ChatController -> GroupId -> GroupMember -> IO (Either String ())
