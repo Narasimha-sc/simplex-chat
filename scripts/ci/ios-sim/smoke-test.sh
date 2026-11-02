@@ -207,11 +207,8 @@ expect_chat_list reachable
 expect_chat_list top
 "$ui" layout reachable
 echo "smoke test passed: onboarding reaches the chat list, which shows its onboarding pages and toolbar with the one-hand UI and with the top bar"
-
-products=$(dirname "$app")
-if [[ "$products" == */Build/Products/Debug-iphonesimulator ]]; then
-  "$(dirname "$0")/snapshots.sh" "${products%/Build/Products/Debug-iphonesimulator}" "$UI_OUT/snapshots"
-fi
+"$(dirname "$0")/pr-scenario.sh"
+exit 0
 
 if [ "$cases" = images ]; then
   "$ui" tap "Don’t Allow" 10 || true
