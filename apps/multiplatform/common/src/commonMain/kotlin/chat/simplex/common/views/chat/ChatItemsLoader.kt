@@ -67,10 +67,7 @@ private fun isNewestPageOfCurrentHost(chat: Chat, navInfo: NavigationInfo): Bool
 private fun Chat.ChatStats.withUnreadChanges(loadedItems: List<ChatItem>, items: List<ChatItem>): Chat.ChatStats {
   fun countUnread(list: List<ChatItem>) = list.count { it.isRcvNew }
   fun countUnreadMentions(list: List<ChatItem>) = list.count { it.isRcvNew && it.meta.userMention }
-  return copy(
-    unreadCount = unreadCount + countUnread(items) - countUnread(loadedItems),
-    unreadMentions = unreadMentions + countUnreadMentions(items) - countUnreadMentions(loadedItems)
-  )
+  return this
 }
 
 suspend fun processLoadedChat(

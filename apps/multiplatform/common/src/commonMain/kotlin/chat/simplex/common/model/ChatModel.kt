@@ -592,7 +592,6 @@ object ChatModel {
     }
 
     fun applyItemUpdatesWhileLoading(record: ItemUpdatesWhileLoading) {
-      record.updates.forEach { it() }
     }
 
     private fun recordUpdate(update: () -> Unit) {
