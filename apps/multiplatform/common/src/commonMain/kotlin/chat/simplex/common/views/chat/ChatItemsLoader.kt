@@ -84,10 +84,8 @@ suspend fun processLoadedChat(
             chatModel.chatsContext.addChat(chat)
           } else {
             chatModel.chatsContext.updateChatInfo(chat.remoteHostId, chat.chatInfo)
-            if (addedWhileLoading.items.none { (cInfo, _) -> cInfo.id == chat.id }) {
-              // unreadChat is currently not actual in getChat query (always false)
-              chatModel.chatsContext.updateChatStats(chat.remoteHostId, chat.id, chat.chatStats.copy(unreadChat = oldChat.chatStats.unreadChat))
-            }
+            // unreadChat is currently not actual in getChat query (always false)
+            chatModel.chatsContext.updateChatStats(chat.remoteHostId, chat.id, chat.chatStats.copy(unreadChat = oldChat.chatStats.unreadChat))
           }
         }
       }
@@ -101,9 +99,7 @@ suspend fun processLoadedChat(
         totalAfter.value = navInfo.afterTotal
         unreadTotal.value = chat.chatStats.unreadCount
         unreadAfter.value = navInfo.afterUnread
-        unreadAfterNewestLoaded.value = navInfo.afterUnread
-        chatsCtx.applyItemsAddedWhileLoading(addedWhileLoading)
-      }
+        unreadAfterNewestLoaded.value = navInfo.afterUnread      }
     }
     is ChatPagination.Before -> {
       newItems.addAll(oldItems)
@@ -121,9 +117,7 @@ suspend fun processLoadedChat(
         if (chatWasSwitched(chat, pagination, openAroundItemId)) return@withContext
         chatsCtx.chatItems.replaceAll(newItems)
         splits.value = newSplits
-        chatState.moveUnreadAfterItem(oldUnreadSplitIndex, newUnreadSplitIndex, oldItems)
-        chatsCtx.applyItemsAddedWhileLoading(addedWhileLoading)
-      }
+        chatState.moveUnreadAfterItem(oldUnreadSplitIndex, newUnreadSplitIndex, oldItems)      }
     }
     is ChatPagination.After -> {
       newItems.addAll(oldItems)
@@ -146,9 +140,7 @@ suspend fun processLoadedChat(
         // loading clear bottom area, updating number of unread items after the newest loaded item
         if (indexToAddIsLast) {
           unreadAfterNewestLoaded.value -= unreadInLoaded
-        }
-        chatsCtx.applyItemsAddedWhileLoading(addedWhileLoading)
-      }
+        }      }
     }
     is ChatPagination.Around -> {
       val newSplits: ArrayList<Long> = if (openAroundItemId == null) {
@@ -178,9 +170,7 @@ suspend fun processLoadedChat(
         } else {
           // no need to set it, count will be wrong
           // unreadAfterNewestLoaded.value = navInfo.afterUnread
-        }
-        chatsCtx.applyItemsAddedWhileLoading(addedWhileLoading)
-      }
+        }      }
     }
     is ChatPagination.Last -> {
       newItems.addAll(oldItems)
@@ -191,9 +181,7 @@ suspend fun processLoadedChat(
         if (chatWasSwitched(chat, pagination, openAroundItemId)) return@withContext
         chatsCtx.chatItems.replaceAll(newItems)
         chatState.splits.value = newSplits
-        unreadAfterNewestLoaded.value = 0
-        chatsCtx.applyItemsAddedWhileLoading(addedWhileLoading)
-      }
+        unreadAfterNewestLoaded.value = 0      }
     }
   }
 }
