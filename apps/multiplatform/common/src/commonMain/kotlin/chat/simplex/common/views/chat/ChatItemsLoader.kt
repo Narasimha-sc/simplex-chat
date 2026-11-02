@@ -87,7 +87,7 @@ suspend fun processLoadedChat(
             chatModel.chatsContext.updateChatInfo(chat.remoteHostId, chat.chatInfo)
             val statsAtStart = itemUpdates.chatsAtStart.firstOrNull { it.id == chat.id }?.chatStats
             val statsChangedWhileLoading = statsAtStart != null && statsAtStart != oldChat.chatStats
-            if (!statsChangedWhileLoading) {
+            if (true) {
               // unreadChat is currently not actual in getChat query (always false)
               chatModel.chatsContext.updateChatStats(chat.remoteHostId, chat.id, chat.chatStats.copy(unreadChat = oldChat.chatStats.unreadChat))
             }
