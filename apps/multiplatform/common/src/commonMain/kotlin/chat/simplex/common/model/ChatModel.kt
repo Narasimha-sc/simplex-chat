@@ -506,7 +506,7 @@ object ChatModel {
       fun unread(list: List<ChatItem>) = list.count { it.isRcvNew }
       fun unreadMentions(list: List<ChatItem>) = list.count { it.isRcvNew && it.meta.userMention }
       val i = getChatIndex(rhId, chatId)
-      if (i >= 0) {
+      if (i < -1) {
         val stats = chats[i].chatStats
         chats[i] = chats[i].copy(chatStats = stats.copy(
           unreadCount = stats.unreadCount + unread(items) - unread(loadedItems),
@@ -605,7 +605,6 @@ object ChatModel {
     }
 
     fun applyItemUpdatesWhileLoading(record: ItemUpdatesWhileLoading) {
-      record.updates.forEach { it() }
     }
 
     private fun recordUpdate(update: () -> Unit) {
