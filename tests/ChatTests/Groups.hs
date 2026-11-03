@@ -60,6 +60,10 @@ import Simplex.Messaging.Transport
 import Simplex.Messaging.Version
 import System.Directory (copyFile, doesFileExist)
 import System.FilePath ((</>))
+import System.Timeout (timeout)
+import Simplex.Chat.Controller (storeCxt)
+import Simplex.Chat.Store.Groups (createNewUnknownGroupMember, getGroupIdByName)
+import Simplex.Chat.Store.Shared (getGroupInfo)
 import Test.Hspec hiding (it)
 #if defined(dbPostgres)
 import Database.PostgreSQL.Simple (Only (..))
@@ -89,6 +93,7 @@ chatGroupTests = do
     it "delete contact before they accept group invitation, contact joins group" testGroupDeleteInvitedContact
     it "member profile is kept when deleting group if other groups have this member" testDeleteGroupMemberProfileKept
     it "remove several members at once" testGroupRemoveMembers
+    it "remove more members than fit in one message" testGroupRemoveMembersSplitBatch
     it "remove contact from group and add again" testGroupRemoveAdd
     it "list groups containing group invitations" testGroupList
     it "group message quoted replies" testGroupMessageQuotedReply
@@ -1173,6 +1178,41 @@ testGroupRemoveMembers =
             cath <## "#team: alice removed you from the group (signed)"
             cath <## "use /d #team to delete the group"
         ]
+
+testGroupRemoveMembersSplitBatch :: HasCallStack => TestParams -> IO ()
+testGroupRemoveMembersSplitBatch =
+  testChat2 aliceProfile bobProfile $
+    \alice bob -> do
+      connectUsers alice bob
+      alice ##> "/g team"
+      alice <## "group #team is created"
+      alice <## "to add members use /a team <name> or /create link #team"
+      let cxt = storeCxt $ chatController alice
+      withCCTransaction alice $ \db -> withCCUser alice $ \user ->
+        either (fail . show) pure =<< runExceptT (do
+          g <- getGroupInfo db cxt user =<< getGroupIdByName db user "team"
+          forM_ [1 .. 260 :: Int] $ \i ->
+            createNewUnknownGroupMember db cxt user g (MemberId $ B.pack $ "placeholder-" <> show i) (T.pack $ "p" <> show i) GRMember)
+      addMember "team" alice bob GRMember
+      bob ##> "/j team"
+      concurrently_
+        (alice <## "#team: bob joined the group")
+        (bob <## "#team: you joined the group")
+      threadDelay 500000
+      ids <- withCCTransaction alice $ \db -> do
+        DB.execute_ db "UPDATE group_members SET member_status = 'connected' WHERE member_status = 'unknown'"
+        map fromOnly <$> (DB.query_ db "SELECT group_member_id FROM group_members WHERE group_id = 1 AND member_category != 'user' ORDER BY group_member_id" :: IO [Only Int64])
+      putStrLn $ "SPLIT-BATCH: removing " <> show (length ids) <> " members"
+      alice ##> ("/_remove #1 " <> intercalate "," (map show ids))
+      aliceLines <- drain alice
+      bobLines <- drain bob
+      mapM_ (putStrLn . ("SPLIT-BATCH alice: " <>)) aliceLines
+      mapM_ (putStrLn . ("SPLIT-BATCH bob: " <>)) bobLines
+      let bobErrors = filter (\l -> "error" `isInfixOf` l && not ("unknown member ID" `isInfixOf` l)) bobLines
+      putStrLn $ "SPLIT-BATCH bob errors: " <> show (length bobErrors)
+      bobErrors `shouldBe` []
+  where
+    drain cc = timeout 10000000 (getTermLine cc) >>= maybe (pure []) (\l -> (l :) <$> drain cc)
 
 testGroupRemoveAdd :: HasCallStack => TestParams -> IO ()
 testGroupRemoveAdd =
