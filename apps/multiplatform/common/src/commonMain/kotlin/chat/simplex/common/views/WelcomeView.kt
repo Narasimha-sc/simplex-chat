@@ -46,6 +46,7 @@ import chat.simplex.common.views.usersettings.DeleteImageButton
 import chat.simplex.common.views.usersettings.EditImageButton
 import chat.simplex.common.views.usersettings.SettingsActionItem
 import chat.simplex.res.*
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
@@ -58,7 +59,8 @@ fun bioFitsLimit(bio: String): Boolean {
 }
 
 @Composable
-fun CreateProfile(chatModel: ChatModel, close: () -> Unit) {
+fun CreateProfile(chatModel: ChatModel, close: () -> Unit, createProfile: ((String, String, String?) -> Job)? = null) {
+  var submitting by remember { mutableStateOf(false) }
   val scope = rememberCoroutineScope()
   val scrollState = rememberScrollState()
   val keyboardState by getKeyboardState()
@@ -157,15 +159,19 @@ fun CreateProfile(chatModel: ChatModel, close: () -> Unit) {
         SettingsActionItem(
           painterResource(MR.images.ic_check),
           stringResource(MR.strings.create_another_profile_button),
-          disabled = !canCreateProfile(displayName.value) || !bioFitsLimit(shortDescr.value),
+          disabled = submitting || !canCreateProfile(displayName.value) || !bioFitsLimit(shortDescr.value),
           textColor = MaterialTheme.colors.primary,
           iconColor = MaterialTheme.colors.primary,
           click = {
-            if (chatModel.localUserCreated.value == true) {
+            submitting = true
+            val job = if (createProfile != null) {
+              createProfile(displayName.value, shortDescr.value, profileImage.value)
+            } else if (chatModel.localUserCreated.value == true) {
               createProfileInProfiles(chatModel, displayName.value, shortDescr.value, profileImage.value, close)
             } else {
               createProfileInNoProfileSetup(displayName.value, profileImage.value, close)
             }
+            job.invokeOnCompletion { submitting = false }
           },
         )
         SectionTextFooter(generalGetString(MR.strings.your_profile_is_stored_on_your_device))
@@ -353,7 +359,29 @@ private fun CreateFirstProfileDesktop(chatModel: ChatModel, close: () -> Unit) {
   }
 }
 
-fun createProfileInNoProfileSetup(displayName: String, image: String? = null, close: () -> Unit) {
+fun createProfileForInvitation(rhId: Long?, onCreated: (User) -> Unit) {
+  val modalManager = ModalManager.fullscreen
+  if (modalManager.isTopModalOpen(ModalViewId.CREATE_PROFILE)) return
+  modalManager.showModalCloseable(id = ModalViewId.CREATE_PROFILE) { close ->
+    CreateProfile(chatModel, close, createProfile = { displayName, shortDescr, image ->
+      withBGApi {
+        val profile = Profile(displayName.trim(), "", shortDescr.trim().ifEmpty { null }, image = image)
+        val user = controller.apiCreateActiveUser(rhId, profile, keepActiveUser = true) ?: return@withBGApi
+        if (user.activeUser) {
+          controller.changeActiveUser_(rhId, user.userId, null)
+          if (modalManager.isTopModalOpen(ModalViewId.CREATE_PROFILE)) close()
+          return@withBGApi
+        }
+        chatModel.users.add(UserInfo(user, 0))
+        if (!modalManager.isTopModalOpen(ModalViewId.CREATE_PROFILE)) return@withBGApi
+        close()
+        onCreated(user)
+      }
+    })
+  }
+}
+
+fun createProfileInNoProfileSetup(displayName: String, image: String? = null, close: () -> Unit): Job =
   withBGApi {
     val user = controller.apiCreateActiveUser(null, Profile(displayName.trim(), "", null, image)) ?: return@withBGApi
     if (!chatModel.connectedToRemote()) {
@@ -364,9 +392,8 @@ fun createProfileInNoProfileSetup(displayName: String, image: String? = null, cl
     controller.switchUIRemoteHost(null)
     close()
   }
-}
 
-fun createProfileInProfiles(chatModel: ChatModel, displayName: String, shortDescr: String, image: String? = null, close: () -> Unit) {
+fun createProfileInProfiles(chatModel: ChatModel, displayName: String, shortDescr: String, image: String? = null, close: () -> Unit): Job =
   withBGApi {
     val rhId = chatModel.remoteHostId()
     val user = chatModel.controller.apiCreateActiveUser(
@@ -384,7 +411,6 @@ fun createProfileInProfiles(chatModel: ChatModel, displayName: String, shortDesc
       close()
     }
   }
-}
 
 fun createProfileOnboarding(chatModel: ChatModel, displayName: String, close: () -> Unit) {
   withBGApi {
