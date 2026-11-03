@@ -21,7 +21,7 @@ constraints: zip +disable-bzip2 +disable-zstd
 source-repository-package
     type: git
     location: https://github.com/Narasimha-sc/simplexmq.git
-    tag: 548fcaac9bed2c3131b36a9c0b189b981b90ea30
+    tag: f0d3f229191de6324254517c2cae8335e3ec5cd4
 
 source-repository-package
     type: git
