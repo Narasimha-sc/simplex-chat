@@ -536,16 +536,14 @@ fun ChatView(
                 val stats = r?.second
                 val (updatedMember, code) = if ((member.memberActive || (groupInfo.useRelays && member.memberCurrent)) && member.memberRole != GroupMemberRole.Relay) {
                   val memCode = chatModel.controller.apiGetGroupMemberCode(chatRh, groupInfo.apiId, member.groupMemberId)
-                  (memCode?.first ?: r?.first) to memCode?.second
+                  (memCode?.first ?: r?.first ?: member) to memCode?.second
                 } else {
-                  r?.first to null
+                  (r?.first ?: member) to null
                 }
                 if (!isActive || chatModel.chatId.value != groupInfo.id) return@launch
                 // members are not loaded in large groups, so only the opened member is added to the model
-                if (updatedMember != null) {
-                  withContext(Dispatchers.Main) {
-                    chatModel.chatsContext.upsertGroupMember(chatRh, groupInfo, updatedMember)
-                  }
+                withContext(Dispatchers.Main) {
+                  chatModel.chatsContext.upsertGroupMember(chatRh, groupInfo, updatedMember)
                 }
                 connStats.value = stats
                 connectionCode.value = code

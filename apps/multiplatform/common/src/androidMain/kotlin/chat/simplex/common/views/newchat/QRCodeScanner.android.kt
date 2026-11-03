@@ -65,7 +65,7 @@ actual fun QRCodeScanner(
     val modifier = Modifier
       .padding(padding)
       .clipToBounds()
-      .sizeIn(maxWidth = 400.dp, maxHeight = 400.dp)
+      .widthIn(max = 400.dp)
       .aspectRatio(1f)
     val showScanner = remember { showQRCodeScanner }
     if (showScanner.value && cameraPermissionState.status == PermissionStatus.Granted) {
