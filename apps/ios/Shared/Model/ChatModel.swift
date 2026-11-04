@@ -730,14 +730,9 @@ final class ChatModel: ObservableObject {
     }
 
     func applyItemUpdatesWhileLoading(_ record: ItemUpdatesWhileLoading, _ loadingIM: ItemsModel, _ loadedChatId: ChatId) {
-        record.additions.forEach { $0(loadingIM, loadedChatId) }
-        record.updates.forEach { $0(loadingIM, loadedChatId) }
     }
 
     func applyItemUpdatesUntilChatIsShown(_ record: ItemUpdatesWhileLoading, _ loadingIM: ItemsModel, _ loadedChatId: ChatId) {
-        loadingIM.stopApplyingItemUpdates()
-        record.installed = (loadingIM, loadedChatId)
-        loadingIM.openingItemUpdates = record
     }
 
     private func addToRecords(_ update: @escaping (ItemsModel, ChatId) -> Void, in list: ReferenceWritableKeyPath<ItemUpdatesWhileLoading, [(ItemsModel, ChatId) -> Void]>) {
