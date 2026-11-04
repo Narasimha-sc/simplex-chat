@@ -21,3 +21,7 @@ The switch was added on all platforms, as the other `TCP_*` rows are.
 
 - Advanced network settings on Android and desktop; iOS returns to master.
 - The stored preference and the config sent are unchanged.
+
+## Open questions
+
+- With the switch hidden and its stored value on (set before a SOCKS proxy was turned on, or imported from an Android or Linux archive), "Reset to defaults" is enabled and clears the stored value, although every visible row is at its default.

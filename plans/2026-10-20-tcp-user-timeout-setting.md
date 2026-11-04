@@ -18,7 +18,7 @@ A connection with unacknowledged data gets no TCP keep-alive probes, so the OS f
 
 ## Testing
 
-Desktop and Android, master vs this change: the switch is present only with this change; an untouched screen has Save and Reset disabled on both; the switch is stored and survives a restart and a SOCKS proxy on/off; the network config has `"unackedDataTimeout":true` only when it is on; keep-alive settings, Reset to defaults and messaging after "Save and reconnect" are the same on both.
+Desktop and Android, master vs this change: the switch is present only with this change; an untouched screen has Save and Reset disabled on both; the stored value survives a restart and a SOCKS proxy on/off; the network config has `"unackedDataTimeout":true` only when it is on; keep-alive settings, Reset to defaults and messaging after "Save and reconnect" are the same on both.
 
 Effect (desktop, a test build with simplexmq #1926, a local SMP server in a network namespace whose replies were dropped from just before a message was sent): with the switch on, the app's connection failed ~90 s after its data went unacknowledged and the app reconnected once the replies were let through; with it off, the connection was still open 337 s after the message was sent.
 
