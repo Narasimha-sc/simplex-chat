@@ -267,8 +267,12 @@ fun ChatView(
     }
     val clipboard = LocalClipboardManager.current
     val terminal = chatInfo.activeChatLayout(user) == ChatLayoutMode.Terminal
+    val appBarConnection: () -> CollapsingAppBarNestedScrollConnection = when (chatInfo) {
+      is ChatInfo.Direct, is ChatInfo.Group, is ChatInfo.Local -> ::FixedAppBarNestedScrollConnection
+      else -> ::CollapsingAppBarNestedScrollConnection
+    }
     CompositionLocalProvider(
-      LocalAppBarHandler provides rememberAppBarHandler(chatInfo.id, keyboardCoversBar = false, connection = ::FixedAppBarNestedScrollConnection),
+      LocalAppBarHandler provides rememberAppBarHandler(chatInfo.id, keyboardCoversBar = false, connection = appBarConnection),
       LocalSelectionManager provides selectionManager,
       LocalTerminalLayout provides terminal,
       LocalBubbleLayout provides !terminal,
