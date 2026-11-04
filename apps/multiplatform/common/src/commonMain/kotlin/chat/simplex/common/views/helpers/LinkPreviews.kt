@@ -212,7 +212,7 @@ fun ChatItemLinkView(linkPreview: LinkPreview, showMenu: State<Boolean>, onLongC
       modifier = Modifier
         .fillMaxWidth()
         .desktopModifyBlurredState(blurred, showMenu)
-        .privacyBlur(true, image, blurred, chatViewScrollState.collectAsState(), onLongClick = onLongClick),
+        .privacyBlur(true, image, blurred, chatViewScrollState, onLongClick = onLongClick),
       contentScale = ContentScale.FillWidth,
     )
     Column(Modifier.padding(top = 6.dp).padding(horizontal = 12.dp)) {
