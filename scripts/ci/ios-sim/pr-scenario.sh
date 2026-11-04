@@ -13,11 +13,12 @@ peer_dir=$out/peer
 results=$out/results.tsv
 port=5226
 c1_trials=6
-c1_count=24
 c5_trials=8
-c5_count=24
+flood_max=150
 interval=0.05
 tap_at=6
+stop_after=3
+min_valid=10
 geom_re=' at (-?[0-9]+),(-?[0-9]+) size ([0-9]+)x([0-9]+)'
 account_image='^Image "Account" .* at [0-9]+,(7[5-9][0-9]|8[0-9][0-9]) '
 
@@ -29,12 +30,15 @@ esac
 cat << EOF
 openmsg scenario, build $build (${GITHUB_REF_NAME:-no branch}): messages received while their chat is opening.
   Bob, a CLI peer on the test backend's SMP server, sends numbered texts; the app's chat shows them, read by OCR.
-  Bob sends each text as soon as his CLI accepts it, at most one per $interval s; the tap follows his answer to text $tap_at.
-  C1  $c1_trials times: $c1_count texts "Wave <j> number NNNN"; Bob's chat is opened from the chat list
-  C5  $c5_trials times, Bob's chat open with its search open: $c5_count texts "Reload <j> number NNNN";
+  Bob sends texts as fast as his CLI accepts them, at most one per $interval s and $flood_max in all; the tap follows his
+  answer to text $tap_at, and Bob stops $stop_after s after the app log shows the apiGetChat response of the open or reload.
+  C1  $c1_trials times: texts "Wave <j> number NNNN"; Bob's chat is opened from the chat list
+  C5  $c5_trials times, Bob's chat open with its search open: texts "Reload <j> number NNNN";
       the search's Cancel (an initial reload of the open chat)
   C2  after a sample with lost numbers, the chat reopened without a flood shows them
   A number is lost when a screenshot shows numbers below and above it but not it.
+  A sample is valid when Bob's answers come both before the apiGetChat request and after its response.
+  The verdict is INCONCLUSIVE with fewer than $min_valid valid samples.
   Results: openmsg/results.tsv of the smoke test artifact.
 EOF
 
@@ -352,7 +356,7 @@ read_burst() {
   ocr=$out/$name.ocr
   : > "$ocr"
   to_bottom
-  for p in 1 2 3 4 5 6 7 8; do
+  for p in $(seq 1 16); do
     shot "$name-page$p"
     png=$(shot_file "$name-page$p")
     [ -n "$png" ] || fail "no screenshot $name-page$p"
@@ -374,11 +378,44 @@ app_log_lines() {
 }
 
 verdict_of() {
+  if [ "$2" != valid ]; then
+    echo INVALID
+    return
+  fi
   case "$1" in
     bug) if [ "$build" = base ]; then echo MATCH; else echo MISMATCH; fi ;;
     ok) echo MATCH ;;
     *) echo INVALID ;;
   esac
+}
+
+flood_and_tap() {
+  local tag=$1 text=$2 x=$3 y=$4 name=$5 t0 t1
+  load_request="" load_response=""
+  om flood "$peer_dir" "$tag" "$cid" "$flood_max" "$interval" "$text"
+  om flood-reached "$peer_dir" "$tag" "$tap_at" 60 || fail "Bob did not send $tap_at texts in 60 s"
+  load_mark=$(wc -c < "$UI_OUT/app.log" | tr -d ' ')
+  t0="" t1=""
+  read -r t0 t1 < <(om tap "$x" "$y") || true
+  echo "$name: tapped between ${t0:-?} and ${t1:-?}"
+  read_load 60
+  if [ -n "$load_response" ]; then
+    sleep "$stop_after"
+    om stop "$peer_dir" "$tag"
+  else
+    echo "$name: no apiGetChat response in the app log yet, the flood runs to $flood_max texts"
+  fi
+  om flood-wait "$peer_dir" "$tag" 400 || echo "flood $tag: not every message got a response"
+  om stop "$peer_dir" "$tag"
+  if [ -z "$load_response" ]; then
+    read_load 30
+  fi
+}
+
+read_load() {
+  local type=""
+  read -r load_request load_response type < <(om load-time "$UI_OUT/app.log" "$load_mark" "$1") || true
+  echo "apiGetChat after app log byte $load_mark: request ${load_request:-none}, response ${load_response:-none} ${type:-}"
 }
 
 c2_reopen() {
@@ -396,16 +433,16 @@ c2_reopen() {
 }
 
 judge_sample() {
-  local check=$1 tag=$2 word=$3 j=$4 count=$5 t0=$6 window=$7 name=$8 outcome missing gap obs v
-  om judge "$peer_dir" "$tag" "$word" "$j" "$count" "$t0" "$window" "$out/$name.ocr" > "$out/$name.judge" || fail "the judge failed for $name"
+  local check=$1 tag=$2 word=$3 j=$4 name=$5 outcome missing gap validity obs v
+  om judge "$peer_dir" "$tag" "$word" "$j" "$load_request" "$load_response" "$out/$name.ocr" > "$out/$name.judge" || fail "the judge failed for $name"
   app_log_lines >> "$out/$name.judge"
   cat "$out/$name.judge"
-  read -r outcome missing gap < "$out/$name.judge"
+  read -r outcome missing gap validity < "$out/$name.judge"
   obs=$(sed -n 2p "$out/$name.judge")
   if [ "$build" = base ] && [ "$outcome" = ok ]; then
     obs="timing-miss $obs"
   fi
-  v=$(verdict_of "$outcome")
+  v=$(verdict_of "$outcome" "$validity")
   if [ "$gap" = - ]; then
     gap=$(basename "$(shot_file "$name-page1")")
   fi
@@ -416,29 +453,26 @@ judge_sample() {
 }
 
 c1_trial() {
-  local j=$1 tag=c1o$1 word=Wave name=C1-open$1 line x y t0 t1
+  local j=$1 tag=c1o$1 word=Wave name=C1-open$1 line
   to_list
   line=$(bob_row)
   [ -n "$line" ] || fail "no row of Bob in the chat list"
   geom "$line"
-  x=$((gx + gw / 2))
-  y=$((gy + gh / 2))
-  om flood "$peer_dir" "$tag" "$cid" "$c1_count" "$interval" "$word $j number"
-  om flood-reached "$peer_dir" "$tag" "$tap_at" 60 || fail "Bob did not send $tap_at texts in 60 s"
-  t0="" t1=""
-  read -r t0 t1 < <(om tap "$x" "$y") || true
-  [ -n "$t0" ] || fail "the tap on Bob's row failed"
-  echo "$name: tapped Bob's row between $t0 and $t1"
+  flood_and_tap "$tag" "$word $j number" $((gx + gw / 2)) $((gy + gh / 2)) "$name"
   if ! wait_chat 20; then
     shot "$name-not-opened"
     record "C1-open-during-flood-$j" "$expect" "the chat did not open" INVALID "$(basename "$(shot_file "$name-not-opened")")"
     return 0
   fi
-  shot "$name-opened"
-  om flood-wait "$peer_dir" "$tag" "$c1_count" 120 || echo "flood $tag: not every message got a response"
+  if [ -z "$load_response" ]; then
+    shot "$name-no-load"
+    record "C1-open-during-flood-$j" "$expect" "no apiGetChat response in the app log" INVALID "$(basename "$(shot_file "$name-no-load")")"
+    back_to_list
+    return 0
+  fi
   sleep 4
   read_burst "$word" "$j" "$name"
-  judge_sample "C1-open-during-flood-$j" "$tag" "$word" "$j" "$c1_count" "$t0" 1.0 "$name"
+  judge_sample "C1-open-during-flood-$j" "$tag" "$word" "$j" "$name"
   back_to_list
   sleep 2
 }
@@ -466,7 +500,7 @@ open_search() {
 }
 
 c5_trial() {
-  local j=$1 tag=c5r$1 word=Reload name=C5-reload$1 line x y t0 t1 t
+  local j=$1 tag=c5r$1 word=Reload name=C5-reload$1 line t
   t=$("$ui" tree) || t=""
   if ! chat_shown "$t"; then
     open_bob
@@ -475,17 +509,15 @@ c5_trial() {
   line=$(cancel_line)
   [ -n "$line" ] || fail "no Cancel of the chat search"
   geom "$line"
-  x=$((gx + gw / 2))
-  y=$((gy + gh / 2))
   shot "$name-search-open"
-  om flood "$peer_dir" "$tag" "$cid" "$c5_count" "$interval" "$word $j number"
-  om flood-reached "$peer_dir" "$tag" "$tap_at" 60 || fail "Bob did not send $tap_at texts in 60 s"
-  t0="" t1=""
-  read -r t0 t1 < <(om tap "$x" "$y") || true
-  [ -n "$t0" ] || fail "the tap on Cancel failed"
-  echo "$name: tapped Cancel between $t0 and $t1"
-  om flood-wait "$peer_dir" "$tag" "$c5_count" 120 || echo "flood $tag: not every message got a response"
+  flood_and_tap "$tag" "$word $j number" $((gx + gw / 2)) $((gy + gh / 2)) "$name"
   sleep 4
+  if [ -z "$load_response" ]; then
+    shot "$name-no-load"
+    record "C5-search-closed-during-flood-$j" "$expect" "no apiGetChat response in the app log" INVALID "$(basename "$(shot_file "$name-no-load")")"
+    "$ui" tap Cancel 5 || true
+    return 0
+  fi
   if [ -n "$(cancel_line)" ]; then
     shot "$name-search-not-closed"
     record "C5-search-closed-during-flood-$j" "$expect" "the search did not close" INVALID "$(basename "$(shot_file "$name-search-not-closed")")"
@@ -493,7 +525,7 @@ c5_trial() {
     return 0
   fi
   read_burst "$word" "$j" "$name"
-  judge_sample "C5-search-closed-during-flood-$j" "$tag" "$word" "$j" "$c5_count" "$t0" 1.0 "$name"
+  judge_sample "C5-search-closed-during-flood-$j" "$tag" "$word" "$j" "$name"
 }
 
 run_check() {
@@ -580,17 +612,21 @@ set -e
 echo "::group::results"
 cat "$results"
 echo "::endgroup::"
-read -r samples bugs oks confirmed < <(awk -F'\t' '
-  $1 ~ /^C[15]-/ && ($5 == "MATCH" || $5 == "MISMATCH") { s++ }
-  $1 ~ /^C[15]-/ && $4 ~ /outcome=bug/ { b++ }
-  $1 ~ /^C[15]-/ && $4 ~ /outcome=ok/ { o++ }
+read -r c1_valid c5_valid bugs oks confirmed < <(awk -F'\t' '
+  $1 ~ /^C1-/ && ($5 == "MATCH" || $5 == "MISMATCH") { v1++ }
+  $1 ~ /^C5-/ && ($5 == "MATCH" || $5 == "MISMATCH") { v5++ }
+  $1 ~ /^C[15]-/ && ($5 == "MATCH" || $5 == "MISMATCH") && $4 ~ /outcome=bug/ { b++ }
+  $1 ~ /^C[15]-/ && ($5 == "MATCH" || $5 == "MISMATCH") && $4 ~ /outcome=ok/ { o++ }
   $1 ~ /^C2-/ && $5 == "MATCH" { c++ }
-  END { print s + 0, b + 0, o + 0, c + 0 }' "$results")
-echo "samples $samples: with lost numbers $bugs (confirmed by a reopen: $confirmed), without $oks"
-if [ "$confirmed" -gt 0 ]; then
+  END { print v1 + 0, v5 + 0, b + 0, o + 0, c + 0 }' "$results")
+valid=$((c1_valid + c5_valid))
+echo "valid samples: C1 $c1_valid of $c1_trials, C5 $c5_valid of $c5_trials; with lost numbers $bugs (confirmed by a reopen: $confirmed), without $oks"
+if [ "$valid" -lt "$min_valid" ]; then
+  echo "SCENARIO: INCONCLUSIVE (valid samples $valid, fewer than $min_valid)"
+elif [ "$confirmed" -gt 0 ]; then
   echo "SCENARIO: BUG PRESENT"
-elif [ "$bugs" -eq 0 ] && [ "$oks" -ge 3 ]; then
+elif [ "$bugs" -eq 0 ]; then
   echo "SCENARIO: BUG ABSENT"
 else
-  echo "SCENARIO: INCONCLUSIVE"
+  echo "SCENARIO: INCONCLUSIVE (lost numbers not confirmed by a reopen)"
 fi
