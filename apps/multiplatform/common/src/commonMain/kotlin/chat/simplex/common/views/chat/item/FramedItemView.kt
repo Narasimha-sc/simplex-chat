@@ -245,6 +245,8 @@ fun FramedItemView(
   val captionlessMedia = (ci.content.msgContent is MsgContent.MCImage || ci.content.msgContent is MsgContent.MCVideo) &&
       !ci.meta.isLive && ci.content.text.isEmpty()
   val transparentBackground = captionlessMedia && ci.quotedItem == null && ci.meta.itemForwarded == null
+  val textOnly = ci.content.msgContent is MsgContent.MCText && ci.markdownBlocks == null && ci.quotedItem == null && ci.meta.itemForwarded == null &&
+      ci.meta.itemDeleted == null && !ci.meta.isLive && !(ci.file == null && ci.formattedText == null && isShortEmoji(ci.content.text))
 
   val sentColor = MaterialTheme.appColors.sentMessage
   val receivedColor = MaterialTheme.appColors.receivedMessage
@@ -279,7 +281,7 @@ fun FramedItemView(
         val tailRendered = chatItemTailRendered(ci, tailVisible, revealed = true)
         Column(
           Modifier
-            .width(IntrinsicSize.Max)
+            .then(if (textOnly) Modifier else Modifier.width(IntrinsicSize.Max))
             .padding(start = if (!sent && tailRendered) msgTailWidthDp else 0.dp, end = if (sent && tailRendered) msgTailWidthDp else 0.dp)
         ) {
           PriorityLayout(Modifier, CHAT_IMAGE_LAYOUT_ID, limitToPriorityWidth = !terminal || captionlessMedia) {
