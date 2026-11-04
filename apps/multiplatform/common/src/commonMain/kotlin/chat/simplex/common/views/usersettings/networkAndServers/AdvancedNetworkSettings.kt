@@ -28,6 +28,7 @@ import chat.simplex.common.views.helpers.*
 import chat.simplex.common.model.ChatModel.controller
 import chat.simplex.common.platform.ColumnWithScrollBar
 import chat.simplex.common.platform.chatModel
+import chat.simplex.common.platform.unackedDataTimeoutSupported
 import chat.simplex.common.views.usersettings.PreferenceToggle
 import chat.simplex.common.views.usersettings.SettingsPreferenceItem
 import chat.simplex.res.*
@@ -185,7 +186,7 @@ fun ModalData.AdvancedNetworkSettingsView(showModal: (@Composable ModalData.() -
       networkTCPKeepIdle,
       networkTCPKeepIntvl,
       networkTCPKeepCnt,
-      networkTCPUserTimeout,
+      networkTCPUserTimeout.takeIf { unackedDataTimeoutSupported && !currentCfg.value.useSocksProxy },
       updateSessionMode = { sessionMode.value = it; currentCfg.value = currentCfg.value.copy(sessionMode = it) },
       updateSMPProxyMode = { smpProxyMode.value = it; currentCfg.value = currentCfg.value.copy(smpProxyMode = it) },
       updateSMPProxyFallback = { smpProxyFallback.value = it; currentCfg.value = currentCfg.value.copy(smpProxyFallback = it) },
@@ -221,7 +222,7 @@ fun ModalData.AdvancedNetworkSettingsView(showModal: (@Composable ModalData.() -
   networkTCPKeepIdle: MutableState<Int>,
   networkTCPKeepIntvl: MutableState<Int>,
   networkTCPKeepCnt: MutableState<Int>,
-  networkTCPUserTimeout: MutableState<Boolean>,
+  networkTCPUserTimeout: MutableState<Boolean>?,
   updateSessionMode: (TransportSessionMode) -> Unit,
   updateSMPProxyMode: (SMPProxyMode) -> Unit,
   updateSMPProxyFallback: (SMPProxyFallback) -> Unit,
@@ -325,7 +326,9 @@ fun ModalData.AdvancedNetworkSettingsView(showModal: (@Composable ModalData.() -
           SectionItemView {
             IntSettingRow("TCP_KEEPCNT", networkTCPKeepCnt, listOf(1, 2, 4, 6, 8), "")
           }
-          PreferenceToggle("TCP_USER_TIMEOUT", checked = networkTCPUserTimeout.value) { networkTCPUserTimeout.value = it }
+          if (networkTCPUserTimeout != null) {
+            PreferenceToggle("TCP_USER_TIMEOUT", checked = networkTCPUserTimeout.value) { networkTCPUserTimeout.value = it }
+          }
         } else {
           SectionItemView {
             Text("TCP_KEEPIDLE", color = MaterialTheme.colors.secondary)
@@ -336,8 +339,10 @@ fun ModalData.AdvancedNetworkSettingsView(showModal: (@Composable ModalData.() -
           SectionItemView {
             Text("TCP_KEEPCNT", color = MaterialTheme.colors.secondary)
           }
-          SectionItemView {
-            Text("TCP_USER_TIMEOUT", color = MaterialTheme.colors.secondary)
+          if (networkTCPUserTimeout != null) {
+            SectionItemView {
+              Text("TCP_USER_TIMEOUT", color = MaterialTheme.colors.secondary)
+            }
           }
         }
       }
