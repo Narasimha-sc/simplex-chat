@@ -20,11 +20,13 @@ USAGE = """Peer, flood and judge for pr-scenario.sh (messages received while the
   pr-openmsg.py flood <dir> <tag> <contact id> <count> <interval> <text>
                                                           sends "<text> 0001".. to the contact, one every interval seconds
   pr-openmsg.py flood-reached <dir> <tag> <n> [secs]      waits until n flood messages have responses
-  pr-openmsg.py flood-wait <dir> <tag> <count> [secs]     waits for a response to every flood message, prints the counts
+  pr-openmsg.py stop <dir> <tag>                          stops the flood
+  pr-openmsg.py flood-wait <dir> <tag> [secs]             waits for the stopped flood's responses, prints the counts
+  pr-openmsg.py load-time <app log> <byte offset> [secs]  "<request> <response> <type>": the first apiGetChat after the offset
   pr-openmsg.py event <dir> <type> [secs]                 prints the first event of this type
   pr-openmsg.py tap <x> <y>                               taps the point with axe, prints the time before and after the tap
   pr-openmsg.py page <ocr file> <image> <word> <n>        "<numbers> <lowest> <highest> <older texts 0|1> <signature>" of one page
-  pr-openmsg.py judge <dir> <tag> <word> <n> <count> <tap time> <window secs> <ocr file>
+  pr-openmsg.py judge <dir> <tag> <word> <n> <apiGetChat request> <apiGetChat response> <ocr file>
                                                           the numbers "<word> <n> number NNNN" lost from the pages read
   pr-openmsg.py shown <ocr file> <word> <n> <numbers>     which of the comma-separated numbers the pages show"""
 
@@ -125,11 +127,16 @@ def response_ok(msg):
     return isinstance(resp, dict) and resp.get("type") not in ("chatCmdError", "chatError")
 
 
+STOPPED = set()
+
+
 def flood(ws, d, tag, contact_id, count, interval, text):
     count, interval = int(count), float(interval)
     start = time.time()
     with open(os.path.join(d, "flood-%s.sent" % tag), "w") as f:
         for i in range(1, count + 1):
+            if tag in STOPPED:
+                break
             delay = start + (i - 1) * interval - time.time()
             if delay > 0:
                 time.sleep(delay)
@@ -185,6 +192,8 @@ def peer(port, d):
                 os._exit(0)
             elif kind == "CMD":
                 ws.send({"corrId": name[:-4], "cmd": rest})
+            elif kind == "STOP":
+                STOPPED.add(rest)
             elif kind == "FLOOD":
                 threading.Thread(target=flood, args=(ws, d) + tuple(rest.split(" ", 4)), daemon=True).start()
         time.sleep(0.02)
@@ -230,18 +239,62 @@ def flood_reached(d, tag, n, secs=60):
         time.sleep(0.05)
 
 
-def flood_wait(d, tag, count, secs=60):
+def stop_flood(d, tag):
+    write_atomic(os.path.join(d, "in", "stop-%s.cmd" % tag), ("STOP " + tag).encode())
+
+
+def sent_count(d, tag):
+    path = os.path.join(d, "flood-%s.sent" % tag)
+    return sum(1 for _ in open(path)) if os.path.exists(path) else 0
+
+
+def flood_wait(d, tag, secs=60):
     deadline = time.time() + float(secs)
     while True:
         rows = flood_responses(d, tag)
         done = os.path.exists(os.path.join(d, "flood-%s.done" % tag))
-        if done and len(rows) >= int(count):
-            break
+        sent = sent_count(d, tag)
+        errors = sum(1 for v in rows.values() if v[1] != "ok")
+        if done and len(rows) >= sent:
+            print("sent=%d responses=%d errors=%d" % (sent, len(rows), errors))
+            return
         if time.time() > deadline:
-            print("sent=%s responses=%d errors=%d timeout" % ("all" if done else "not all", len(rows), sum(1 for v in rows.values() if v[1] != "ok")))
+            print("sent=%d responses=%d errors=%d done=%s timeout" % (sent, len(rows), errors, done))
             sys.exit(1)
         time.sleep(0.2)
-    print("sent=%s responses=%d errors=%d" % (count, len(rows), sum(1 for v in rows.values() if v[1] != "ok")))
+
+
+LOG_TIME = re.compile(r"^(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d)(\.\d+)")
+
+
+def log_time(line):
+    m = LOG_TIME.match(line)
+    if not m:
+        return None
+    return time.mktime(time.strptime(m.group(1), "%Y-%m-%d %H:%M:%S")) + float(m.group(2))
+
+
+def load_time(app_log, offset, secs=120):
+    deadline = time.time() + float(secs)
+    offset = int(offset)
+    request = None
+    with open(app_log, "rb") as f:
+        while True:
+            f.seek(offset)
+            while True:
+                raw = f.readline()
+                if not raw.endswith(b"\n"):
+                    break
+                offset += len(raw)
+                line = raw.decode("utf-8", "replace").rstrip("\n")
+                if line.endswith("chatSendCmd apiGetChat") and request is None:
+                    request = log_time(line)
+                elif "chatSendCmd apiGetChat: " in line and request is not None:
+                    print("%.3f %.3f %s" % (request, log_time(line) or 0, line.rsplit(": ", 1)[-1]))
+                    return
+            if time.time() > deadline:
+                sys.exit("no apiGetChat response in %s within %s s" % (app_log, secs))
+            time.sleep(0.1)
 
 
 def find_type(obj, kind):
@@ -355,8 +408,10 @@ def bubbles_between(image, y_low, y_high):
     return str(count)
 
 
-def judge(d, tag, word, n, count, tap_time, window, ocr_file):
-    n, count, tap_time, window = int(n), int(count), float(tap_time), float(window)
+def judge(d, tag, word, n, request, response, ocr_file):
+    n, request, response = int(n), float(request), float(response)
+    count = sent_count(d, tag)
+    window_end = max(response, request + 0.25) + 0.2
     pages = ocr_pages(ocr_file)
     shown, candidates = set(), set()
     gap_pages, tree_notes = [], []
@@ -385,28 +440,32 @@ def judge(d, tag, word, n, count, tap_time, window, ocr_file):
         candidates |= set(page_missing)
     missing = sorted(candidates - shown)
     responses = flood_responses(d, tag)
-    in_window = sorted(k for k, (t, _) in responses.items() if tap_time <= t <= tap_time + window)
-    before = max((k for k, (t, _) in responses.items() if t < tap_time), default=0)
+    in_window = sorted(k for k, (t, _) in responses.items() if request <= t <= window_end)
+    before = max((k for k, (t, _) in responses.items() if t < request), default=0)
+    after = sum(1 for t, _ in responses.values() if t > response)
+    valid = before > 0 and after > 0
     if missing:
         outcome = "bug"
-    elif in_window and all(k in shown for k in in_window):
+    elif valid and all(k in shown for k in in_window):
         outcome = "ok"
     else:
         outcome = "invalid"
     tail = [k for k in range(max(shown, default=0) + 1, count + 1)]
     times = sorted(t for t, _ in responses.values())
     rate = (len(times) - 1) / (times[-1] - times[0]) if len(times) > 1 and times[-1] > times[0] else 0.0
-    lost = ",".join("%d(%+.2fs)" % (k, responses[k][0] - tap_time) if k in responses else str(k) for k in missing)
-    print("%s %s %s" % (outcome, ",".join(map(str, missing)) or "-", gap_pages[0] if gap_pages else "-"))
+    lost = ",".join("%d(%+.2fs)" % (k, responses[k][0] - request) if k in responses else str(k) for k in missing)
+    print("%s %s %s %s" % (outcome, ",".join(map(str, missing)) or "-", gap_pages[0] if gap_pages else "-", "valid" if valid else "not-valid"))
     print(
-        "outcome=%s missing=%s shown=%d range=%s window=%s sent_before_tap=%d rate=%.1f/s tail_absent=%s order_violations=%d pages=%d gap_pages=%s tree_bubbles_between=%s errors=%d"
+        "outcome=%s missing=%s shown=%d range=%s load=%.2fs window=%s sent_before_load=%d sent_after_load=%d rate=%.1f/s tail_absent=%s order_violations=%d pages=%d gap_pages=%s tree_bubbles_between=%s errors=%d"
         % (
             outcome,
             lost or "none",
             len(shown),
             "%d-%d" % (min(shown), max(shown)) if shown else "none",
+            response - request,
             "%d-%d" % (in_window[0], in_window[-1]) if in_window else "none",
             before,
+            after,
             rate,
             ",".join(map(str, tail)) or "none",
             violations,
@@ -435,6 +494,8 @@ COMMANDS = {
     "flood": start_flood,
     "flood-reached": flood_reached,
     "flood-wait": flood_wait,
+    "stop": stop_flood,
+    "load-time": load_time,
     "event": event,
     "tap": tap,
     "page": page,
