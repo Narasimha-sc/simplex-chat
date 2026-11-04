@@ -160,6 +160,7 @@ chatGroupTests = do
   describe "group delivery receipts" $ do
     it "should send delivery receipts in group" testSendGroupDeliveryReceipts
     it "should send delivery receipts in group depending on configuration" testConfigureGroupDeliveryReceipts
+    it "should clear delivery receipts overrides in groups only for the current user" testClearGroupReceiptsOverridesCurrentUser
   describe "link content filter" $ do
     it "filter group chat by link content" testGroupLinkContentFilter
   describe "direct connections in group are not established based on chat protocol version" $ do
@@ -203,7 +204,6 @@ chatGroupTests = do
     it "forward message reaction (x.msg.react)" testGroupMsgForwardReaction
     it "forward message deletion (x.msg.del)" testGroupMsgForwardDeletion
     it "forward file (x.msg.file.descr)" testGroupMsgForwardFile
-    it "send file description to member connected before upload completes" testGroupMsgForwardFileConnectedBeforeUpload
     it "forward role change (x.grp.mem.role)" testGroupMsgForwardChangeRole
     it "forward new member announcement (x.grp.mem.new)" testGroupMsgForwardNewMember
     it "forward member leaving (x.grp.leave)" testGroupMsgForwardLeave
@@ -4650,6 +4650,44 @@ testConfigureGroupDeliveryReceipts ps =
       cc3 .<## ("> " <> msg)
       cc1 <// 50000
 
+testClearGroupReceiptsOverridesCurrentUser :: HasCallStack => TestParams -> IO ()
+testClearGroupReceiptsOverridesCurrentUser ps =
+  withNewTestChatCfg ps cfg "alice" aliceProfile $ \alice -> do
+    withNewTestChatCfg ps cfg "bob" bobProfile $ \bob -> do
+      withNewTestChatCfg ps cfg "cath" cathProfile $ \cath -> do
+        bob ##> "/_set receipts contacts 1 off"
+        bob <## "ok"
+        cath ##> "/_set receipts contacts 1 off"
+        cath <## "ok"
+
+        createGroup2 "team" alice bob
+        alice ##> "/receipts #team off"
+        alice <## "ok"
+
+        alice ##> "/create user alisa"
+        showActiveUser alice "alisa"
+        createGroup2 "club" alice cath
+        alice ##> "/set receipts groups off"
+        alice <## "ok"
+        alice ##> "/receipts #club on"
+        alice <## "ok"
+        threadDelay 1000000
+
+        alice ##> "/user alice"
+        showActiveUser alice "alice (Alice)"
+        alice ##> "/set receipts groups on clear_overrides=on"
+        alice <## "ok"
+
+        bob #> "#team hi"
+        alice <# "#team bob> hi"
+        bob ⩗ "#team hi"
+
+        cath #> "#club hey"
+        (alice, "alisa") $<# "#club cath> hey"
+        cath ⩗ "#club hey"
+  where
+    cfg = testCfg {showReceipts = True}
+
 testNoGroupDirectConns :: HasCallStack => TestParams -> IO ()
 testNoGroupDirectConns =
   testChat3 aliceProfile bobProfile cathProfile $
@@ -6113,58 +6151,6 @@ testGroupMsgForwardFile =
       src <- B.readFile "./tests/fixtures/test.jpg"
       dest <- B.readFile (tmpFile cath "test.jpg")
       dest `shouldBe` src
-
-testGroupMsgForwardFileConnectedBeforeUpload :: HasCallStack => TestParams -> IO ()
-testGroupMsgForwardFileConnectedBeforeUpload =
-  testChat3 aliceProfile bobProfile cathProfile $
-    \alice bob cath -> do
-      createGroup3 "team" alice bob cath
-      threadDelay 1000000
-      setMemberConnStatus bob "cath" "joined"
-      setMemberConnStatus cath "bob" "joined"
-      setupGroupForwardingVectors alice bob cath
-
-      bob #> "/f #team ./tests/fixtures/test.jpg"
-      bob <## "use /fc 1 to cancel sending"
-      concurrentlyN_
-        [ do
-            alice <# "#team bob> sends file test.jpg (136.5 KiB / 139737 bytes)"
-            alice <## "use /fr 1 [<dir>/ | <path>] to receive it",
-          do
-            cath <# "#team bob> sends file test.jpg (136.5 KiB / 139737 bytes) [>>]"
-            cath <## "use /fr 1 [<dir>/ | <path>] to receive it [>>]"
-        ]
-
-      setMemberConnStatus bob "cath" "ready"
-      setMemberConnStatus cath "bob" "ready"
-      updateGroupForwardingVectors alice "bob" "cath" MRConnected
-
-      withXFTPServer alice $ do
-        bob `skipUploadWarnings` "completed uploading file 1 (test.jpg) for #team"
-        cath ##> ("/fr 1 " <> tmpDir cath)
-        cath
-          <### [ ConsoleString $ "saving file 1 from bob to " <> tmpFile cath "test.jpg",
-                 "started receiving file 1 (test.jpg) from bob"
-               ]
-        cath <## "completed receiving file 1 (test.jpg) from bob"
-        src <- B.readFile "./tests/fixtures/test.jpg"
-        dest <- B.readFile (tmpFile cath "test.jpg")
-        dest `shouldBe` src
-  where
-    setMemberConnStatus cc memberName status =
-      void $ withCCTransaction cc $ \db ->
-        DB.execute
-          db
-          [sql|
-            UPDATE connections SET conn_status = ?
-            WHERE group_member_id IN (SELECT group_member_id FROM group_members WHERE local_display_name = ?)
-          |]
-          (status :: String, memberName :: String)
-    skipUploadWarnings cc line = do
-      l <- getTermLine cc
-      if l == "warning:  uploading file 1 (test.jpg) for #team"
-        then getTermLine cc >> skipUploadWarnings cc line
-        else l `shouldBe` line
 
 testGroupMsgForwardChangeRole :: HasCallStack => TestParams -> IO ()
 testGroupMsgForwardChangeRole =

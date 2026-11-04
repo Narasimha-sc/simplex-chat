@@ -2852,7 +2852,7 @@ memberSendAction gInfo@GroupInfo {membership} events members m@GroupMember {memb
   | otherwise = case memberConn m of
       Nothing -> pendingOrForwarded
       Just conn@Connection {connStatus}
-        | connEnded conn || memberStatus == GSMemRejected -> Nothing
+        | connDisabled conn || connStatus == ConnDeleted || isConnFailed connStatus || memberStatus == GSMemRejected -> Nothing
         | connInactive conn -> Just MSAPending
         | connStatus == ConnSndReady || connStatus == ConnReady -> Just (MSASend conn)
         | otherwise -> pendingOrForwarded
@@ -2861,15 +2861,15 @@ memberSendAction gInfo@GroupInfo {membership} events members m@GroupMember {memb
       GCUserMember -> Nothing -- shouldn't happen
       GCInviteeMember -> Just MSAPending
       GCHostMember -> Just MSAPending
-      GCPreMember -> forwardSupportedOrPending
-      GCPostMember -> forwardSupportedOrPending
+      GCPreMember -> forwardSupportedOrPending (invitedByGroupMemberId membership)
+      GCPostMember -> forwardSupportedOrPending (invitedByGroupMemberId m)
       where
-        forwardSupportedOrPending
+        forwardSupportedOrPending invitingMemberId_
           | hasInvitingMember && all isForwardedGroupMsg events = Just MSAForwarded
           | any isXGrpMsgForward events = Nothing
           | otherwise = Just MSAPending
           where
-            hasInvitingMember = case forwardingMemberId gInfo m of
+            hasInvitingMember = case invitingMemberId_ of
               Just invMemberId ->
                 -- can be optimized for large groups by replacing [GroupMember] with Map GroupMemberId GroupMember
                 any (\m' -> groupMemberId' m' == invMemberId) members
@@ -2877,15 +2877,6 @@ memberSendAction gInfo@GroupInfo {membership} events members m@GroupMember {memb
             isXGrpMsgForward event = case event of
               XGrpMsgForward {} -> True
               _ -> False
-
-connEnded :: Connection -> Bool
-connEnded conn@Connection {connStatus} = connDisabled conn || connStatus == ConnDeleted || isConnFailed connStatus
-
-forwardingMemberId :: GroupInfo -> GroupMember -> Maybe GroupMemberId
-forwardingMemberId GroupInfo {membership} m = case memberCategory m of
-  GCPreMember -> invitedByGroupMemberId membership
-  GCPostMember -> invitedByGroupMemberId m
-  _ -> Nothing
 
 -- Should match memberSendAction logic
 readyMemberConn :: GroupMember -> Maybe (GroupMemberId, Connection)
