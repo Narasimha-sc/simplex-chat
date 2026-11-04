@@ -49,6 +49,7 @@
       android:enableOnBackInvokedCallback="false"
       android:theme="@style/Theme.SimpleX"
       tools:ignore="UnusedAttribute">
+    <profileable android:shell="true" />
     <!--      android:localeConfig="@xml/locales_config"-->
 
     <!-- Main activity -->
