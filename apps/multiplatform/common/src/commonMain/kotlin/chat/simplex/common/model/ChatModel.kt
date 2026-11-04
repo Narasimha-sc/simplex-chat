@@ -4110,12 +4110,28 @@ data class CITimed(
   val deleteAt: Instant?
 )
 
+private class TimestampFormatters(val locale: Locale) {
+  val shortTime: DateTimeFormatter = DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT).withLocale(locale)
+  val weekday: DateTimeFormatter = DateTimeFormatter.ofPattern("EEE", locale)
+  val dayMonth: DateTimeFormatter = DateTimeFormatter.ofPattern("d MMM", locale)
+  val dayMonthYear: DateTimeFormatter = DateTimeFormatter.ofPattern("d MMM yyyy", locale)
+}
+
+private var lastTimestampFormatters: TimestampFormatters? = null
+
+private fun timestampFormatters(): TimestampFormatters {
+  val locale = Locale.getDefault(Locale.Category.FORMAT)
+  val formatters = lastTimestampFormatters
+  return if (formatters != null && formatters.locale == locale) formatters else TimestampFormatters(locale).also { lastTimestampFormatters = it }
+}
+
 fun getTimestampDateText(t: Instant): String {
   val tz = TimeZone.currentSystemDefault()
   val time = t.toLocalDateTime(tz).toJavaLocalDateTime()
-  val weekday = time.format(DateTimeFormatter.ofPattern("EEE"))
-  val dayMonthYear = time.format(DateTimeFormatter.ofPattern(
-    if (Clock.System.now().toLocalDateTime(tz).year == time.year) "d MMM" else "d MMM yyyy")
+  val formatters = timestampFormatters()
+  val weekday = time.format(formatters.weekday)
+  val dayMonthYear = time.format(
+    if (Clock.System.now().toLocalDateTime(tz).year == time.year) formatters.dayMonth else formatters.dayMonthYear
   )
 
   return "$weekday, $dayMonthYear"
@@ -4123,14 +4139,15 @@ fun getTimestampDateText(t: Instant): String {
 
 fun getTimestampText(t: Instant, shortFormat: Boolean = false): String {
   val tz = TimeZone.currentSystemDefault()
-  val now: LocalDateTime = Clock.System.now().toLocalDateTime(tz)
   val time: LocalDateTime = t.toLocalDateTime(tz)
+  if (shortFormat) return time.toJavaLocalDateTime().format(timestampFormatters().shortTime)
+  val now: LocalDateTime = Clock.System.now().toLocalDateTime(tz)
   val period = now.date.minus(time.date)
   val recent = now.date == time.date ||
       (period.years == 0 && period.months == 0 && period.days == 1 && now.hour < 12 && time.hour >= 18 )
   val dateFormatter =
-    if (recent || shortFormat) {
-      DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT)
+    if (recent) {
+      timestampFormatters().shortTime
     } else {
       val dayMonthFormat = when (Locale.getDefault().country) {
         "US" -> "M/dd"
