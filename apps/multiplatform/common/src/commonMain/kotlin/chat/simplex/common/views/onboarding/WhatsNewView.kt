@@ -1136,7 +1136,7 @@ fun isInUs(): Boolean =
 @Composable
 private fun InvestInSimpleXChatView(modalManager: ModalManager) {
   if (!crowdfundingAvailable()) return
-  val showGetStake = { modalManager.showModalCloseable(cardScreen = true) { close -> GetStakeView(showFirstImage = false, inCenterOfWindow = crowdfundingLayout.inCenterOfWindow(modalManager), close = close) } }
+  val showGetStake = { modalManager.showModalCloseable(cardScreen = true) { close -> GetStakeView(inCenterOfWindow = crowdfundingLayout.inCenterOfWindow(modalManager), close = close) } }
   Column(modifier = Modifier.padding(bottom = 12.dp)) {
     Text(
       generalGetString(MR.strings.v7_1_invest),
@@ -1163,13 +1163,8 @@ private fun InvestInSimpleXChatView(modalManager: ModalManager) {
       )
     }
     Text(
-      buildAnnotatedString {
-        append(generalGetString(MR.strings.v7_0_invest_descr))
-        append(" ")
-        withStyle(SpanStyle(color = MaterialTheme.colors.primary)) {
-          append(generalGetString(MR.strings.learn_more))
-        }
-      },
+      generalGetString(MR.strings.v7_1_invest_learn_more),
+      color = MaterialTheme.colors.primary,
       fontSize = 15.sp,
       modifier = Modifier
         .pointerHoverIcon(PointerIcon.Hand)
@@ -1211,14 +1206,14 @@ private val getStakeSlides: List<CrowdfundingSlide> = listOf(
   ),
   CrowdfundingSlide(
     MR.images.crowdfunding_4,
-    "Revenue plan: businesses & big channels pay",
+    "Revenue plan: businesses & channels pay",
     "SimpleX Chat plans to earn from the infrastructure and services that creators, businesses and large communities need as they grow.",
     "Read about how we plan to make SimpleX Chat and network profitable, and about all the investment terms on Wefunder."
   ),
 )
 
 @Composable
-fun GetStakeView(showFirstImage: Boolean, inCenterOfWindow: Boolean = false, close: () -> Unit) {
+fun GetStakeView(inCenterOfWindow: Boolean = false, close: () -> Unit) {
   val uriHandler = LocalUriHandler.current
   val stopped = chatModel.chatRunning.value == false
 
@@ -1247,9 +1242,7 @@ fun GetStakeView(showFirstImage: Boolean, inCenterOfWindow: Boolean = false, clo
     // in the center of the window the page is wide enough for the title to fit on one line
     val title = "Invest in\nSimpleX Chat"
     AppBarTitle(if (inCenterOfWindow) title.replace("\n", " ") else title, withPadding = false)
-    if (showFirstImage) {
-      slideImage(getStakeSlides[0])
-    }
+    slideImage(getStakeSlides[0])
     Text(
       buildAnnotatedString {
         append(getStakeSlides[0].text)
@@ -1260,7 +1253,7 @@ fun GetStakeView(showFirstImage: Boolean, inCenterOfWindow: Boolean = false, clo
           }
         }
       },
-      Modifier.padding(top = if (showFirstImage) 8.dp else 0.dp),
+      Modifier.padding(top = 8.dp),
       lineHeight = 24.sp
     )
 
