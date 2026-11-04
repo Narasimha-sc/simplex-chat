@@ -3810,11 +3810,14 @@ private fun getItemSeparation(chatItem: ChatItem, prevItem: ChatItem?): ItemSepa
     true
   } else chatItem.chatDir.sent == prevItem.chatDir.sent
   val largeGap = !sameMemberAndDirection || (abs(prevItem.meta.createdAt.epochSeconds - chatItem.meta.createdAt.epochSeconds) >= 60)
+  val timeZone = TimeZone.currentSystemDefault()
+  val time = chatItem.meta.itemTs.toLocalDateTime(timeZone)
+  val prevTime = prevItem.meta.itemTs.toLocalDateTime(timeZone)
 
   return ItemSeparation(
-    timestamp = largeGap || prevItem.meta.timestampText != chatItem.meta.timestampText,
+    timestamp = largeGap || prevTime.hour != time.hour || prevTime.minute != time.minute,
     largeGap = largeGap,
-    date = if (getTimestampDateText(chatItem.meta.itemTs) == getTimestampDateText(prevItem.meta.itemTs)) null else prevItem.meta.itemTs
+    date = if (time.date == prevTime.date) null else prevItem.meta.itemTs
   )
 }
 
