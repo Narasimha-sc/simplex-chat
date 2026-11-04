@@ -14,13 +14,14 @@ results=$out/results.tsv
 port=5226
 c1_trials=6
 c5_trials=8
-flood_max=150
+flood_max=400
 interval=0.05
 tap_at=6
 stop_after=3
 min_valid=10
 geom_re=' at (-?[0-9]+),(-?[0-9]+) size ([0-9]+)x([0-9]+)'
 account_image='^Image "Account" .* at [0-9]+,(7[5-9][0-9]|8[0-9][0-9]) '
+go_down_re='^(Image "Go Down"|StaticText "[0-9]+") '
 
 case "${GITHUB_REF_NAME:-}" in
   *-before) build=base expect="bug or timing-miss" ;;
@@ -338,11 +339,26 @@ stop_peer() {
   echo "::endgroup::"
 }
 
-to_bottom() {
-  local i
-  for i in 1 2 3 4; do
+go_down_line() {
+  local t line
+  t=$("$ui" tree) || return 0
+  while IFS= read -r line; do
+    if [[ $line =~ $go_down_re ]] && geom "$line" && [ "$gx" -ge 330 ] && [ "$gy" -ge 600 ] && [ "$gy" -le 790 ]; then
+      echo "$line"
+      return 0
+    fi
+  done <<< "$t"
+}
+
+scroll_newer() {
+  local line
+  line=$(go_down_line)
+  if [ -n "$line" ]; then
+    tap_line "$line"
+  else
     axe swipe --start-x 201 --start-y 650 --end-x 201 --end-y 250 --duration 0.2 --udid "$SIM_UDID" > /dev/null 2>&1 || true
-  done
+    axe swipe --start-x 201 --start-y 650 --end-x 201 --end-y 250 --duration 0.2 --udid "$SIM_UDID" > /dev/null 2>&1 || true
+  fi
   sleep 2
 }
 
@@ -351,24 +367,41 @@ scroll_older() {
   sleep 1.5
 }
 
+read_page() {
+  local word=$1 j=$2 name=$3 png
+  shot "$name"
+  png=$(shot_file "$name")
+  [ -n "$png" ] || fail "no screenshot $name"
+  "$work/pr-ocr" "$screen_h" "$png" >> "$ocr" || echo "OCR of $png failed"
+  cnt="" low="" high="" older="" sig=""
+  read -r cnt low high older sig < <(om page "$ocr" "$png" "$word" "$j") || true
+  echo "read $name: ${cnt:-?} numbers ${low:-?}..${high:-?}, older texts ${older:-?}"
+}
+
 read_burst() {
-  local word=$1 j=$2 name=$3 ocr p png cnt low high older sig prev=""
+  local word=$1 j=$2 name=$3 tag=$4 p=0 newest prev_high=-1 prev=""
   ocr=$out/$name.ocr
   : > "$ocr"
-  to_bottom
-  for p in $(seq 1 16); do
-    shot "$name-page$p"
-    png=$(shot_file "$name-page$p")
-    [ -n "$png" ] || fail "no screenshot $name-page$p"
-    "$work/pr-ocr" "$screen_h" "$png" >> "$ocr" || echo "OCR of $png failed"
-    cnt="" low="" high="" older="" sig=""
-    read -r cnt low high older sig < <(om page "$ocr" "$png" "$word" "$j") || true
-    echo "read $name page $p: ${cnt:-?} numbers ${low:-?}..${high:-?}, older texts ${older:-?}"
-    if [ "$low" = 1 ] || [ "$older" = 1 ] || [ "$sig" = "$prev" ]; then
+  newest=$(om sent "$peer_dir" "$tag")
+  while [ "$p" -lt 8 ]; do
+    p=$((p + 1))
+    scroll_newer
+    read_page "$word" "$j" "$name-page$p"
+    if [ "$high" = - ] || [ "$high" -ge "$newest" ] || [ "$high" = "$prev_high" ]; then
+      break
+    fi
+    prev_high=$high
+  done
+  echo "read $name: bottom at ${high:-?} of $newest sent"
+  prev=$sig
+  while [ "$p" -lt 30 ] && [ "$low" != 1 ] && [ "$older" != 1 ]; do
+    p=$((p + 1))
+    scroll_older
+    read_page "$word" "$j" "$name-page$p"
+    if [ "$sig" = "$prev" ]; then
       break
     fi
     prev=$sig
-    scroll_older
   done
 }
 
@@ -419,11 +452,11 @@ read_load() {
 }
 
 c2_reopen() {
-  local check=$1 word=$2 j=$3 missing=$4 name=$5 res v
+  local check=$1 word=$2 j=$3 missing=$4 name=$5 tag=$6 res v
   back_to_list
   open_bob
   sleep 2
-  read_burst "$word" "$j" "$name-reopen"
+  read_burst "$word" "$j" "$name-reopen" "$tag"
   res=$(om shown "$out/$name-reopen.ocr" "$word" "$j" "$missing")
   case "$res" in
     all*) v=MATCH ;;
@@ -448,7 +481,7 @@ judge_sample() {
   fi
   record "$check" "$expect" "$obs" "$v" "$gap"
   if [ "$outcome" = bug ]; then
-    c2_reopen "$check" "$word" "$j" "$missing" "$name"
+    c2_reopen "$check" "$word" "$j" "$missing" "$name" "$tag"
   fi
 }
 
@@ -471,7 +504,7 @@ c1_trial() {
     return 0
   fi
   sleep 4
-  read_burst "$word" "$j" "$name"
+  read_burst "$word" "$j" "$name" "$tag"
   judge_sample "C1-open-during-flood-$j" "$tag" "$word" "$j" "$name"
   back_to_list
   sleep 2
@@ -524,7 +557,7 @@ c5_trial() {
     "$ui" tap Cancel 5 || true
     return 0
   fi
-  read_burst "$word" "$j" "$name"
+  read_burst "$word" "$j" "$name" "$tag"
   judge_sample "C5-search-closed-during-flood-$j" "$tag" "$word" "$j" "$name"
 }
 

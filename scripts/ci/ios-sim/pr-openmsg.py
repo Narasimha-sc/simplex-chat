@@ -18,9 +18,11 @@ USAGE = """Peer, flood and judge for pr-scenario.sh (messages received while the
                                                           logs every message to <dir>/events.jsonl, sends what <dir>/in/*.cmd hold
   pr-openmsg.py cmd <dir> <id> <command> [secs]           sends a chat command through the peer, prints the response
   pr-openmsg.py flood <dir> <tag> <contact id> <count> <interval> <text>
-                                                          sends "<text> 0001".. to the contact, one every interval seconds
+                                                          sends "<text> 0001".. to the contact, each after the answer to the previous one,
+                                                          at most one every interval seconds
   pr-openmsg.py flood-reached <dir> <tag> <n> [secs]      waits until n flood messages have responses
   pr-openmsg.py stop <dir> <tag>                          stops the flood
+  pr-openmsg.py sent <dir> <tag>                          how many texts the flood sent
   pr-openmsg.py flood-wait <dir> <tag> [secs]             waits for the stopped flood's responses, prints the counts
   pr-openmsg.py load-time <app log> <byte offset> [secs]  "<request> <response> <type>": the first apiGetChat after the offset
   pr-openmsg.py event <dir> <type> [secs]                 prints the first event of this type
@@ -128,21 +130,26 @@ def response_ok(msg):
 
 
 STOPPED = set()
+ANSWERED = set()
+ANSWER = threading.Condition()
 
 
 def flood(ws, d, tag, contact_id, count, interval, text):
     count, interval = int(count), float(interval)
-    start = time.time()
     with open(os.path.join(d, "flood-%s.sent" % tag), "w") as f:
         for i in range(1, count + 1):
             if tag in STOPPED:
                 break
-            delay = start + (i - 1) * interval - time.time()
+            corr = "f%s-%d" % (tag, i)
+            sent_at = time.time()
+            ws.send({"corrId": corr, "cmd": "/_send @%s text %s %04d" % (contact_id, text, i)})
+            f.write("%d\t%.3f\n" % (i, sent_at))
+            f.flush()
+            with ANSWER:
+                ANSWER.wait_for(lambda: corr in ANSWERED, timeout=60)
+            delay = sent_at + interval - time.time()
             if delay > 0:
                 time.sleep(delay)
-            ws.send({"corrId": "f%s-%d" % (tag, i), "cmd": "/_send @%s text %s %04d" % (contact_id, text, i)})
-            f.write("%d\t%.3f\n" % (i, time.time()))
-            f.flush()
     write_atomic(os.path.join(d, "flood-%s.done" % tag), b"")
 
 
@@ -170,6 +177,9 @@ def peer(port, d):
                     tag, _, i = corr[1:].rpartition("-")
                     with open(os.path.join(d, "flood-%s.resp" % tag), "a") as f:
                         f.write("%s\t%.3f\t%s\n" % (i, t, "ok" if response_ok(msg) else "error"))
+                    with ANSWER:
+                        ANSWERED.add(corr)
+                        ANSWER.notify_all()
                 else:
                     write_atomic(os.path.join(d, "resp-%s.json" % corr), raw)
         except (EOFError, OSError) as e:
@@ -338,9 +348,14 @@ def event(d, kind, secs=60):
 
 
 def tap(x, y):
-    t0 = time.time()
-    subprocess.run(["axe", "tap", "-x", x, "-y", y, "--udid", os.environ["SIM_UDID"]], check=True, stdout=subprocess.DEVNULL)
-    print("%.3f %.3f" % (t0, time.time()))
+    for attempt in range(1, 4):
+        t0 = time.time()
+        if subprocess.run(["axe", "tap", "-x", x, "-y", y, "--udid", os.environ["SIM_UDID"]], stdout=subprocess.DEVNULL).returncode == 0:
+            print("%.3f %.3f" % (t0, time.time()))
+            return
+        sys.stderr.write("tap attempt %d at %s,%s failed\n" % (attempt, x, y))
+        time.sleep(1)
+    sys.exit("the tap at %s,%s failed 3 times" % (x, y))
 
 
 def ocr_pages(path):
@@ -444,19 +459,21 @@ def judge(d, tag, word, n, request, response, ocr_file):
     before = max((k for k, (t, _) in responses.items() if t < request), default=0)
     after = sum(1 for t, _ in responses.values() if t > response)
     valid = before > 0 and after > 0
+    covered = before in shown and before + 1 in shown
     if missing:
         outcome = "bug"
-    elif valid and all(k in shown for k in in_window):
+    elif valid and covered and all(k in shown for k in in_window):
         outcome = "ok"
     else:
         outcome = "invalid"
+        valid = valid and covered
     tail = [k for k in range(max(shown, default=0) + 1, count + 1)]
     times = sorted(t for t, _ in responses.values())
     rate = (len(times) - 1) / (times[-1] - times[0]) if len(times) > 1 and times[-1] > times[0] else 0.0
     lost = ",".join("%d(%+.2fs)" % (k, responses[k][0] - request) if k in responses else str(k) for k in missing)
     print("%s %s %s %s" % (outcome, ",".join(map(str, missing)) or "-", gap_pages[0] if gap_pages else "-", "valid" if valid else "not-valid"))
     print(
-        "outcome=%s missing=%s shown=%d range=%s load=%.2fs window=%s sent_before_load=%d sent_after_load=%d rate=%.1f/s tail_absent=%s order_violations=%d pages=%d gap_pages=%s tree_bubbles_between=%s errors=%d"
+        "outcome=%s missing=%s shown=%d range=%s load=%.2fs window=%s sent_before_load=%d sent_after_load=%d load_point_covered=%s rate=%.1f/s tail_absent=%s order_violations=%d pages=%d gap_pages=%s tree_bubbles_between=%s errors=%d"
         % (
             outcome,
             lost or "none",
@@ -466,6 +483,7 @@ def judge(d, tag, word, n, request, response, ocr_file):
             "%d-%d" % (in_window[0], in_window[-1]) if in_window else "none",
             before,
             after,
+            "yes" if covered else "no",
             rate,
             ",".join(map(str, tail)) or "none",
             violations,
@@ -495,6 +513,7 @@ COMMANDS = {
     "flood-reached": flood_reached,
     "flood-wait": flood_wait,
     "stop": stop_flood,
+    "sent": lambda d, tag: print(sent_count(d, tag)),
     "load-time": load_time,
     "event": event,
     "tap": tap,
