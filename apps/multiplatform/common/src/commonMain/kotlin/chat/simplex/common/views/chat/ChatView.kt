@@ -49,6 +49,7 @@ import chat.simplex.res.*
 import dev.icerock.moko.resources.ImageResource
 import dev.icerock.moko.resources.StringResource
 import kotlinx.coroutines.*
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.*
 import kotlinx.datetime.*
 import java.io.File
@@ -1973,15 +1974,7 @@ fun BoxScope.ChatItemsList(
         tryOrShowError("${cItem.id}ChatItem", error = {
           CIBrokenComposableView(if (cItem.chatDir.sent && !LocalTerminalLayout.current) Alignment.CenterEnd else Alignment.CenterStart)
         }) {
-          LaunchedEffect(Unit) {
-            snapshotFlow { highlighted.value }
-              .distinctUntilChanged()
-              .filter { it }
-              .collect {
-                delay(500)
-                highlightedItems.value = setOf()
-              }
-          }
+          ClearHighlightAfterDelay(highlighted, highlightedItems)
           ChatItemView(chatsCtx, remoteHostId, chat, cItem, composeState, provider, useLinkPreviews = useLinkPreviews, linkMode = linkMode, revealed = revealed, highlighted = highlighted, hoveredItemId = hoveredItemId, range = range, searchIsNotBlank = searchValueIsNotBlank, fillMaxWidth = fillMaxWidth, selectedChatItems = selectedChatItems, selectChatItem = { selectUnselectChatItem(true, cItem, revealed, selectedChatItems, reversedChatItems) }, deleteMessage = deleteMessage, deleteMessages = deleteMessages, archiveReports = archiveReports, receiveFile = receiveFile, cancelFile = cancelFile, joinGroup = joinGroup, acceptCall = acceptCall, acceptFeature = acceptFeature, openDirectChat = openDirectChat, forwardItem = forwardItem, updateContactStats = updateContactStats, updateMemberStats = updateMemberStats, syncContactConnection = syncContactConnection, syncMemberConnection = syncMemberConnection, findModelChat = findModelChat, findModelMember = findModelMember, scrollToItem = scrollToItem, scrollToItemId = scrollToItemId, scrollToQuotedItemFromItem = scrollToQuotedItemFromItem, setReaction = setReaction, showItemDetails = showItemDetails, reveal = reveal, showMemberInfo = showMemberInfo, showChatInfo = showChatInfo, developerTools = developerTools, showViaProxy = showViaProxy, itemSeparation = itemSeparation, showTimestamp = itemSeparation.timestamp, swipeOffset = swipeOffset, bubbleInteractionSource = bubbleInteractionSource)
         }
       }
@@ -2039,18 +2032,17 @@ fun BoxScope.ChatItemsList(
           val voiceWithTransparentBack = cItem.content.msgContent is MsgContent.MCVoice && cItem.content.text.isEmpty() && cItem.quotedItem == null && cItem.meta.itemForwarded == null
           val selectionVisible = selectedChatItems.value != null && cItem.canBeDeletedForSelf
           val terminal = LocalTerminalLayout.current
-          val selectionOffset by animateDpAsState(if (selectionVisible && (!sent || terminal)) 4.dp + 22.dp * fontSizeMultiplier else 0.dp)
+          val selectionOffset by animateOnChangeAsState(if (selectionVisible && (!sent || terminal)) 4.dp + 22.dp * fontSizeMultiplier else 0.dp, Dp.VectorConverter, spring(visibilityThreshold = Dp.VisibilityThreshold))
           val swipeableOrSelectionModifier = (if (selectionVisible) Modifier else swipeableModifier).graphicsLayer { translationX = selectionOffset.toPx() }
           if (terminal) {
             val rowInteractionSource = remember { TerminalRowInteractionSource() }
             val highlighted = remember { derivedStateOf { highlightedItems.value.contains(cItem.id) } }
-            val rowColor = animateColorAsState(
-              when {
-                selectedChatItems.value?.contains(cItem.id) == true -> MaterialTheme.colors.primary.copy(alpha = 0.1f)
-                highlighted.value -> MaterialTheme.colors.primary.copy(alpha = 0.14f)
-                else -> Color.Transparent
-              }
-            )
+            val rowColorTarget = when {
+              selectedChatItems.value?.contains(cItem.id) == true -> MaterialTheme.colors.primary.copy(alpha = 0.1f)
+              highlighted.value -> MaterialTheme.colors.primary.copy(alpha = 0.14f)
+              else -> Color.Transparent
+            }
+            val rowColor = animateOnChangeAsState(rowColorTarget, Color.VectorConverter(rowColorTarget.colorSpace), spring())
             ChatItemBox(Modifier.drawBehind { drawRect(rowColor.value) }.terminalRowIndication(rowInteractionSource), top = 0.dp, bottom = if (itemSeparation.date != null) TERMINAL_LEVEL_STEP.toDp() else 0.dp) {
               AnimatedVisibility(selectionVisible, enter = fadeIn(), exit = fadeOut()) {
                 SelectedListItem(Modifier.padding(start = 8.dp), cItem.id, selectedChatItems)
@@ -3273,7 +3265,50 @@ private fun findQuotedItemFromItem(
   }
 }
 
-val chatViewScrollState = MutableStateFlow(false)
+val chatViewScrollState = mutableStateOf(false)
+
+@Composable
+private fun ClearHighlightAfterDelay(highlighted: State<Boolean>, highlightedItems: MutableState<Set<Long>>) {
+  val clearing = remember { mutableStateOf(false) }
+  if (highlighted.value || clearing.value) {
+    LaunchedEffect(Unit) {
+      snapshotFlow { highlighted.value }
+        .distinctUntilChanged()
+        .filter { it }
+        .collect {
+          clearing.value = true
+          delay(500)
+          highlightedItems.value = setOf()
+          clearing.value = false
+        }
+    }
+  }
+}
+
+@Composable
+private fun <T, V : AnimationVector> animateOnChangeAsState(targetValue: T, typeConverter: TwoWayConverter<T, V>, animationSpec: AnimationSpec<T>): State<T> {
+  val animatable = remember { Animatable(targetValue, typeConverter) }
+  AnimateOnChange(animatable, targetValue, animationSpec)
+  return animatable.asState()
+}
+
+@Composable
+private fun <T, V : AnimationVector> AnimateOnChange(animatable: Animatable<T, V>, targetValue: T, animationSpec: AnimationSpec<T>) {
+  if (targetValue != animatable.targetValue || animatable.isRunning) {
+    val channel = remember { Channel<T>(Channel.CONFLATED) }
+    SideEffect { channel.trySend(targetValue) }
+    LaunchedEffect(channel) {
+      for (target in channel) {
+        val newTarget = channel.tryReceive().getOrNull() ?: target
+        launch {
+          if (newTarget != animatable.targetValue) {
+            animatable.animateTo(newTarget, animationSpec)
+          }
+        }
+      }
+    }
+  }
+}
 
 fun addGroupMembers(groupInfo: GroupInfo, rhId: Long?, view: Any? = null, close: (() -> Unit)? = null) {
   hideKeyboard(view)
