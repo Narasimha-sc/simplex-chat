@@ -219,51 +219,54 @@ fun CIImageView(
         }
       }
     }
-    val loaded = if (revealed) res.value else null
-    if (loaded != null && file != null) {
-      val (imageBitmap, data, _) = loaded
-      SimpleAndAnimatedImageView(data, imageBitmap, file, imageProvider, smallView, blurred, @Composable { painter, onClick -> ImageView(painter, image, onClick) })
-    } else {
-      imageView(previewBitmap, onClick = {
-        if (file != null) {
-          when {
-            file.fileStatus is CIFileStatus.RcvInvitation || file.fileStatus is CIFileStatus.RcvAborted ->
-              if (file.fileProhibited != null) {
-                showProhibitedFileAlert(file, file.fileProhibited)
-              } else {
-                chatModel.openWhenReceived(file, smallView)
-                receiveFile(file.fileId)
-              }
-            file.fileStatus is CIFileStatus.RcvAccepted ->
-              when (file.fileProtocol) {
-                FileProtocol.XFTP ->
-                  AlertManager.shared.showAlertMsg(
-                    generalGetString(MR.strings.waiting_for_image),
-                    generalGetString(MR.strings.image_will_be_received_when_contact_completes_uploading)
-                  )
-                FileProtocol.SMP ->
-                  AlertManager.shared.showAlertMsg(
-                    generalGetString(MR.strings.waiting_for_image),
-                    generalGetString(MR.strings.image_will_be_received_when_contact_is_online)
-                  )
-                FileProtocol.LOCAL -> {}
-              }
-            file.fileStatus is CIFileStatus.RcvError ->
-              showFileErrorAlert(file.fileStatus.rcvFileError, file)
-            file.fileStatus is CIFileStatus.RcvWarning ->
-              showFileErrorAlert(file.fileStatus.rcvFileError, temporary = true)
-            file.fileStatus is CIFileStatus.SndError ->
-              showFileErrorAlert(file.fileStatus.sndFileError)
-            file.fileStatus is CIFileStatus.SndWarning ->
-              showFileErrorAlert(file.fileStatus.sndFileError, temporary = true)
-            file.fileStatus is CIFileStatus.RcvTransfer -> {} // ?
-            file.fileStatus is CIFileStatus.RcvComplete -> {} // ?
-            file.fileStatus is CIFileStatus.RcvCancelled -> {} // TODO
-            else -> {}
+    val loadedOrPreview = @Composable {
+      val loaded = if (revealed) res.value else null
+      if (loaded != null && file != null) {
+        val (imageBitmap, data, _) = loaded
+        SimpleAndAnimatedImageView(data, imageBitmap, file, imageProvider, smallView, blurred, @Composable { painter, onClick -> ImageView(painter, image, onClick) })
+      } else {
+        imageView(previewBitmap, onClick = {
+          if (file != null) {
+            when {
+              file.fileStatus is CIFileStatus.RcvInvitation || file.fileStatus is CIFileStatus.RcvAborted ->
+                if (file.fileProhibited != null) {
+                  showProhibitedFileAlert(file, file.fileProhibited)
+                } else {
+                  chatModel.openWhenReceived(file, smallView)
+                  receiveFile(file.fileId)
+                }
+              file.fileStatus is CIFileStatus.RcvAccepted ->
+                when (file.fileProtocol) {
+                  FileProtocol.XFTP ->
+                    AlertManager.shared.showAlertMsg(
+                      generalGetString(MR.strings.waiting_for_image),
+                      generalGetString(MR.strings.image_will_be_received_when_contact_completes_uploading)
+                    )
+                  FileProtocol.SMP ->
+                    AlertManager.shared.showAlertMsg(
+                      generalGetString(MR.strings.waiting_for_image),
+                      generalGetString(MR.strings.image_will_be_received_when_contact_is_online)
+                    )
+                  FileProtocol.LOCAL -> {}
+                }
+              file.fileStatus is CIFileStatus.RcvError ->
+                showFileErrorAlert(file.fileStatus.rcvFileError, file)
+              file.fileStatus is CIFileStatus.RcvWarning ->
+                showFileErrorAlert(file.fileStatus.rcvFileError, temporary = true)
+              file.fileStatus is CIFileStatus.SndError ->
+                showFileErrorAlert(file.fileStatus.sndFileError)
+              file.fileStatus is CIFileStatus.SndWarning ->
+                showFileErrorAlert(file.fileStatus.sndFileError, temporary = true)
+              file.fileStatus is CIFileStatus.RcvTransfer -> {} // ?
+              file.fileStatus is CIFileStatus.RcvComplete -> {} // ?
+              file.fileStatus is CIFileStatus.RcvCancelled -> {} // TODO
+              else -> {}
+            }
           }
-        }
-      })
+        })
+      }
     }
+    loadedOrPreview()
     // Do not show download icon when the view is blurred
     if (!smallView && (!showDownloadButton(file?.fileStatus) || !blurred.value)) {
       loadingIndicator()
