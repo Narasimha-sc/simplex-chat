@@ -2986,10 +2986,13 @@ private fun FloatingDate(
 
   fun setDateVisibility(isVisible: Boolean) {
     if (isVisible) {
-      val now = Clock.System.now()
-      val date = lastVisibleItemDate.value
-      if (!isNearBottom.value && !showDate.value && date != null && getTimestampDateText(date) != getTimestampDateText(now)) {
-        showDate.value = true
+      if (!isNearBottom.value && !showDate.value) {
+        val now = Clock.System.now()
+        val date = lastVisibleItemDate.value
+        val timeZone = TimeZone.currentSystemDefault()
+        if (date != null && date.toLocalDateTime(timeZone).date != now.toLocalDateTime(timeZone).date) {
+          showDate.value = true
+        }
       }
     } else if (showDate.value) {
       showDate.value = false
@@ -2997,14 +3000,21 @@ private fun FloatingDate(
   }
 
   LaunchedEffect(Unit) {
-    var hideDateWhenNotScrolling: Job = Job()
+    var hideDateWhenNotScrolling: Job? = null
+    var lastScrollMillis = 0L
     snapshotFlow { listState.value.firstVisibleItemScrollOffset }
       .collect {
         setDateVisibility(true)
-        hideDateWhenNotScrolling.cancel()
-        hideDateWhenNotScrolling = launch {
-          delay(1000)
-          setDateVisibility(false)
+        lastScrollMillis = System.nanoTime() / 1_000_000
+        if (hideDateWhenNotScrolling?.isActive != true) {
+          hideDateWhenNotScrolling = launch {
+            var idleMillis = 0L
+            while (idleMillis < 1000) {
+              delay(1000 - idleMillis)
+              idleMillis = System.nanoTime() / 1_000_000 - lastScrollMillis
+            }
+            setDateVisibility(false)
+          }
         }
       }
   }
