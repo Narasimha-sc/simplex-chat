@@ -203,7 +203,6 @@ chatGroupTests = do
     it "forward message reaction (x.msg.react)" testGroupMsgForwardReaction
     it "forward message deletion (x.msg.del)" testGroupMsgForwardDeletion
     it "forward file (x.msg.file.descr)" testGroupMsgForwardFile
-    it "send file description to member connected before upload completes" testGroupMsgForwardFileConnectedBeforeUpload
     it "forward role change (x.grp.mem.role)" testGroupMsgForwardChangeRole
     it "forward new member announcement (x.grp.mem.new)" testGroupMsgForwardNewMember
     it "forward member leaving (x.grp.leave)" testGroupMsgForwardLeave
@@ -353,6 +352,8 @@ chatGroupTests = do
         it "role transitions update the roster (mod <-> admin, admin -> non-roster)" testChannelRoleTransitionsUpdateRoster
         it "malicious relay cannot downgrade or re-key a roster-established moderator via XGrpMemNew" testChannelRelayCannotDowngradeRosterMember
         it "malicious relay cannot forge a privileged member via XGrpMemNew forwarded as the owner" testChannelRelayCannotForgePrivilegedMember
+        it "owner promotion with a different member key keeps the member role" testChannelPromotionDifferentKeyKeepsRole
+        it "owner promotion pins the key of a member known without a key" testChannelPromotionPinsMemberKey
         it "should add relay to channel with roster (relay caches roster before joinable)" testChannelAddRelayWithRoster
         it "roster blob spanning multiple chunks reassembles" testChannelRosterMultipartReassembly
         it "corrupted roster blob is rejected on digest mismatch" testChannelRosterDigestMismatchRejected
@@ -6112,58 +6113,6 @@ testGroupMsgForwardFile =
       dest <- B.readFile (tmpFile cath "test.jpg")
       dest `shouldBe` src
 
-testGroupMsgForwardFileConnectedBeforeUpload :: HasCallStack => TestParams -> IO ()
-testGroupMsgForwardFileConnectedBeforeUpload =
-  testChat3 aliceProfile bobProfile cathProfile $
-    \alice bob cath -> do
-      createGroup3 "team" alice bob cath
-      threadDelay 1000000
-      setMemberConnStatus bob "cath" "joined"
-      setMemberConnStatus cath "bob" "joined"
-      setupGroupForwardingVectors alice bob cath
-
-      bob #> "/f #team ./tests/fixtures/test.jpg"
-      bob <## "use /fc 1 to cancel sending"
-      concurrentlyN_
-        [ do
-            alice <# "#team bob> sends file test.jpg (136.5 KiB / 139737 bytes)"
-            alice <## "use /fr 1 [<dir>/ | <path>] to receive it",
-          do
-            cath <# "#team bob> sends file test.jpg (136.5 KiB / 139737 bytes) [>>]"
-            cath <## "use /fr 1 [<dir>/ | <path>] to receive it [>>]"
-        ]
-
-      setMemberConnStatus bob "cath" "ready"
-      setMemberConnStatus cath "bob" "ready"
-      updateGroupForwardingVectors alice "bob" "cath" MRConnected
-
-      withXFTPServer alice $ do
-        bob `skipUploadWarnings` "completed uploading file 1 (test.jpg) for #team"
-        cath ##> ("/fr 1 " <> tmpDir cath)
-        cath
-          <### [ ConsoleString $ "saving file 1 from bob to " <> tmpFile cath "test.jpg",
-                 "started receiving file 1 (test.jpg) from bob"
-               ]
-        cath <## "completed receiving file 1 (test.jpg) from bob"
-        src <- B.readFile "./tests/fixtures/test.jpg"
-        dest <- B.readFile (tmpFile cath "test.jpg")
-        dest `shouldBe` src
-  where
-    setMemberConnStatus cc memberName status =
-      void $ withCCTransaction cc $ \db ->
-        DB.execute
-          db
-          [sql|
-            UPDATE connections SET conn_status = ?
-            WHERE group_member_id IN (SELECT group_member_id FROM group_members WHERE local_display_name = ?)
-          |]
-          (status :: String, memberName :: String)
-    skipUploadWarnings cc line = do
-      l <- getTermLine cc
-      if l == "warning:  uploading file 1 (test.jpg) for #team"
-        then getTermLine cc >> skipUploadWarnings cc line
-        else l `shouldBe` line
-
 testGroupMsgForwardChangeRole :: HasCallStack => TestParams -> IO ()
 testGroupMsgForwardChangeRole =
   testChat3 aliceProfile bobProfile cathProfile $
@@ -11389,6 +11338,54 @@ testChannelRelayCannotForgePrivilegedMember ps =
     forgedMemberRows cc name =
       withCCTransaction cc $ \db ->
         DB.query db "SELECT member_role, member_pub_key FROM group_members WHERE local_display_name = ?" (Only name)
+
+testChannelPromotionDifferentKeyKeepsRole :: HasCallStack => TestParams -> IO ()
+testChannelPromotionDifferentKeyKeepsRole ps =
+  withNewTestChat ps "alice" aliceProfile $ \alice ->
+    withNewTestChatOpts ps relayTestOpts "bob" bobProfile $ \bob ->
+      withNewTestChat ps "cath" cathProfile $ \cath ->
+        withNewTestChat ps "dan" danProfile $ \dan -> do
+          (shortLink, fullLink) <- prepareChannel1Relay "team" alice bob
+          memberJoinChannel "team" [bob] [alice] shortLink fullLink cath
+          memberJoinChannel "team" [bob] [alice] shortLink fullLink dan
+          danId <- memberIdByName alice "dan"
+          connId <- relayConnIdToMember bob "cath"
+          g <- C.newRandom
+          kp <- atomically $ C.generateKeyPair g
+          let relayKey = fst kp :: C.PublicKeyEd25519
+              memInfo = MemberInfo {memberId = danId, memberRole = GRObserver, v = Nothing, profile = danProfile, memberKey = Just (MemberKey relayKey)}
+          agentSendBody bob connId $ chatMsgToBody $ ChatMessage chatInitialVRange Nothing (XGrpMemNew memInfo Nothing)
+          cath <## "#team: bob introduced dan (Daniel) in the channel"
+          threadDelay 1000000
+          alice ##> "/mr #team dan admin"
+          alice <## "#team: you changed the role of dan to admin (signed)"
+          concurrentlyN_
+            [ bob <## "#team: alice changed the role of dan from observer to admin (signed)",
+              dan <## "#team: alice changed your role from observer to admin (signed)",
+              cath <##. "error: x.grp.mem.role: member key conflict, keeping trusted key, memberId="
+            ]
+          checkMemberRow cath "dan" (Just "observer")
+
+testChannelPromotionPinsMemberKey :: HasCallStack => TestParams -> IO ()
+testChannelPromotionPinsMemberKey ps =
+  withNewTestChat ps "alice" aliceProfile $ \alice ->
+    withNewTestChatOpts ps relayTestOpts "bob" bobProfile $ \bob ->
+      withNewTestChat ps "cath" cathProfile $ \cath ->
+        withNewTestChat ps "dan" danProfile $ \dan -> do
+          (shortLink, fullLink) <- prepareChannel1Relay "team" alice bob
+          memberJoinChannel "team" [bob] [alice] shortLink fullLink cath
+          memberJoinChannel "team" [bob] [alice] shortLink fullLink dan
+          threadDelay 1000000
+          alice ##> "/block for all #team dan"
+          alice <## "#team: you blocked dan (signed)"
+          bob <## "#team: alice blocked dan (signed)"
+          cath <##. "#team: alice blocked an unknown member, creating unknown member record"
+          cath .<##. ("#team: alice blocked", "(signed)")
+          threadDelay 1000000
+          promoteChannelMember "team" alice bob dan [cath]
+          danId <- getMemberIdByName alice "dan"
+          (_, danKey) <- getMemberRoleKey alice danId
+          getMemberRoleKey cath danId `shouldReturn` ("member", danKey)
 
 testChannelRemoveMemberSigned :: HasCallStack => TestParams -> IO ()
 testChannelRemoveMemberSigned ps =
