@@ -267,7 +267,7 @@ fun ChatView(
     val clipboard = LocalClipboardManager.current
     val terminal = chatInfo.activeChatLayout(user) == ChatLayoutMode.Terminal
     CompositionLocalProvider(
-      LocalAppBarHandler provides rememberAppBarHandler(chatInfo.id, keyboardCoversBar = false),
+      LocalAppBarHandler provides rememberAppBarHandler(chatInfo.id, keyboardCoversBar = false, connection = ::FixedAppBarNestedScrollConnection),
       LocalSelectionManager provides selectionManager,
       LocalTerminalLayout provides terminal,
       LocalBubbleLayout provides !terminal,

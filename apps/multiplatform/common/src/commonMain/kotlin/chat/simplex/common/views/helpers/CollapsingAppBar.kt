@@ -18,10 +18,10 @@ import chat.simplex.common.model.ChatController.appPrefs
 val LocalAppBarHandler: ProvidableCompositionLocal<AppBarHandler?> = staticCompositionLocalOf { null }
 
 @Composable
-fun rememberAppBarHandler(key1: Any? = null, key2: Any? = null, keyboardCoversBar: Boolean = true): AppBarHandler {
+fun rememberAppBarHandler(key1: Any? = null, key2: Any? = null, keyboardCoversBar: Boolean = true, connection: () -> CollapsingAppBarNestedScrollConnection = ::CollapsingAppBarNestedScrollConnection): AppBarHandler {
   val graphicsLayer = rememberGraphicsLayer()
   val backgroundGraphicsLayer = rememberGraphicsLayer()
-  return remember(key1, key2) { AppBarHandler(graphicsLayer, backgroundGraphicsLayer, keyboardCoversBar) }
+  return remember(key1, key2) { AppBarHandler(graphicsLayer, backgroundGraphicsLayer, keyboardCoversBar, connection = connection()) }
 }
 
 @Composable
@@ -65,7 +65,8 @@ class AppBarHandler(
   var backgroundGraphicsLayer: GraphicsLayer?,
   val keyboardCoversBar: Boolean = true,
   listState: LazyListState = LazyListState(0, 0),
-  scrollState: ScrollState = ScrollState(initial = 0)
+  scrollState: ScrollState = ScrollState(initial = 0),
+  val connection: CollapsingAppBarNestedScrollConnection = CollapsingAppBarNestedScrollConnection()
 ) {
   val title = mutableStateOf("")
   var listState by mutableStateOf(listState, structuralEqualityPolicy())
@@ -73,8 +74,6 @@ class AppBarHandler(
 
   var scrollState by mutableStateOf(scrollState, structuralEqualityPolicy())
     internal set
-
-  val connection = CollapsingAppBarNestedScrollConnection()
 
   val backgroundGraphicsLayerSize: MutableState<IntSize> = mutableStateOf(IntSize.Zero)
 
@@ -87,9 +86,9 @@ class AppBarHandler(
   }
 }
 
-class CollapsingAppBarNestedScrollConnection(): NestedScrollConnection {
+open class CollapsingAppBarNestedScrollConnection(): NestedScrollConnection {
   var scrollTrackingEnabled = true
-  var appBarOffset: Float by mutableFloatStateOf(0f)
+  open var appBarOffset: Float by mutableFloatStateOf(0f)
 
   override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
     appBarOffset += available.y
@@ -100,4 +99,10 @@ class CollapsingAppBarNestedScrollConnection(): NestedScrollConnection {
     appBarOffset -= available.y
     return Offset(x = 0f, 0f)
   }
+}
+
+class FixedAppBarNestedScrollConnection: CollapsingAppBarNestedScrollConnection() {
+  override var appBarOffset: Float
+    get() = 0f
+    set(value) {}
 }
