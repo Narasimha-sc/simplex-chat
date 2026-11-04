@@ -18,6 +18,9 @@ fun DefaultDropdownMenu(
   onClosed: State<() -> Unit> = remember { mutableStateOf({}) },
   dropdownMenuItems: (@Composable () -> Unit)?
 ) {
+  val wasShown = remember { mutableStateOf(false) }
+  if (showMenu.value) wasShown.value = true
+  if (!wasShown.value) return
   MaterialTheme(
     shapes = MaterialTheme.shapes.copy(medium = RoundedCornerShape(corner = CornerSize(25.dp)))
   ) {

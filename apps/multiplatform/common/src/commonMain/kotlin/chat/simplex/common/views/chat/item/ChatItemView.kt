@@ -392,7 +392,7 @@ fun ChatItemView(
 
             @Composable
             fun MsgContentItemDropdownMenu() {
-              val saveFileLauncher = rememberSaveFileLauncher(ciFile = cItem.file)
+              val saveFileLauncher = cItem.file?.let { rememberSaveFileLauncher(ciFile = it) }
               when {
                 // cItem.id check is a special case for live message chat item which has negative ID while not sent yet
                 cItem.isReport && cItem.meta.itemDeleted == null && cInfo is ChatInfo.Group -> {
@@ -453,7 +453,7 @@ fun ChatItemView(
                         showMenu.value = false
                       })
                     }
-                    if (cItem.file != null && (getLoadedFilePath(cItem.file) != null || (chatModel.connectedToRemote() && cachedRemoteReqs[cItem.file.fileSource] != false && cItem.file.loaded))) {
+                    if (saveFileLauncher != null && cItem.file != null && (getLoadedFilePath(cItem.file) != null || (chatModel.connectedToRemote() && cachedRemoteReqs[cItem.file.fileSource] != false && cItem.file.loaded))) {
                       SaveContentItemAction(cItem, saveFileLauncher, showMenu)
                     } else if (cItem.file != null && cItem.file.fileStatus is CIFileStatus.RcvInvitation && fileSizeValid(cItem.file)) {
                       ItemAction(stringResource(MR.strings.download_file), painterResource(MR.images.ic_arrow_downward), onClick = {
