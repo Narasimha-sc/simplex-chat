@@ -62,6 +62,7 @@ import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.json.*
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 import java.util.Date
@@ -7668,13 +7669,15 @@ sealed class GroupLinkPlan {
   @Serializable @SerialName("updateRequired") class UpdateRequired(val groupSLinkData_: GroupShortLinkData? = null): GroupLinkPlan()
 }
 
+private val terminalItemNoGenerator = AtomicLong(0)
+
 abstract class TerminalItem {
   abstract val id: Long
   abstract val remoteHostId: Long?
   val date: Instant = Clock.System.now()
   abstract val label: String
   abstract val details: String
-  val createdAtNanos: Long = System.nanoTime()
+  val itemNo: Long = terminalItemNoGenerator.incrementAndGet()
 
   class Cmd(override val id: Long, override val remoteHostId: Long?, val cmd: CC): TerminalItem() {
     override val label get() = "> ${cmd.cmdString}"
