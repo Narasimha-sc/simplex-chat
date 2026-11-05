@@ -39,7 +39,7 @@ import Simplex.Chat.Messages (CIMention (..), CIMentionMember (..), ChatItemId)
 import Simplex.Chat.Messages.Batch (encodeBinaryBatch, encodeFwdElement)
 import Simplex.Chat.Messages.CIContent (publicGroupNoE2EText)
 import Simplex.Chat.Options
-import Simplex.Chat.Protocol (ChatMessage (ChatMessage), ChatMsgEvent (XGrpMemNew, XGrpRelayInv, XInfo, XMember, XMsgUpdate, XMsgNew, XMsgDel), FwdSender (FwdMember, FwdChannel), GrpMsgForward (GrpMsgForward), MsgContainer (..), MsgMention (..), MsgContent (..), VerifiedMsg (VMUnsigned), chatMsgToBody, mcSimple, msgContentText)
+import Simplex.Chat.Protocol (ChatMessage (ChatMessage), ChatMsgEvent (XFile, XGrpMemNew, XGrpRelayInv, XInfo, XMember, XMsgUpdate, XMsgNew, XMsgDel), FwdSender (FwdMember, FwdChannel), GrpMsgForward (GrpMsgForward), MsgContainer (..), MsgMention (..), MsgContent (..), VerifiedMsg (VMUnsigned), chatMsgToBody, mcSimple, msgContentText)
 import Simplex.Chat.Types
 import Simplex.Chat.Types.MemberRelations (MemberRelation (..), getRelation, setRelation)
 import Simplex.Chat.Types.Shared (GroupMemberRole (..), GroupAcceptance (..))
@@ -100,6 +100,7 @@ chatGroupTests = do
     it "update group profile" testUpdateGroupProfile
     it "update member role" testUpdateMemberRole
     it "check owner role change" testOwnerRoleChange
+    it "observer cannot post file with legacy x.file" testGroupObserverLegacyFile
     it "group description is shown as the first message to new members" testGroupDescription
     it "moderate message of another group member" testGroupModerate
     it "moderate own message (should process as deletion)" testGroupModerateOwn
@@ -203,6 +204,7 @@ chatGroupTests = do
     it "forward message reaction (x.msg.react)" testGroupMsgForwardReaction
     it "forward message deletion (x.msg.del)" testGroupMsgForwardDeletion
     it "forward file (x.msg.file.descr)" testGroupMsgForwardFile
+    it "send file description to member connected before upload completes" testGroupMsgForwardFileConnectedBeforeUpload
     it "forward role change (x.grp.mem.role)" testGroupMsgForwardChangeRole
     it "forward new member announcement (x.grp.mem.new)" testGroupMsgForwardNewMember
     it "forward member leaving (x.grp.leave)" testGroupMsgForwardLeave
@@ -1763,6 +1765,17 @@ testOwnerRoleChange =
                "bob (Bob): admin, you, connected",
                "cath (Catherine): admin, connected"
              ]
+
+testGroupObserverLegacyFile :: HasCallStack => TestParams -> IO ()
+testGroupObserverLegacyFile =
+  testChat2 aliceProfile bobProfile $
+    \alice bob -> do
+      createGroup2' "team" alice (bob, GRObserver) True
+      connId <- relayConnIdToMember bob "alice"
+      let fInv = FileInvitation {fileName = "test.txt", fileSize = 1, fileDigest = Nothing, fileConnReq = Nothing, fileInline = Nothing, fileDescr = Nothing, fileBadge = Nothing}
+      agentSendBody bob connId $ chatMsgToBody $ ChatMessage chatInitialVRange Nothing (XFile fInv)
+      alice <##. "error: unsupported message: XFile"
+      alice #$> ("/_get chat #1 count=1", chat, [(0, "connected")])
 
 testGroupDescription :: HasCallStack => TestParams -> IO ()
 testGroupDescription = testChat4 aliceProfile bobProfile cathProfile danProfile $ \alice bob cath dan -> do
@@ -6112,6 +6125,58 @@ testGroupMsgForwardFile =
       src <- B.readFile "./tests/fixtures/test.jpg"
       dest <- B.readFile (tmpFile cath "test.jpg")
       dest `shouldBe` src
+
+testGroupMsgForwardFileConnectedBeforeUpload :: HasCallStack => TestParams -> IO ()
+testGroupMsgForwardFileConnectedBeforeUpload =
+  testChat3 aliceProfile bobProfile cathProfile $
+    \alice bob cath -> do
+      createGroup3 "team" alice bob cath
+      threadDelay 1000000
+      setMemberConnStatus bob "cath" "joined"
+      setMemberConnStatus cath "bob" "joined"
+      setupGroupForwardingVectors alice bob cath
+
+      bob #> "/f #team ./tests/fixtures/test.jpg"
+      bob <## "use /fc 1 to cancel sending"
+      concurrentlyN_
+        [ do
+            alice <# "#team bob> sends file test.jpg (136.5 KiB / 139737 bytes)"
+            alice <## "use /fr 1 [<dir>/ | <path>] to receive it",
+          do
+            cath <# "#team bob> sends file test.jpg (136.5 KiB / 139737 bytes) [>>]"
+            cath <## "use /fr 1 [<dir>/ | <path>] to receive it [>>]"
+        ]
+
+      setMemberConnStatus bob "cath" "ready"
+      setMemberConnStatus cath "bob" "ready"
+      updateGroupForwardingVectors alice "bob" "cath" MRConnected
+
+      withXFTPServer alice $ do
+        bob `skipUploadWarnings` "completed uploading file 1 (test.jpg) for #team"
+        cath ##> ("/fr 1 " <> tmpDir cath)
+        cath
+          <### [ ConsoleString $ "saving file 1 from bob to " <> tmpFile cath "test.jpg",
+                 "started receiving file 1 (test.jpg) from bob"
+               ]
+        cath <## "completed receiving file 1 (test.jpg) from bob"
+        src <- B.readFile "./tests/fixtures/test.jpg"
+        dest <- B.readFile (tmpFile cath "test.jpg")
+        dest `shouldBe` src
+  where
+    setMemberConnStatus cc memberName status =
+      void $ withCCTransaction cc $ \db ->
+        DB.execute
+          db
+          [sql|
+            UPDATE connections SET conn_status = ?
+            WHERE group_member_id IN (SELECT group_member_id FROM group_members WHERE local_display_name = ?)
+          |]
+          (status :: String, memberName :: String)
+    skipUploadWarnings cc line = do
+      l <- getTermLine cc
+      if l == "warning:  uploading file 1 (test.jpg) for #team"
+        then getTermLine cc >> skipUploadWarnings cc line
+        else l `shouldBe` line
 
 testGroupMsgForwardChangeRole :: HasCallStack => TestParams -> IO ()
 testGroupMsgForwardChangeRole =
