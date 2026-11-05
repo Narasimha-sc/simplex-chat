@@ -23,6 +23,8 @@ expect val appPlatform: AppPlatform
 
 expect val deviceName: String
 
+expect val unackedDataTimeoutSupported: Boolean
+
 expect fun isAppVisibleAndFocused(): Boolean
 
 expect fun appLinkSchemeRegistered(): Boolean
