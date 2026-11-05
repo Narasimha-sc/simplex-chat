@@ -643,6 +643,7 @@ private fun MutableState<MigrationToState?>.importArchive(archivePath: String, n
         chatInitControllerRemovingDatabases()
       }
       controller.apiDeleteStorage()
+      withContext(Dispatchers.Main) { chatModel.clearDroppedUpdates() }
       wallpapersDir.mkdirs()
       try {
         val config = ArchiveConfig(archivePath, parentTempDirectory = databaseExportDir.toString())
