@@ -38,6 +38,9 @@ on:
       - "apps/simplex-badge-service/web/**"
       - "scripts/ci/packages_release.py"
       - "scripts/ci/test_packages_release.py"
+      - "website/src/js/simplex-lib.jsc"
+      - "website/test/**"
+      - "website/package.json"
     types: [opened, synchronize, reopened, ready_for_review]
   workflow_dispatch:
     inputs:
@@ -1219,7 +1222,7 @@ jobs:
         shell: bash
         run: |
           disk=$(hdiutil attach -nomount ram://4194304 | tr -d '[:space:]')
-          diskutil erasevolume HFS+ tests "$disk"
+          diskutil erasevolume APFS tests "$disk"
           ln -s /Volumes/tests tests/tmp
 
       - name: Run tests
