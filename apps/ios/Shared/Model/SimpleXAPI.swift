@@ -2324,6 +2324,7 @@ func initializeChat(start: Bool, confirmStart: Bool = false, dbKey: String? = ni
     let m = ChatModel.shared
     m.ctrlInitInProgress = true
     defer { m.ctrlInitInProgress = false }
+    let dbOpened = !hasMigrationResult()
     (m.chatDbEncrypted, m.chatDbStatus) = chatMigrateInit(dbKey, confirmMigrations: confirmMigrations)
     if  m.chatDbStatus != .ok { return }
     NetworkObserver.shared.restartMonitor()
@@ -2332,6 +2333,7 @@ func initializeChat(start: Bool, confirmStart: Bool = false, dbKey: String? = ni
         encryptionStartedDefault.set(false)
     }
     try apiSetAppFilePaths(filesFolder: getAppFilesDirectory().path, tempFolder: getTempFilesDirectory().path, assetsFolder: getWallpaperDirectory().deletingLastPathComponent().path)
+    if dbOpened { updateAppDataBackup() }
     try apiSetEncryptLocalFiles(privacyEncryptLocalFilesGroupDefault.get())
     m.chatInitialized = true
     m.currentUser = try apiGetActiveUser()
