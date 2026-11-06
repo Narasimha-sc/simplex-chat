@@ -369,11 +369,6 @@ struct ChatView: View {
             revealedItems = Set()
             stopAudioPlayer()
             if let cId {
-                if im.secondaryIMFilter == nil {
-                    chatModel.groupMembers = []
-                    chatModel.groupMembersIndexes.removeAll()
-                    chatModel.membersLoaded = false
-                }
                 if let c = chatModel.getChat(cId) {
                     chat = c
                 }
@@ -2971,7 +2966,6 @@ struct ChatView: View {
                                     m.decreaseGroupReportsCounter(chat.chatInfo.id)
                                 }
                                 m.updateChatInfo(itemDeletion.deletedChatItem.chatInfo)
-                                m.upsertSupportChatMember(itemDeletion.deletedChatItem.chatInfo)
                             }
                         }
                     }
@@ -3176,7 +3170,6 @@ private func deleteMessages(_ chat: Chat, _ deletingItems: [Int64], _ mode: CIDe
                     }
                     if let updatedChatInfo = deletedItems.last?.deletedChatItem.chatInfo {
                         ChatModel.shared.updateChatInfo(updatedChatInfo)
-                        ChatModel.shared.upsertSupportChatMember(updatedChatInfo)
                     }
                 }
                 await onSuccess()

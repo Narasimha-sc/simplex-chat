@@ -1178,6 +1178,10 @@ CREATE INDEX idx_group_snd_item_statuses_chat_item_id ON group_snd_item_statuses
 CREATE INDEX idx_group_snd_item_statuses_group_member_id ON group_snd_item_statuses(
   group_member_id
 );
+CREATE INDEX idx_chat_items_user_id_item_status ON chat_items(
+  user_id,
+  item_status
+);
 CREATE INDEX idx_contacts_contact_group_member_id ON contacts(
   contact_group_member_id
 );
@@ -1586,22 +1590,6 @@ CREATE INDEX idx_group_members_invited_via_group_member_id ON group_members(
 CREATE INDEX idx_badge_store_receipts_user ON badge_store_receipts(user_id);
 CREATE UNIQUE INDEX idx_badge_purchases_store_receipt ON badge_purchases(
   badge_store_receipt_id
-);
-CREATE INDEX idx_group_members_user_id_member_role ON group_members(
-  user_id,
-  member_role,
-  group_id
-);
-CREATE INDEX idx_group_members_group_id_contact_id ON group_members(
-  group_id,
-  contact_id
-) WHERE contact_id IS NOT NULL;
-CREATE INDEX idx_chat_items_user_id_item_status ON chat_items(
-  user_id,
-  item_status,
-  contact_id,
-  group_id,
-  user_mention
 );
 CREATE TRIGGER on_group_members_insert_update_summary
 AFTER INSERT ON group_members

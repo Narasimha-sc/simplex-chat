@@ -2496,7 +2496,7 @@ CREATE INDEX idx_chat_items_timed_delete_at ON test_chat_schema.chat_items USING
 
 
 
-CREATE INDEX idx_chat_items_user_id_item_status ON test_chat_schema.chat_items USING btree (user_id, item_status, contact_id, group_id, user_mention);
+CREATE INDEX idx_chat_items_user_id_item_status ON test_chat_schema.chat_items USING btree (user_id, item_status);
 
 
 
@@ -2760,10 +2760,6 @@ CREATE INDEX idx_group_members_group_id ON test_chat_schema.group_members USING 
 
 
 
-CREATE INDEX idx_group_members_group_id_contact_id ON test_chat_schema.group_members USING btree (group_id, contact_id) WHERE (contact_id IS NOT NULL);
-
-
-
 CREATE UNIQUE INDEX idx_group_members_group_id_index_in_group ON test_chat_schema.group_members USING btree (group_id, index_in_group);
 
 
@@ -2781,10 +2777,6 @@ CREATE INDEX idx_group_members_invited_via_group_member_id ON test_chat_schema.g
 
 
 CREATE INDEX idx_group_members_member_profile_id ON test_chat_schema.group_members USING btree (member_profile_id);
-
-
-
-CREATE INDEX idx_group_members_member_role ON test_chat_schema.group_members USING btree (member_role, user_id, group_id);
 
 
 

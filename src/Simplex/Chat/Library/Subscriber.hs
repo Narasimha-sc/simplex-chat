@@ -2274,11 +2274,8 @@ processAgentMessageConn cxt user@User {userId} entity gks_ corrId agentConnId ag
               groupMsgToView cInfo ci'
           | otherwise = do
               file_ <- processFileInv gInfo' (Just m')
-              (ci, cInfo) <- createNonLive gInfo' (Just m') scopeInfo file_
-              let (gInfoC, scopeC) = case cInfo of
-                    GroupChat g s -> (g, s)
-                    _ -> (gInfo', scopeInfo)
-              deletions <- markGroupCIsDeleted user gInfoC scopeC [CChatItem SMDRcv ci] (Just moderator) moderatedAt
+              (ci, _cInfo) <- createNonLive gInfo' (Just m') scopeInfo file_
+              deletions <- markGroupCIsDeleted user gInfo' scopeInfo [CChatItem SMDRcv ci] (Just moderator) moderatedAt
               toView $ CEvtChatItemsDeleted user deletions False False
         -- m' is Maybe GroupMember
         createNonLive gInfo' m' scopeInfo file_ = do
@@ -3308,7 +3305,7 @@ processAgentMessageConn cxt user@User {userId} entity gks_ corrId agentConnId ag
         GCHostMember ->
           withStore' (\db -> runExceptT $ getGroupMemberByMemberId db cxt user gInfo memId) >>= \case
             Right existingMember
-              | useRelays' gInfo -> do
+              | useRelays' gInfo && not (sameMemberId memId (membership gInfo)) -> do
                   updatedMember <- withStore $ \db -> updatePreparedChannelMember db cxt user existingMember memInfo (memberPresHeader gInfo memId (memberPubKey existingMember))
                   toView $ CEvtGroupMemberUpdated user gInfo existingMember updatedMember
               | otherwise ->
@@ -3354,10 +3351,11 @@ processAgentMessageConn cxt user@User {userId} entity gks_ corrId agentConnId ag
         _ -> messageError "x.grp.mem.inv can be only sent by invitee member"
 
     xGrpMemFwd :: GroupInfoKeys -> GroupMember -> MemberInfo -> IntroInvitation -> CM ()
-    xGrpMemFwd g@(GIK gInfo@GroupInfo {membership, chatSettings} _) m memInfo@(MemberInfo memId memRole memChatVRange _ _) IntroInvitation {groupConnReq} = do
+    xGrpMemFwd g@(GIK gInfo@GroupInfo {membership, chatSettings} _) m@GroupMember {localDisplayName = c} memInfo@(MemberInfo memId memRole memChatVRange _ _) IntroInvitation {groupConnReq} = do
       let GroupMember {memberId = membershipMemId} = membership
       checkHostRole m memRole
-      toMember <- withStore $ \db -> do
+      when (memId == membershipMemId) $ throwChatError CEGroupDuplicateMemberId
+      (toMember, fromAnnouncer) <- withStore $ \db -> do
         toMember <-
           getGroupMemberByMemberId db cxt user gInfo memId
             -- TODO if the missed messages are correctly sent as soon as there is connection before anything else is sent
@@ -3367,12 +3365,14 @@ processAgentMessageConn cxt user@User {userId} entity gks_ corrId agentConnId ag
             `catchError` \case
               SEGroupMemberNotFoundByMemberId _ -> createNewGroupMember db cxt user gInfo m memInfo (memberInfoPresHeader gInfo memInfo) GCPostMember GSMemAnnounced
               e -> throwError e
+        let fromAnnouncer = not (memberRemoved toMember) && (invitedByGroupMemberId toMember == Just (groupMemberId' m) || memberStatus toMember == GSMemUnknown)
         -- TODO [knocking] separate pending statuses from GroupMemberStatus?
         -- TODO            add GSMemIntroInvitedPending, GSMemConnectedPending, etc.?
         -- TODO            keep as is? (GSMemIntroInvited has no purpose)
         let newMemberStatus = if memberPending toMember then memberStatus toMember else GSMemIntroInvited
-        liftIO $ updateGroupMemberStatus db userId toMember newMemberStatus
-        pure toMember
+        when fromAnnouncer $ liftIO $ updateGroupMemberStatus db userId toMember newMemberStatus
+        pure (toMember, fromAnnouncer)
+      unless fromAnnouncer $ throwChatError (CEGroupContactRole c)
       subMode <- chatReadVar subscriptionMode
       let mcvr = maybe chatInitialVRange fromChatVRange memChatVRange
           chatV = vr cxt `peerConnChatVersion` mcvr
