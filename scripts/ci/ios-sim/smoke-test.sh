@@ -170,6 +170,31 @@ send_image() {
   echo "$ext: the picked image was previewed and sent as a $size .$ext file"
 }
 
+# The software keyboard's first-use tip ("Speed up your typing by sliding…", Continue) covers the profile page and
+# hides it from the tree (run 41632465521); its Continue is looked for in the tree and at its place, 201,829.
+dismiss_keyboard_tip() {
+  local element
+  if "$ui" tap Continue 1 > /dev/null 2>&1; then
+    echo "keyboard tip dismissed"
+    return
+  fi
+  element=$("$ui" point 201 829 || true)
+  if grep -qF '"Continue"' <<< "$element"; then
+    "$ui" tap-xy 201 829
+    echo "keyboard tip dismissed at 201,829"
+  fi
+}
+
+until_profile_page() {
+  local deadline=$((SECONDS + 60)) t
+  until t=$("$ui" tree) && grep -qF -- "$1" <<< "$t"; do
+    [ "$SECONDS" -lt "$deadline" ] || fail "\"$1\" not shown after 60 s"
+    dismiss_keyboard_tip
+    sleep 2
+  done
+  dismiss_keyboard_tip
+}
+
 xcrun simctl install "$SIM_UDID" "$app"
 xcrun simctl launch "$SIM_UDID" "$bundle_id"
 
@@ -178,11 +203,16 @@ xcrun simctl launch "$SIM_UDID" "$bundle_id"
 "$ui" shot first-screen
 "$ui" tap "Get started"
 
-"$ui" wait "Create profile" 30
+until_profile_page "Create profile"
 "$ui" tap-value "Enter profile name..."
+until_profile_page "Enter profile name..."
 "$ui" type citester
+if grep -qF 'Group "Suggested"' <<< "$("$ui" tree)"; then
+  tap_element GenericElement Dismiss || true
+fi
+"$ui" key return
 "$ui" shot profile-name
-"$ui" tap "Create profile"
+tap_element Button "Create profile" || "$ui" tap "Create profile"
 
 "$ui" wait "Continue" 60
 "$ui" shot your-network
@@ -207,11 +237,8 @@ expect_chat_list reachable
 expect_chat_list top
 "$ui" layout reachable
 echo "smoke test passed: onboarding reaches the chat list, which shows its onboarding pages and toolbar with the one-hand UI and with the top bar"
-
-products=$(dirname "$app")
-if [[ "$products" == */Build/Products/Debug-iphonesimulator ]]; then
-  "$(dirname "$0")/snapshots.sh" "${products%/Build/Products/Debug-iphonesimulator}" "$UI_OUT/snapshots"
-fi
+"$(dirname "$0")/pr-scenario.sh"
+exit 0
 
 if [ "$cases" = images ]; then
   "$ui" tap "Don’t Allow" 10 || true
