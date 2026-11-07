@@ -360,6 +360,8 @@ class SimplexApp: Application(), LifecycleEventObserver {
 
       override suspend fun androidUnfinishedBadgePurchases(): List<BadgePurchaseOutcome> = unfinishedBadgePurchases()
 
+      override fun androidManageBadgeSubscription(productId: String) = manageBadgeSubscription(productId)
+
       @Composable
       override fun androidLockPortraitOrientation() {
         val context = LocalContext.current
