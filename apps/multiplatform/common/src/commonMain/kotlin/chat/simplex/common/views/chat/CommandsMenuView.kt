@@ -125,9 +125,8 @@ fun CommandsMenuView(
     ) {
       Row(Modifier.padding(horizontal = DEFAULT_PADDING), verticalAlignment = Alignment.CenterVertically) {
         Icon(
-          painterResource(MR.images.ic_arrow_back_ios_new),
+          painterResource(MR.images.ic_arrow_back_ios_new).mirrorIfRtl(),
           contentDescription = null,
-          modifier = Modifier.mirrorIfRtl(),
           tint = MaterialTheme.colors.secondary
         )
         Spacer(Modifier.width(DEFAULT_PADDING_HALF))
@@ -205,9 +204,8 @@ fun CommandsMenuView(
             )
             Spacer(Modifier.width(DEFAULT_PADDING_HALF))
             Icon(
-              painterResource(MR.images.ic_chevron_right),
+              painterResource(MR.images.ic_chevron_right).mirrorIfRtl(),
               contentDescription = null,
-              modifier = Modifier.mirrorIfRtl(),
               tint = MaterialTheme.colors.secondary
             )
           }

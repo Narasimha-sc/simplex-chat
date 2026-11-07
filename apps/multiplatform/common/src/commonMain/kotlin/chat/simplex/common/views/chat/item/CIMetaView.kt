@@ -108,7 +108,7 @@ private fun CIMetaText(
   }
   if (showViaProxy && meta.sentViaProxy == true) {
     Spacer(Modifier.width(4.dp))
-    Icon(painterResource(MR.images.ic_arrow_forward), null, Modifier.height(17.dp).mirrorIfRtl(), tint = MaterialTheme.colors.secondary)
+    Icon(painterResource(MR.images.ic_arrow_forward).mirrorIfRtl(), null, Modifier.height(17.dp), tint = MaterialTheme.colors.secondary)
   }
   if (showStatus) {
     Spacer(Modifier.width(4.dp))

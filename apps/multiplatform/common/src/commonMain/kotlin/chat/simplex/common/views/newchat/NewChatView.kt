@@ -567,10 +567,9 @@ private fun InviteView(rhId: Long?, connLinkInvitation: CreatedConnLink, contact
         )
         Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End) {
           Icon(
-            painter = painterResource(MR.images.ic_arrow_forward_ios),
+            painter = painterResource(MR.images.ic_arrow_forward_ios).mirrorIfRtl(),
             contentDescription = stringResource(MR.strings.new_chat_share_profile),
             tint = MaterialTheme.colors.secondary,
-            modifier = Modifier.mirrorIfRtl(),
           )
         }
       }

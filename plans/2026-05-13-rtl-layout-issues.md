@@ -24,11 +24,8 @@ Each of these is drawn with left/right coordinates instead of start/end ones:
 
 - `chatItemShape` mirrors the tail when `sent != (layoutDirection == LayoutDirection.Rtl)`.
 - `CenteredRowLayout`, `PriorityLayout`, `DependentLayout` and the banner picture use `placeRelative`.
-- `Modifier.mirrorIfRtl()` (`Modifiers.kt`) scales the drawing by -1 horizontally under right-to-left. It is applied to `ic_arrow_back_ios_new` (`NavigationButtonBack`, onboarding cards' Back, the desktop full-screen video Back, What's new previous version, bot commands menu), `ic_arrow_forward_ios` (share profile, What's new next version), `ic_chevron_right` (bot commands submenu), `ic_arrow_forward` (sent via proxy in the message meta and in Info → Delivery) and the four `ic_radiowaves_up_forward_*` icons (`SubscriptionStatusIcon`).
-- `Painter.mirrorIfRtl()` returns a painter that draws the original mirrored, for icons passed as a `Painter`: the "Don't enable" chevron (`SetDeliveryReceiptsView`), the "Show message status" arrow (`AdvancedNetworkSettings`) and the go-to-forwarded-message arrow (`GoToItemInnerButton`, which now takes a `Painter`).
+- `Painter.mirrorIfRtl()` (`Modifiers.kt`) returns, under right-to-left, a painter that draws the original scaled by -1 horizontally. It is applied to `ic_arrow_back_ios_new` (`NavigationButtonBack`, onboarding cards' Back, the desktop full-screen video Back, What's new previous version, bot commands menu), `ic_arrow_forward_ios` (share profile, What's new next version), `ic_chevron_right` (bot commands submenu, the "Don't enable" button of `SetDeliveryReceiptsView`), `ic_arrow_forward` (sent via proxy in the message meta and in Info → Delivery, "Show message status" in `AdvancedNetworkSettings`, the go-to-forwarded-message button `GoToItemInnerButton`, which now takes a `Painter`) and the four `ic_radiowaves_up_forward_*` icons (`SubscriptionStatusIcon`).
 - In Info → Delivery the status icon is mirrored when it is `ic_chevron_right_2` (forwarded), the only directional icon `GroupSndStatus.statusIcon()` returns.
-
-Left-to-right rendering is unchanged: `placeRelative` equals `place`, the tail condition equals `sent`, and both `mirrorIfRtl` functions return their receiver.
 
 ## Scope
 
