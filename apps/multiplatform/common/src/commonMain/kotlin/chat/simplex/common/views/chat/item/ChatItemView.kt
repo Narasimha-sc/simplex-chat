@@ -35,7 +35,6 @@ import chat.simplex.common.views.chat.*
 import chat.simplex.common.views.chatlist.openChat
 import chat.simplex.common.views.helpers.*
 import chat.simplex.res.*
-import dev.icerock.moko.resources.ImageResource
 import dev.icerock.moko.resources.StringResource
 import kotlinx.datetime.Instant
 import kotlin.math.*
@@ -246,7 +245,7 @@ fun ChatItemView(
     }
 
     @Composable
-    fun GoToItemInnerButton(alignStart: Boolean, icon: ImageResource, iconSize: Dp = 22.dp, parentActivated: State<Boolean>, mirror: Boolean = false, onClick: () -> Unit) {
+    fun GoToItemInnerButton(alignStart: Boolean, icon: Painter, iconSize: Dp = 22.dp, parentActivated: State<Boolean>, onClick: () -> Unit) {
       val buttonInteractionSource = remember { MutableInteractionSource() }
       val buttonHovered = buttonInteractionSource.collectIsHoveredAsState()
       val buttonPressed = buttonInteractionSource.collectIsPressedAsState()
@@ -281,7 +280,7 @@ fun ChatItemView(
           .size(22.dp),
         interactionSource = buttonInteractionSource
       ) {
-        Icon(painterResource(icon), null, Modifier.size(iconSize).then(if (mirror) Modifier.mirrorIfRtl() else Modifier), tint = iconTint)
+        Icon(icon, null, Modifier.size(iconSize), tint = iconTint)
       }
     }
 
@@ -290,14 +289,14 @@ fun ChatItemView(
     fun GoToItemButton(alignStart: Boolean, parentActivated: State<Boolean>) {
       val chatTypeApiIdMsgId = cItem.meta.itemForwarded?.chatTypeApiIdMsgId
       if (searchIsNotBlank.value) {
-        GoToItemInnerButton(alignStart, MR.images.ic_search, 17.dp, parentActivated) {
+        GoToItemInnerButton(alignStart, painterResource(MR.images.ic_search), 17.dp, parentActivated) {
           withBGApi {
             openChat(secondaryChatsCtx = null, rhId, cInfo.chatType, cInfo.apiId, cItem.id)
             closeReportsIfNeeded()
           }
         }
       } else if (chatTypeApiIdMsgId != null) {
-        GoToItemInnerButton(alignStart, MR.images.ic_arrow_forward, 22.dp, parentActivated, mirror = true) {
+        GoToItemInnerButton(alignStart, painterResource(MR.images.ic_arrow_forward).mirrorIfRtl(), 22.dp, parentActivated) {
           val (chatType, apiId, msgId) = chatTypeApiIdMsgId
           withBGApi {
             openChat(secondaryChatsCtx = null, rhId, chatType, apiId, msgId)
@@ -1313,9 +1312,7 @@ private fun chatItemShape(roundness: Float, density: Density, tailVisible: Boole
     quadraticBezierTo(bubbleInitialX, 0f, bubbleInitialX + rx, 0f) // Top-left corner
   }
 
-  // Default path draws the tail at the bottom-left corner.
-  val tailOnRight = sent != (layoutDirection == LayoutDirection.Rtl)
-  if (tailOnRight) {
+  if (sent != (layoutDirection == LayoutDirection.Rtl)) {
     val matrix = Matrix()
     matrix.scale(-1f, 1f)
     this.transform(matrix)
