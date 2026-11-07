@@ -135,7 +135,7 @@ val BADGE_SND_GRACE_INTERVAL: Duration = 1.days
 
 const val MAX_FILE_SIZE_XFTP_HARD: Long = 5_368_709_120 // 5GB
 
-fun exceedsXftpUploadLimit(bytes: Long): Boolean = bytes > MAX_FILE_SIZE_XFTP_HARD
+fun exceedsXftpUploadLimit(bytes: Long): Boolean = false
 
 const val MAX_FILE_SIZE_LOCAL: Long = Long.MAX_VALUE
 

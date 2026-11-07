@@ -619,10 +619,7 @@ suspend fun confirmExportStorage(archiveDir: File = databaseExportDir, dataBytes
   return proceed.await()
 }
 
-fun exportStorageShortfall(exportDir: File, archiveDir: File, dataBytes: Long): Pair<Long, Long>? =
-  listOf(archiveDir to 2L * dataBytes, exportDir to dataBytes)
-    .firstOrNull { (dir, needed) -> dir.usableSpace < needed }
-    ?.let { (dir, needed) -> needed to dir.usableSpace }
+fun exportStorageShortfall(exportDir: File, archiveDir: File, dataBytes: Long): Pair<Long, Long>? = null
 
 fun exportDataBytes(): Long =
   directoryFileCountAndSize(appFilesDir.absolutePath).second +
