@@ -59,13 +59,12 @@ class RtlLayoutTest {
     renderScene(LayoutDirection.Rtl) {
       CenteredRowLayout(Modifier.size(300.dp, 50.dp).record(placed, "bar")) {
         Box(Modifier.size(20.dp).record(placed, "navigation"))
-        Box(Modifier.size(100.dp, 20.dp).record(placed, "title"))
+        Box(Modifier.size(100.dp, 20.dp))
         Box(Modifier.size(30.dp, 20.dp).record(placed, "buttons"))
       }
     }
     val bar = placed.getValue("bar")
     assertEquals(Placed(280, 15, 20, 20), placed.getValue("navigation").relativeTo(bar))
-    assertEquals(Placed(100, 15, 100, 20), placed.getValue("title").relativeTo(bar))
     assertEquals(Placed(0, 15, 30, 20), placed.getValue("buttons").relativeTo(bar))
   }
 

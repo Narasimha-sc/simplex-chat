@@ -16,14 +16,14 @@ On Android and desktop, with a right-to-left language (Arabic, Persian, Hebrew),
 Each of these is drawn with left/right coordinates instead of start/end ones:
 
 - `chatItemShape` (`ChatItemView.kt`) ignores the `LayoutDirection` that `GenericShape` passes and mirrors the tail by `sent` alone, while the padding reserved for the tail (`FramedItemView.kt`, `ChatView.kt`) and `chatItemOffset` follow the layout direction.
-- `CenteredRowLayout` (`FramedItemView.kt`), used by every centred `DefaultAppBar`, places its three slots with `place`.
+- `CenteredRowLayout` (`FramedItemView.kt`), used by every centred `DefaultAppBar`, places its navigation and buttons slots with `place`.
 - `PriorityLayout` places its rows with `place` when they are limited to the media width (the classic layout and captionless media), `DependentLayout` always; `SupportSimpleXBanner` places its picture with `place` at the right edge.
 - The directional vector icons are drawn as they are in the SVG files in both directions.
 
 ## Fix
 
 - `chatItemShape` mirrors the tail when `sent != (layoutDirection == LayoutDirection.Rtl)`.
-- `CenteredRowLayout`, `PriorityLayout`, `DependentLayout` and the banner picture use `placeRelative`.
+- `CenteredRowLayout` places its navigation and buttons slots with `placeRelative`; `PriorityLayout`, `DependentLayout` and the banner picture use `placeRelative`.
 - `Painter.mirrorIfRtl()` (`Modifiers.kt`) returns, under right-to-left, a painter that draws the original scaled by -1 horizontally. It is applied to `ic_arrow_back_ios_new` (`NavigationButtonBack`, onboarding cards' Back, the desktop full-screen video Back, What's new previous version, bot commands menu), `ic_arrow_forward_ios` (share profile, What's new next version), `ic_chevron_right` (bot commands submenu, the "Don't enable" button of `SetDeliveryReceiptsView`), `ic_arrow_forward` (sent via proxy in the message meta and in Info → Delivery, "Show message status" in `AdvancedNetworkSettings`, the go-to-forwarded-message button `GoToItemInnerButton`, which now takes a `Painter`) and the four `ic_radiowaves_up_forward_*` icons (`SubscriptionStatusIcon`).
 - In Info → Delivery the status icon is mirrored when it is `ic_chevron_right_2` (forwarded), the only directional icon `GroupSndStatus.statusIcon()` returns.
 

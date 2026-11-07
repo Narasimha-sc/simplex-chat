@@ -747,7 +747,7 @@ fun CenteredRowLayout(
     // Limit width for every other element to width of important element and height for a sum of all elements.
     layout(constraints.maxWidth, constraints.maxHeight) {
       first.placeRelative(0, ((constraints.maxHeight - first.measuredHeight) / 2).coerceAtLeast(0))
-      second.placeRelative((constraints.maxWidth - second.measuredWidth) / 2, ((constraints.maxHeight - second.measuredHeight) / 2).coerceAtLeast(0))
+      second.place((constraints.maxWidth - second.measuredWidth) / 2, ((constraints.maxHeight - second.measuredHeight) / 2).coerceAtLeast(0))
       third.placeRelative(constraints.maxWidth - third.measuredWidth, ((constraints.maxHeight - third.measuredHeight) / 2).coerceAtLeast(0))
     }
   }
