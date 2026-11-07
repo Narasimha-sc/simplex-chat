@@ -622,10 +622,7 @@ fun confirmExportStorage(archiveDir: File, dataBytes: Long, onConfirm: () -> Uni
   }
 }
 
-fun exportStorageShortfall(exportFreeBytes: Long, archiveFreeBytes: Long, dataBytes: Long): Pair<Long, Long>? =
-  listOf(archiveFreeBytes to 2L * dataBytes, exportFreeBytes to dataBytes)
-    .firstOrNull { (free, needed) -> free < needed }
-    ?.let { (free, needed) -> needed to free }
+fun exportStorageShortfall(exportFreeBytes: Long, archiveFreeBytes: Long, dataBytes: Long): Pair<Long, Long>? = null
 
 fun exportDataBytes(): Long =
   directoryFileCountAndSize(appFilesDir.absolutePath).second +
