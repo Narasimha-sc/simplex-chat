@@ -5,7 +5,7 @@
 On Android and desktop, with a right-to-left language (Arabic, Persian, Hebrew), issue #5448:
 
 - message bubble tails are on the wrong side: a received bubble overlaps the sender's avatar, a sent bubble has its tail on the inner edge;
-- centred toolbars keep the back button on the left and the action buttons on the right (chat, chat list, New chat sheet, settings pages with the one-hand UI, selection mode);
+- centred toolbars keep the navigation button (back, close or profile picture) on the left and the action buttons on the right (chat, chat list, New chat sheet, settings pages with the one-hand UI, selection mode);
 - back arrows, forward arrows and chevrons, the sent-via-proxy arrow and the signal-strength waves point the left-to-right way;
 - a short caption under an image, file or voice message sits at the end edge;
 - the group member name and role row above a short received message starts at the far edge and can extend past the pane;
@@ -17,7 +17,7 @@ Each of these is drawn with left/right coordinates instead of start/end ones:
 
 - `chatItemShape` (`ChatItemView.kt`) ignores the `LayoutDirection` that `GenericShape` passes and mirrors the tail by `sent` alone, while the padding reserved for the tail (`FramedItemView.kt`, `ChatView.kt`) and `chatItemOffset` follow the layout direction.
 - `CenteredRowLayout` (`FramedItemView.kt`), used by every centred `DefaultAppBar`, places its three slots with `place`.
-- `PriorityLayout` places its rows with `place` when they are limited to the media width (the classic layout), `DependentLayout` always; `SupportSimpleXBanner` places its picture with `place` at the right edge.
+- `PriorityLayout` places its rows with `place` when they are limited to the media width (the classic layout and captionless media), `DependentLayout` always; `SupportSimpleXBanner` places its picture with `place` at the right edge.
 - The directional vector icons are drawn as they are in the SVG files in both directions.
 
 ## Fix
