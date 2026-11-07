@@ -120,6 +120,25 @@ struct CIVideoView: View {
         }
     }
 
+    private func playReceived(_ file: CIFile) {
+        setupPlayer(file)
+        if urlDecrypted == nil {
+            decrypt(file: file, completed: playVideo)
+        } else {
+            playVideo()
+        }
+    }
+
+    private func playVideo() {
+        if smallView {
+            showFullScreenPlayer = urlDecrypted != nil
+        } else if let urlDecrypted {
+            m.stopPreviousRecPlay = urlDecrypted
+            videoPlaying = true
+            player?.play()
+        }
+    }
+
     private func setupPlayer(_ file: CIFile?) {
         let newUrl = getLoadedVideo(file)
         if newUrl == url {
@@ -366,7 +385,7 @@ struct CIVideoView: View {
                     .simultaneousGesture(TapGesture().onEnded {
                         showFileErrorAlert(sndFileError, temporary: true)
                     })
-            case .rcvInvitation: fileIcon("arrow.down", 10, 13)
+            case .rcvInvitation: fileIcon(file.expired && fileSizeValid(file) ? "xmark" : "arrow.down", 10, 13)
             case .rcvAccepted: fileIcon("ellipsis", 14, 11)
             case let .rcvTransfer(rcvProgress, rcvTotal):
                 if file.fileProtocol == .xftp && rcvProgress < rcvTotal {
@@ -380,7 +399,7 @@ struct CIVideoView: View {
             case let .rcvError(rcvFileError):
                 fileIcon("xmark", 10, 13)
                     .simultaneousGesture(TapGesture().onEnded {
-                        showFileErrorAlert(rcvFileError)
+                        showFileErrorAlert(rcvFileError, file)
                     })
             case let .rcvWarning(rcvFileError):
                 fileIcon("exclamationmark.triangle.fill", 10, 13)
@@ -421,9 +440,14 @@ struct CIVideoView: View {
 
     // TODO encrypt: where file size is checked?
     private func receiveFileIfValidSize(file: CIFile, receiveFile: @escaping (User, Int64, Bool, Bool) async -> Void) {
-        Task {
-            if let user = m.currentUser {
-                await receiveFile(user, file.fileId, false, false)
+        if let prohibited = file.fileProhibited {
+            showProhibitedFileAlert(file, prohibited)
+        } else {
+            m.openWhenReceived(file, open: playReceived)
+            Task {
+                if let user = m.currentUser {
+                    await receiveFile(user, file.fileId, false, false)
+                }
             }
         }
     }
@@ -510,9 +534,9 @@ struct CIVideoView: View {
             if let item = player.currentItem {
                 let dur = CMTimeGetSeconds(item.duration)
                 if !dur.isInfinite && !dur.isNaN {
-                    duration = Int(dur)
+                    duration = wholeSeconds(dur)
                 }
-                progress = Int(CMTimeGetSeconds(player.currentTime()))
+                progress = wholeSeconds(CMTimeGetSeconds(player.currentTime()))
                 // `if` prevents showing Play button while the playback seeks to start and then plays
                 if player.currentTime() != player.currentItem?.duration && player.currentTime() != .zero {
                     videoPlaying = player.timeControlStatus == .playing || player.timeControlStatus == .waitingToPlayAtSpecifiedRate

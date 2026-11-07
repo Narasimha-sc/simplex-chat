@@ -24,7 +24,7 @@ import chat.simplex.common.views.helpers.*
 import chat.simplex.common.model.*
 import chat.simplex.common.platform.*
 import chat.simplex.common.views.usersettings.SettingsActionItem
-import chat.simplex.res.MR
+import chat.simplex.res.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
@@ -185,16 +185,14 @@ fun YourServersViewLayout(
         iconColor = if (testing.value) MaterialTheme.colors.secondary else MaterialTheme.colors.primary
       )
     }
-    val serversErr = globalServersError(serverErrors.value)
-    if (serversErr != null) {
+    globalServersErrors(serverErrors.value).forEach { err ->
       SectionCustomFooter {
-        ServersErrorFooter(serversErr)
+        ServersErrorFooter(err)
       }
     }
-    val serversWarn = globalServersWarning(serverWarnings.value)
-    if (serversWarn != null) {
+    globalServersWarnings(serverWarnings.value).forEach { warn ->
       SectionCustomFooter {
-        ServersWarningFooter(serversWarn)
+        ServersWarningFooter(warn)
       }
     }
     SectionDividerSpaced()

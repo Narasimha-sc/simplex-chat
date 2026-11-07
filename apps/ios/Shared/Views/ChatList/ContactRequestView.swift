@@ -22,12 +22,16 @@ struct ContactRequestView: View {
                 .padding(.leading, 4)
             VStack(alignment: .leading, spacing: 0) {
                 HStack(alignment: .top) {
-                    Text(contactRequest.chatViewName)
-                        .font(.title3)
-                        .fontWeight(.bold)
-                        .foregroundColor(theme.colors.primary)
-                        .padding(.leading, 8)
-                        .frame(alignment: .topLeading)
+                    NameWithBadge(
+                        Text(contactRequest.chatViewName)
+                            .font(.title3)
+                            .fontWeight(.bold)
+                            .foregroundColor(theme.colors.primary),
+                        chat.chatInfo.nameBadge,
+                        .title3
+                    )
+                    .padding(.leading, 8)
+                    .frame(alignment: .topLeading)
                     Spacer()
                     formatTimestampText(contactRequest.updatedAt)
                         .font(.subheadline)
@@ -51,7 +55,9 @@ struct ContactRequestView: View {
 
 struct ContactRequestView_Previews: PreviewProvider {
     static var previews: some View {
-        ContactRequestView(contactRequest: UserContactRequest.sampleData, chat: Chat(chatInfo: ChatInfo.sampleData.contactRequest , chatItems: []))
+        var contactRequest = UserContactRequest.sampleData
+        contactRequest.updatedAt = previewDate
+        return ContactRequestView(contactRequest: contactRequest, chat: Chat(chatInfo: ChatInfo.sampleData.contactRequest , chatItems: []))
             .previewLayout(.fixed(width: 360, height: 80))
     }
 }

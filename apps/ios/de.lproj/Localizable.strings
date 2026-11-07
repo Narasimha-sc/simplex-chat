@@ -28,9 +28,6 @@
 /* No comment provided by engineer. */
 "(new)" = "(Neu)";
 
-/* chat link info line */
-"(signed)" = "(signiert)";
-
 /* No comment provided by engineer. */
 "(this device v%@)" = "(Dieses Gerät hat v%@)";
 
@@ -106,6 +103,9 @@
 /* No comment provided by engineer. */
 "%@ %@" = "%@ %@";
 
+/* alert message */
+"%@ accepted the call without end-to-end encryption." = "%@ hat den Anruf ohne Ende-zu-Ende-Verschlüsselung angenommen.";
+
 /* No comment provided by engineer. */
 "%@ and %@" = "%@ und %@";
 
@@ -121,6 +121,9 @@
 /* No comment provided by engineer. */
 "%@ downloaded" = "%@ heruntergeladen";
 
+/* badge alert */
+"%@ invested in SimpleX Chat crowdfunding." = "%@ hat sich am SimpleX Chat-Crowdfunding beteiligt.";
+
 /* notification title */
 "%@ is connected!" = "%@ ist mit Ihnen verbunden!";
 
@@ -135,6 +138,9 @@
 
 /* No comment provided by engineer. */
 "%@ servers" = "%@ Server";
+
+/* badge alert */
+"%@ supports SimpleX Chat." = "%@ unterstützt SimpleX Chat.";
 
 /* No comment provided by engineer. */
 "%@ uploaded" = "%@ hochgeladen";
@@ -153,6 +159,21 @@
 
 /* copied message info */
 "%@:" = "%@:";
+
+/* No comment provided by engineer. */
+"%@/month" = "%@/Monat";
+
+/* No comment provided by engineer. */
+"%@/year" = "%@/Jahr";
+
+/* badge alert */
+"%1$@ supported SimpleX Chat. The badge expired on %2$@." = "%1$@ hat SimpleX Chat unterstützt. Der Badge ist am %2$@ abgelaufen.";
+
+/* countdown */
+"%02d hrs %02d min %02d sec" = "%1$02d h %2$02d min %3$02d s";
+
+/* time interval */
+"%d day" = "%d Tag";
 
 /* time interval */
 "%d days" = "%d Tage";
@@ -179,7 +200,19 @@
 "%d min" = "%d min";
 
 /* time interval */
+"%d month" = "%d Monat";
+
+/* time interval */
 "%d months" = "%d Monate";
+
+/* channel owners count */
+"%d owner" = "%d Eigentümer";
+
+/* channel owners count */
+"%d owners" = "%d Eigentümer";
+
+/* channel members count */
+"%d owners & contributors" = "%d Eigentümer und Mitwirkende";
 
 /* channel relay bar
 channel subscriber relay bar */
@@ -280,6 +313,9 @@ channel relay bar */
 "%lld seconds" = "%lld Sekunden";
 
 /* No comment provided by engineer. */
+"%lld%% off" = "%lld%% Rabatt";
+
+/* No comment provided by engineer. */
 "%lldd" = "%lldT";
 
 /* No comment provided by engineer. */
@@ -360,6 +396,12 @@ time interval */
 /* No comment provided by engineer. */
 "30 seconds" = "30 Sekunden";
 
+/* badge link, profile has a badge */
+"A badge can be added to another profile, or here once this badge ends." = "Ein Badge kann zu einem anderen Profil hinzugefügt werden oder hier, sobald dieser Badge endet.";
+
+/* No comment provided by engineer. */
+"A badge is an anonymous credential stored in your profile on your device. This credential is never sent to anyone." = "Ein Badge ist ein anonymes Credential, das in Ihrem Profil auf Ihrem Gerät gespeichert wird. Dieses Credential wird niemals an jemanden gesendet.";
+
 /* No comment provided by engineer. */
 "A few more things" = "Ein paar weitere Dinge";
 
@@ -372,11 +414,17 @@ time interval */
 /* No comment provided by engineer. */
 "A new random profile will be shared." = "Es wird ein neues Zufallsprofil geteilt.";
 
+/* alert message */
+"A purchase is being added to this profile. Try again later." = "Ein Kauf wird diesem Profil hinzugefügt. Versuchen Sie es später erneut.";
+
 /* No comment provided by engineer. */
-"A separate TCP connection will be used **for each chat profile you have in the app**." = "**Für jedes von Ihnen in der App genutzte Chat-Profil** wird eine separate TCP-Verbindung genutzt.";
+"A separate TCP connection will be used **for each chat profile you have in the app**." = "**Für jedes von Ihnen in der App genutzte Chat-Profil** wird eine separate TCP-Verbindung (und SOCKS-Berechtigung) genutzt.";
 
 /* No comment provided by engineer. */
 "A separate TCP connection will be used **for each contact and group member**.\n**Please note**: if you have many connections, your battery and traffic consumption can be substantially higher and some connections may fail." = "**Für jeden Kontakt und jedes Gruppenmitglied** wird eine separate TCP-Verbindung genutzt.\n**Bitte beachten Sie**: Wenn Sie viele Verbindungen haben, kann der Batterieverbrauch und die Datennutzung wesentlich höher sein und einige Verbindungen können scheitern.";
+
+/* alert message */
+"A store purchase is being added to this profile." = "Ein Kauf aus dem Store wird diesem Profil hinzugefügt.";
 
 /* No comment provided by engineer. */
 "Abort" = "Beenden";
@@ -452,6 +500,9 @@ swipe action */
 "Acknowledged" = "Bestätigt";
 
 /* No comment provided by engineer. */
+"acknowledged roster" = "Bestätigter Relaisbestand";
+
+/* No comment provided by engineer. */
 "Acknowledgement errors" = "Fehler bei der Bestätigung";
 
 /* No comment provided by engineer. */
@@ -464,7 +515,22 @@ swipe action */
 "Active connections" = "Aktive Verbindungen";
 
 /* No comment provided by engineer. */
+"Add" = "Hinzufügen";
+
+/* No comment provided by engineer. */
 "Add address to your profile, so that your SimpleX contacts can share it with other people. Profile update will be sent to your SimpleX contacts." = "Fügen Sie die Adresse Ihrem Profil hinzu, damit Ihre SimpleX-Kontakte sie mit anderen Personen teilen können. Es wird eine Profilaktualisierung an Ihre SimpleX-Kontakte gesendet.";
+
+/* No comment provided by engineer. */
+"Add badge" = "Badge hinzufügen";
+
+/* No comment provided by engineer. */
+"Add badge to your profile?" = "Badge zu Ihrem Profil hinzufügen?";
+
+/* No comment provided by engineer. */
+"Add contributors." = "Mitwirkende hinzufügen.";
+
+/* No comment provided by engineer. */
+"Add description" = "Beschreibung hinzufügen";
 
 /* No comment provided by engineer. */
 "Add friends" = "Freunde aufnehmen";
@@ -476,7 +542,19 @@ swipe action */
 "Add message" = "Nachricht hinzufügen";
 
 /* No comment provided by engineer. */
+"Add moderators and sign every message." = "Moderatoren hinzufügen und jede Nachricht signieren.";
+
+/* No comment provided by engineer. */
 "Add profile" = "Profil hinzufügen";
+
+/* No comment provided by engineer. */
+"Add relay" = "Relais hinzufügen";
+
+/* No comment provided by engineer. */
+"Add relays" = "Relais hinzufügen";
+
+/* No comment provided by engineer. */
+"Add relays to restore message delivery." = "Relais hinzufügen, um die Nachrichtenübermittlung wiederherzustellen.";
 
 /* No comment provided by engineer. */
 "Add server" = "Server hinzufügen";
@@ -486,6 +564,9 @@ swipe action */
 
 /* No comment provided by engineer. */
 "Add team members" = "Team-Mitglieder aufnehmen";
+
+/* No comment provided by engineer. */
+"Add this code to your webpage. It will display the preview of your channel / group." = "Fügen Sie diesen Code in Ihre Webseite ein. Er zeigt die Vorschau Ihres Kanals / Ihrer Gruppe an.";
 
 /* No comment provided by engineer. */
 "Add to another device" = "Einem anderen Gerät hinzufügen";
@@ -504,9 +585,6 @@ swipe action */
 
 /* No comment provided by engineer. */
 "Added message servers" = "Nachrichtenserver hinzugefügt";
-
-/* No comment provided by engineer. */
-"Adding relays will be supported later." = "Das Hinzufügen von Relais wird zu einem späteren Zeitpunkt unterstützt.";
 
 /* No comment provided by engineer. */
 "Additional accent" = "Erste Akzentfarbe";
@@ -543,6 +621,9 @@ swipe action */
 
 /* No comment provided by engineer. */
 "Advanced network settings" = "Erweiterte Netzwerkeinstellungen";
+
+/* No comment provided by engineer. */
+"Advanced options" = "Erweiterte Optionen";
 
 /* No comment provided by engineer. */
 "Advanced settings" = "Erweiterte Einstellungen";
@@ -617,10 +698,13 @@ swipe action */
 "All your contacts will remain connected. Profile update will be sent to your contacts." = "Alle Ihre Kontakte bleiben verbunden. Es wird eine Profilaktualisierung an Ihre Kontakte gesendet.";
 
 /* No comment provided by engineer. */
-"All your contacts, conversations and files will be securely encrypted and uploaded in chunks to configured XFTP relays." = "Alle Ihre Kontakte, Unterhaltungen und Dateien werden sicher verschlüsselt und in Daten-Paketen auf die konfigurierten XTFP-Relais hochgeladen.";
+"All your contacts, conversations and files will be securely encrypted and uploaded in chunks to configured XFTP relays." = "Alle Ihre Kontakte, Unterhaltungen und Dateien werden sicher verschlüsselt und in Daten-Paketen auf die konfigurierten XTFP-Router hochgeladen.";
 
 /* No comment provided by engineer. */
 "Allow" = "Erlauben";
+
+/* No comment provided by engineer. */
+"Allow anyone to embed" = "Einbetten für alle erlauben";
 
 /* No comment provided by engineer. */
 "Allow calls only if your contact allows them." = "Erlauben Sie Anrufe nur dann, wenn es Ihr Kontakt ebenfalls erlaubt.";
@@ -716,22 +800,31 @@ swipe action */
 "always" = "Immer";
 
 /* No comment provided by engineer. */
-"Always use private routing." = "Sie nutzen immer privates Routing.";
+"Always use private routing." = "Immer privates Routing nutzen.";
 
 /* No comment provided by engineer. */
-"Always use relay" = "Über ein Relais verbinden";
+"Always use relay" = "Immer über einen Router verbinden";
 
 /* No comment provided by engineer. */
 "An empty chat profile with the provided name is created, and the app opens as usual." = "Es wurde ein leeres Chat-Profil mit dem eingegebenen Namen erstellt und die App öffnet wie gewohnt.";
 
+/* ledger entry field */
+"Anchor" = "Anker";
+
 /* No comment provided by engineer. */
 "and %lld other events" = "und %lld weitere Ereignisse";
+
+/* No comment provided by engineer. */
+"Annual" = "Jährlich";
 
 /* report reason */
 "Another reason" = "Anderer Grund";
 
 /* No comment provided by engineer. */
 "Answer call" = "Anruf annehmen";
+
+/* No comment provided by engineer. */
+"Any webpage can show the preview." = "Eine Vorschau ist auf jeder Webseite möglich.";
 
 /* No comment provided by engineer. */
 "App build: %@" = "App Build: %@";
@@ -757,6 +850,9 @@ swipe action */
 /* No comment provided by engineer. */
 "App session" = "App-Sitzung";
 
+/* alert title */
+"App update required" = "Aktualisierung der App erforderlich";
+
 /* No comment provided by engineer. */
 "App version" = "App Version";
 
@@ -764,7 +860,10 @@ swipe action */
 "App version: v%@" = "App Version: v%@";
 
 /* No comment provided by engineer. */
-"Appearance" = "Erscheinungsbild";
+"Appearance" = "Darstellung";
+
+/* No comment provided by engineer. */
+"Apple did not sign this purchase, so it cannot be verified." = "Apple hat diesen Kauf nicht signiert, daher kann er nicht verifiziert werden.";
 
 /* No comment provided by engineer. */
 "Apply" = "Anwenden";
@@ -812,7 +911,7 @@ swipe action */
 "attempts" = "Versuche";
 
 /* No comment provided by engineer. */
-"Audio & video calls" = "Audio- & Videoanrufe";
+"Audio & video calls" = "Audio- und Videoanrufe";
 
 /* No comment provided by engineer. */
 "Audio and video calls" = "Audio- und Videoanrufe";
@@ -874,6 +973,33 @@ swipe action */
 /* No comment provided by engineer. */
 "Bad message ID" = "Falsche Nachrichten-ID";
 
+/* alert title */
+"Badge added" = "Badge hinzugefügt";
+
+/* badge alert title */
+"Badge cannot be verified" = "Badge ist nicht verifizierbar";
+
+/* No comment provided by engineer. */
+"Badge ledger" = "Badge-Verlauf";
+
+/* alert title */
+"Badge payment problem" = "Problem bei der Badge-Bezahlung";
+
+/* alert title */
+"Badge renewal failed" = "Badge-Verlängerung fehlgeschlagen";
+
+/* ledger entry field */
+"Badge type" = "Badge-Typ";
+
+/* alert message */
+"Badges cannot be bought in the app yet." = "Badges können noch nicht in der App gekauft werden.";
+
+/* ledger entry field */
+"Balance" = "Guthaben";
+
+/* ledger entry field */
+"Balance start" = "Beginn des Guthabens";
+
 /* No comment provided by engineer. */
 "Be free\nin your network" = "Seien Sie frei\nin Ihrem Netzwerk";
 
@@ -884,7 +1010,13 @@ swipe action */
 "Because we destroyed the power to know who you are. So that your power can never be taken." = "Weil wir die Macht zerstört haben, zu wissen, wer Sie sind. Damit Ihnen Ihre Macht niemals genommen werden kann.";
 
 /* No comment provided by engineer. */
+"Benefits" = "Vorteile";
+
+/* No comment provided by engineer. */
 "Better calls" = "Verbesserte Anrufe";
+
+/* No comment provided by engineer. */
+"Better channels 📢" = "Verbesserte Kanäle 📢";
 
 /* No comment provided by engineer. */
 "Better groups" = "Bessere Gruppen";
@@ -1007,6 +1139,12 @@ marked deleted chat item preview text */
 /* No comment provided by engineer. */
 "Businesses" = "Unternehmen";
 
+/* alert message */
+"Buy badges in the App Store version of the app." = "Kaufen Sie Badges in der App-Store-Version der App.";
+
+/* No comment provided by engineer. */
+"Buy in browser" = "Im Browser kaufen";
+
 /* No comment provided by engineer. */
 "By chat profile (default) or [by connection](https://simplex.chat/blog/20230204-simplex-chat-v4-5-user-chat-profiles.html#transport-isolation) (BETA)." = "Per Chat-Profil (Voreinstellung) oder [per Verbindung](https://simplex.chat/blog/20230204-simplex-chat-v4-5-user-chat-profiles.html#transport-isolation) (BETA).";
 
@@ -1022,11 +1160,11 @@ marked deleted chat item preview text */
 /* call status */
 "call in progress" = "Anruf läuft";
 
+/* alert title */
+"Call is not encrypted" = "Der Anruf ist nicht verschlüsselt";
+
 /* call status */
 "calling…" = "Anrufen…";
-
-/* No comment provided by engineer. */
-"Calls" = "Anrufe";
 
 /* No comment provided by engineer. */
 "Calls prohibited!" = "Anrufe nicht zugelassen!";
@@ -1064,6 +1202,12 @@ new chat action */
 "Cancel" = "Abbrechen";
 
 /* No comment provided by engineer. */
+"Cancel and delete channel" = "Kanal abbrechen und löschen";
+
+/* alert title */
+"Cancel creating channel?" = "Kanalerstellung abbrechen?";
+
+/* No comment provided by engineer. */
 "Cancel migration" = "Migration abbrechen";
 
 /* feature offered item */
@@ -1075,8 +1219,17 @@ new chat action */
 /* No comment provided by engineer. */
 "Cannot forward message" = "Die Nachricht kann nicht weitergeleitet werden";
 
+/* alert message */
+"Cannot generate random database passphrase" = "Es konnte kein zufälliges Datenbank-Passwort generiert werden";
+
 /* alert title */
 "Cannot receive file" = "Datei kann nicht empfangen werden";
+
+/* alert title */
+"Cannot redeem code" = "Dieser Code kann nicht eingelöst werden";
+
+/* No comment provided by engineer. */
+"Cannot verify this purchase" = "Dieser Kauf kann nicht verifiziert werden";
 
 /* snd error text */
 "Capacity exceeded - recipient did not receive previously sent messages." = "Kapazität überschritten - der Empfänger hat die zuvor gesendeten Nachrichten nicht empfangen.";
@@ -1099,9 +1252,6 @@ new chat action */
 /* authentication reason */
 "Change lock mode" = "Sperr-Modus ändern";
 
-/* No comment provided by engineer. */
-"Change member role?" = "Die Mitgliederrolle ändern?";
-
 /* authentication reason */
 "Change passcode" = "Zugangscode ändern";
 
@@ -1113,6 +1263,9 @@ new chat action */
 
 /* No comment provided by engineer. */
 "Change role" = "Rolle ändern";
+
+/* No comment provided by engineer. */
+"Change role?" = "Rolle ändern?";
 
 /* authentication reason */
 "Change self-destruct mode" = "Selbstzerstörungs-Modus ändern";
@@ -1173,8 +1326,14 @@ alert subtitle */
 /* alert message */
 "Channel profile was changed. If you save it, the updated profile will be sent to channel subscribers." = "Das Kanalprofil wurde geändert. Beim Speichern wird das aktualisierte Profil an die Abonnenten des Kanals gesendet.";
 
+/* No comment provided by engineer. */
+"Channel SimpleX name" = "Im Kanal genutzter SimpleX-Name";
+
 /* alert title */
 "Channel temporarily unavailable" = "Der Kanal ist vorübergehend nicht erreichbar";
+
+/* No comment provided by engineer. */
+"Channel webpage" = "Kanal-Webseite";
 
 /* No comment provided by engineer. */
 "Channel will be deleted for all subscribers - this cannot be undone!" = "Der Kanal wird für alle Abonnenten gelöscht. Dies kann nicht rückgängig gemacht werden!";
@@ -1183,10 +1342,13 @@ alert subtitle */
 "Channel will be deleted for you - this cannot be undone!" = "Der Kanal wird für Sie gelöscht. Dies kann nicht rückgängig gemacht werden!";
 
 /* alert message */
-"Channel will start working with %d of %d relays. Proceed?" = "Der Kanal wird mit %1$d von %2$d Relais gestartet. Fortfahren?";
+"Channel will start working with %d of %d relays. Continue?" = "Der Kanal wird mit %1$d von %2$d Relais gestartet. Fortfahren?";
 
 /* No comment provided by engineer. */
 "Channels" = "Kanäle";
+
+/* ledger entry field */
+"Charge ID" = "Transaktions-ID";
 
 /* No comment provided by engineer. */
 "Chat" = "Chat";
@@ -1202,6 +1364,9 @@ alert subtitle */
 
 /* No comment provided by engineer. */
 "Chat console" = "Chat-Konsole";
+
+/* No comment provided by engineer. */
+"Chat data" = "Chat-Daten";
 
 /* No comment provided by engineer. */
 "Chat database" = "Chat-Datenbank";
@@ -1237,7 +1402,7 @@ alert subtitle */
 "Chat preferences were changed." = "Die Chat-Präferenzen wurden geändert.";
 
 /* No comment provided by engineer. */
-"Chat profile" = "Benutzerprofil";
+"Chat profile" = "Chat-Profil";
 
 /* No comment provided by engineer. */
 "Chat relay" = "Chat-Relais";
@@ -1301,6 +1466,12 @@ chat toolbar */
 "Check server address and try again." = "Überprüfen Sie die Serveradresse und versuchen Sie es nochmal.";
 
 /* No comment provided by engineer. */
+"Check your order" = "Überprüfen Sie Ihre Bestellung";
+
+/* No comment provided by engineer. */
+"Checking your purchases" = "Ihre Einkäufe werden überprüft";
+
+/* No comment provided by engineer. */
 "Chinese and Spanish interface" = "Chinesische und spanische Bedienoberfläche";
 
 /* No comment provided by engineer. */
@@ -1311,6 +1482,9 @@ chat toolbar */
 
 /* No comment provided by engineer. */
 "Choose from library" = "Aus dem Fotoalbum auswählen";
+
+/* No comment provided by engineer. */
+"Choose your badge" = "Wählen Sie Ihren Badge aus";
 
 /* No comment provided by engineer. */
 "Chunks deleted" = "Daten-Pakete gelöscht";
@@ -1367,7 +1541,7 @@ chat toolbar */
 "Completed" = "Abgeschlossen";
 
 /* No comment provided by engineer. */
-"Conditions accepted on: %@." = "Die Nutzungsbedingungen wurden akzeptiert am: %@.";
+"Conditions accepted on: %@." = "Die Nutzungsbedingungen wurden am %@ akzeptiert.";
 
 /* No comment provided by engineer. */
 "Conditions are accepted for the operator(s): **%@**." = "Die Nutzungsbedingungen der/des Betreiber(s) werden akzeptiert: **%@**.";
@@ -1382,10 +1556,10 @@ chat toolbar */
 "Conditions will be accepted for the operator(s): **%@**." = "Die Nutzungsbedingungen der/des Betreiber(s) werden akzeptiert: **%@**.";
 
 /* No comment provided by engineer. */
-"Conditions will be accepted on: %@." = "Die Nutzungsbedingungen werden akzeptiert am: %@.";
+"Conditions will be accepted on: %@." = "Die Nutzungsbedingungen werden am %@ akzeptiert.";
 
 /* No comment provided by engineer. */
-"Conditions will be automatically accepted for enabled operators on: %@." = "Die Nutzungsbedingungen der aktivierten Betreiber werden automatisch akzeptiert am: %@.";
+"Conditions will be automatically accepted for enabled operators on: %@." = "Die Nutzungsbedingungen der aktivierten Betreiber werden am %@ automatisch akzeptiert.";
 
 /* No comment provided by engineer. */
 "Configure ICE servers" = "ICE-Server konfigurieren";
@@ -1435,6 +1609,9 @@ server test step */
 
 /* No comment provided by engineer. */
 "Connect faster! 🚀" = "Schneller miteinander verbinden! 🚀";
+
+/* new chat action */
+"Connect to %@" = "Mit %@ verbinden";
 
 /* No comment provided by engineer. */
 "Connect to desktop" = "Mit dem Desktop verbinden";
@@ -1526,11 +1703,11 @@ server test step */
 /* No comment provided by engineer. */
 "Connection blocked" = "Verbindung blockiert";
 
+/* conn error description */
+"Connection blocked: %@" = "Verbindung blockiert: %@";
+
 /* alert title */
 "Connection error" = "Verbindungsfehler";
-
-/* conn error description */
-"Connection error (AUTH)" = "Verbindungsfehler (AUTH)";
 
 /* chat list item title (it should not be shown */
 "connection established" = "Verbindung hergestellt";
@@ -1540,6 +1717,9 @@ server test step */
 
 /* No comment provided by engineer. */
 "Connection is blocked by server operator:\n%@" = "Die Verbindung wurde vom Serverbetreiber blockiert:\n%@";
+
+/* conn error description */
+"Connection link removed" = "Verbindungslink entfernt";
 
 /* No comment provided by engineer. */
 "Connection not ready." = "Verbindung noch nicht bereit.";
@@ -1570,6 +1750,9 @@ server test step */
 
 /* No comment provided by engineer. */
 "Connections" = "Verbindungen";
+
+/* No comment provided by engineer. */
+"Contact" = "Kontakt";
 
 /* profile update event chat item */
 "contact %@ changed to %@" = "Der Kontaktname wurde von %1$@ auf %2$@ geändert";
@@ -1617,13 +1800,22 @@ server test step */
 "Contact preferences" = "Kontakt-Präferenzen";
 
 /* No comment provided by engineer. */
-"Contact requests from groups" = "KONTAKTANFRAGEN VON GRUPPEN";
+"Contact requests in groups" = "Kontaktanfragen in Gruppen";
 
 /* No comment provided by engineer. */
 "contact should accept…" = "Kontakt sollte annehmen…";
 
 /* No comment provided by engineer. */
+"Contact SimpleX team" = "Kontakt mit dem SimpleX-Team aufnehmen";
+
+/* No comment provided by engineer. */
 "Contact will be deleted - this cannot be undone!" = "Kontakt wird gelöscht. Dies kann nicht rückgängig gemacht werden!";
+
+/* file alert */
+"Contact's badge expired." = "Badge des Kontakts ist abgelaufen.";
+
+/* file alert */
+"Contact's badge verification failed." = "Badge‑Verifizierung des Kontakts ist fehlgeschlagen.";
 
 /* No comment provided by engineer. */
 "Contacts" = "Kontakte";
@@ -1634,11 +1826,14 @@ server test step */
 /* blocking reason */
 "Content violates conditions of use" = "Inhalt verletzt Nutzungsbedingungen";
 
-/* No comment provided by engineer. */
+/* alert action */
 "Continue" = "Weiter";
 
 /* No comment provided by engineer. */
 "Contribute" = "Unterstützen Sie uns";
+
+/* member role */
+"contributor" = "Mitwirkender";
 
 /* No comment provided by engineer. */
 "Conversation deleted!" = "Chat-Inhalte entfernt!";
@@ -1647,7 +1842,13 @@ server test step */
 "Copy" = "Kopieren";
 
 /* No comment provided by engineer. */
+"Copy code" = "Code kopieren";
+
+/* No comment provided by engineer. */
 "Copy error" = "Fehlermeldung kopieren";
+
+/* No comment provided by engineer. */
+"Copy purchase key" = "Schlüssel des Einkaufs kopieren";
 
 /* No comment provided by engineer. */
 "Core version: v%@" = "Core Version: v%@";
@@ -1663,6 +1864,9 @@ server test step */
 
 /* No comment provided by engineer. */
 "Create a group using a random profile." = "Gruppe mit einem zufälligen Profil erstellen.";
+
+/* No comment provided by engineer. */
+"Create a webpage to show your channel preview to visitors before they subscribe. Host it yourself or use any static hosting." = "Erstellen Sie eine Webseite, die Besuchern Ihren Kanal als Vorschau zeigt, bevor sie ihn abonnieren. Hosten Sie die Seite selbst oder nutzen Sie beliebiges statisches Hosting.";
 
 /* server test step */
 "Create file" = "Datei erstellen";
@@ -1680,7 +1884,7 @@ server test step */
 "Create list" = "Liste erstellen";
 
 /* No comment provided by engineer. */
-"Create new profile in [desktop app](https://simplex.chat/downloads/). 💻" = "Neues Profil in der [Desktop-App] erstellen (https://simplex.chat/downloads/). 💻";
+"Create new profile in [desktop app](https://simplex.chat/downloads/). 💻" = "Neues Profil in der [Desktop-App](https://simplex.chat/downloads/) erstellen. 💻";
 
 /* No comment provided by engineer. */
 "Create profile" = "Profil erstellen";
@@ -1688,14 +1892,14 @@ server test step */
 /* No comment provided by engineer. */
 "Create public channel" = "Öffentlichen Kanal erstellen";
 
-/* No comment provided by engineer. */
-"Create public channel (BETA)" = "Öffentlichen Kanal erstellen (BETA)";
-
 /* server test step */
 "Create queue" = "Warteschlange erstellen";
 
 /* No comment provided by engineer. */
 "Create SimpleX address" = "SimpleX-Adresse erstellen";
+
+/* No comment provided by engineer. */
+"Create web preview." = "Eine Web-Vorschau erstellen.";
 
 /* No comment provided by engineer. */
 "Create your address" = "Ihre Adresse erstellen";
@@ -1729,6 +1933,15 @@ server test step */
 
 /* No comment provided by engineer. */
 "creator" = "Ersteller";
+
+/* No comment provided by engineer. */
+"Credential" = "Credential";
+
+/* No comment provided by engineer. */
+"Crowdfunding investors can reserve names before the sale starts: [simplex.domains](https://simplex.domains/)" = "Crowdfunding-Investoren können vor Verkaufsbeginn Namen reservieren: [simplex.domains](https://simplex.domains/)";
+
+/* No comment provided by engineer. */
+"Crowdfunding on Wefunder" = "Crowdfunding auf Wefunder";
 
 /* No comment provided by engineer. */
 "Current conditions text couldn't be loaded, you can review conditions via this link:" = "Der Text der aktuellen Nutzungsbedingungen konnte nicht geladen werden. Sie können die Nutzungsbedingungen unter diesem Link einsehen:";
@@ -1797,7 +2010,7 @@ server test step */
 "Database passphrase" = "Datenbank-Passwort";
 
 /* No comment provided by engineer. */
-"Database passphrase & export" = "Datenbank-Passwort & -Export";
+"Database passphrase & export" = "Datenbank-Passwort und -Export";
 
 /* No comment provided by engineer. */
 "Database passphrase is different from saved in the keychain." = "Das Datenbank-Passwort unterscheidet sich von dem im Schlüsselbund gespeicherten.";
@@ -1819,6 +2032,9 @@ server test step */
 
 /* No comment provided by engineer. */
 "Database will be migrated when the app restarts" = "Die Datenbank wird beim nächsten Start der App migriert";
+
+/* ledger entry field */
+"Date" = "Datum";
 
 /* time unit */
 "days" = "Tage";
@@ -1925,6 +2141,9 @@ swipe action */
 "Delete for me" = "Nur bei mir löschen";
 
 /* No comment provided by engineer. */
+"Delete from history" = "Aus dem Nachrichtenverlauf löschen";
+
+/* No comment provided by engineer. */
 "Delete group" = "Gruppe löschen";
 
 /* No comment provided by engineer. */
@@ -1984,6 +2203,12 @@ alert button */
 
 /* No comment provided by engineer. */
 "Delete report" = "Meldung löschen";
+
+/* No comment provided by engineer. */
+"Delete temp data" = "Temporäre Daten löschen";
+
+/* alert title */
+"Delete temp data?" = "Temporäre Daten löschen?";
 
 /* No comment provided by engineer. */
 "Delete up to 20 messages at once." = "Löschen Sie bis zu 20 Nachrichten auf einmal.";
@@ -2049,13 +2274,13 @@ alert button */
 "Desktop devices" = "Desktop-Geräte";
 
 /* No comment provided by engineer. */
-"Destination server address of %@ is incompatible with forwarding server %@ settings." = "Adresse des Zielservers von %@ ist nicht kompatibel mit den Einstellungen des Weiterleitungsservers %@.";
+"Destination server address of %1$@ is incompatible with forwarding server %2$@ settings." = "Die Adresse des Zielservers von %1$@ ist nicht kompatibel mit den Einstellungen des Weiterleitungsservers %2$@.";
 
 /* snd error text */
 "Destination server error: %@" = "Zielserver-Fehler: %@";
 
 /* No comment provided by engineer. */
-"Destination server version of %@ is incompatible with forwarding server %@." = "Die Version des Zielservers %@ ist nicht kompatibel mit dem Weiterleitungsserver %@.";
+"Destination server version of %1$@ is incompatible with forwarding server %2$@." = "Die Version des Zielservers %1$@ ist nicht kompatibel mit dem Weiterleitungsserver %2$@.";
 
 /* No comment provided by engineer. */
 "Detailed statistics" = "Detaillierte Statistiken";
@@ -2064,13 +2289,10 @@ alert button */
 "Details" = "Details";
 
 /* No comment provided by engineer. */
-"Develop" = "Entwicklung";
+"Developer" = "Entwicklertools";
 
 /* No comment provided by engineer. */
 "Developer options" = "Optionen für Entwickler";
-
-/* No comment provided by engineer. */
-"Developer tools" = "Entwicklertools";
 
 /* No comment provided by engineer. */
 "Device" = "Gerät";
@@ -2156,8 +2378,14 @@ alert button */
 /* No comment provided by engineer. */
 "Discover via local network" = "Lokales Netzwerk durchsuchen";
 
+/* alert button */
+"Dismiss" = "Schließen";
+
 /* No comment provided by engineer. */
 "Do it later" = "Später wiederholen";
+
+/* No comment provided by engineer. */
+"Do not require signing messages." = "Signatur für Nachrichten nicht erforderlich.";
 
 /* No comment provided by engineer. */
 "Do not send history to new members." = "Den Nachrichtenverlauf nicht an neue Mitglieder senden.";
@@ -2169,10 +2397,10 @@ alert button */
 "Do NOT send messages directly, even if your or destination server does not support private routing." = "Nachrichten werden nicht direkt versendet, selbst wenn Ihr oder der Zielserver kein privates Routing unterstützt.";
 
 /* No comment provided by engineer. */
-"Do not use credentials with proxy." = "Verwenden Sie keine Anmeldeinformationen mit einem Proxy.";
+"Do not use credentials with proxy." = "Keine Anmeldeinformationen mit einem Proxy verwenden.";
 
 /* No comment provided by engineer. */
-"Do NOT use private routing." = "Sie nutzen KEIN privates Routing.";
+"Do NOT use private routing." = "KEIN privates Routing nutzen.";
 
 /* No comment provided by engineer. */
 "Do NOT use SimpleX for emergency calls." = "SimpleX NICHT für Notrufe nutzen.";
@@ -2188,6 +2416,9 @@ alert button */
 
 /* No comment provided by engineer. */
 "Don't miss important messages." = "Verpassen Sie keine wichtigen Nachrichten.";
+
+/* alert action */
+"Don't save" = "Nicht speichern";
 
 /* alert action */
 "Don't show again" = "Nicht nochmals anzeigen";
@@ -2247,11 +2478,17 @@ chat item action */
 /* No comment provided by engineer. */
 "Easier to invite your friends 👋" = "Freunde einladen – jetzt noch einfacher 👋";
 
+/* No comment provided by engineer. */
+"Easier to read." = "Einfacher zu lesen.";
+
 /* chat item action */
 "Edit" = "Bearbeiten";
 
 /* No comment provided by engineer. */
 "Edit channel profile" = "Kanalprofil bearbeiten";
+
+/* No comment provided by engineer. */
+"Edit description" = "Beschreibung bearbeiten";
 
 /* No comment provided by engineer. */
 "Edit group profile" = "Gruppenprofil bearbeiten";
@@ -2266,7 +2503,7 @@ chat item action */
 "Enable (keep overrides)" = "Aktivieren (vorgenommene Einstellungen bleiben erhalten)";
 
 /* channel creation warning */
-"Enable at least one chat relay in Network & Servers." = "Aktivieren Sie mindestens ein Chat‑Relais unter 'Netzwerk & Server'.";
+"Enable at least one chat relay in Network & Servers." = "Aktivieren Sie mindestens ein Chat‑Relais unter \"Netzwerk und Server\".";
 
 /* alert title */
 "Enable automatic message deletion?" = "Automatisches Löschen von Nachrichten aktivieren?";
@@ -2285,6 +2522,9 @@ chat item action */
 
 /* No comment provided by engineer. */
 "Enable for all" = "Für Alle aktivieren";
+
+/* No comment provided by engineer. */
+"Enable in Appearance settings." = "In den Einstellungen unter \"Darstellung\" aktivieren.";
 
 /* No comment provided by engineer. */
 "Enable in direct chats (BETA)!" = "Kann in direkten Chats aktiviert werden (BETA)!";
@@ -2338,7 +2578,7 @@ chat item action */
 "Encrypt local files" = "Lokale Dateien verschlüsseln";
 
 /* No comment provided by engineer. */
-"Encrypt stored files & media" = "Gespeicherte Dateien & Medien verschlüsseln";
+"Encrypt stored files & media" = "Gespeicherte Dateien und Medien verschlüsseln";
 
 /* No comment provided by engineer. */
 "Encrypted database" = "Verschlüsselte Datenbank";
@@ -2397,17 +2637,35 @@ chat item action */
 /* No comment provided by engineer. */
 "Encryption renegotiation in progress." = "Die Neuverhandlung der Verschlüsselung läuft.";
 
+/* alert action */
+"End call" = "Anruf beenden";
+
 /* No comment provided by engineer. */
 "ended" = "beendet";
 
+/* No comment provided by engineer. */
+"Ended" = "Beendet";
+
 /* call status */
 "ended call %@" = "Anruf beendet %@";
+
+/* No comment provided by engineer. */
+"Ends" = "Endet";
+
+/* No comment provided by engineer. */
+"Ends %@" = "Endet am %@";
+
+/* No comment provided by engineer. */
+"Ends on %@." = "Endet am %@.";
 
 /* No comment provided by engineer. */
 "Enter channel name…" = "Kanalname eingeben…";
 
 /* No comment provided by engineer. */
 "Enter correct passphrase." = "Geben Sie das korrekte Passwort ein.";
+
+/* placeholder */
+"Enter description (optional)" = "Beschreibung eingeben (optional)";
 
 /* No comment provided by engineer. */
 "Enter group name…" = "Geben Sie den Gruppennamen ein…";
@@ -2436,6 +2694,9 @@ chat item action */
 /* No comment provided by engineer. */
 "Enter this device name…" = "Geben Sie diesen Gerätenamen ein…";
 
+/* No comment provided by engineer. */
+"Enter webpage URL" = "URL der Webseite eingeben";
+
 /* placeholder */
 "Enter welcome message…" = "Geben Sie eine Begrüßungsmeldung ein …";
 
@@ -2445,10 +2706,13 @@ chat item action */
 /* No comment provided by engineer. */
 "Enter your name…" = "Geben Sie Ihren Namen ein…";
 
+/* ledger entry field */
+"Entry ID" = "Eintrags-ID";
+
 /* No comment provided by engineer. */
 "error" = "Fehler";
 
-/* conn error description */
+/* No comment provided by engineer. */
 "Error" = "Fehler";
 
 /* No comment provided by engineer. */
@@ -2468,6 +2732,9 @@ chat item action */
 
 /* alert title */
 "Error adding relay" = "Fehler beim Hinzufügen des Relais";
+
+/* alert title */
+"Error adding relays" = "Fehler beim Hinzufügen von Relais";
 
 /* alert title */
 "Error adding server" = "Fehler beim Hinzufügen des Servers";
@@ -2548,6 +2815,9 @@ chat item action */
 "Error deleting database" = "Fehler beim Löschen der Datenbank";
 
 /* alert title */
+"Error deleting message" = "Fehler beim Löschen der Nachricht";
+
+/* alert title */
 "Error deleting old database" = "Fehler beim Löschen der alten Datenbank";
 
 /* No comment provided by engineer. */
@@ -2590,6 +2860,9 @@ chat item action */
 "Error opening chat" = "Fehler beim Öffnen des Chat";
 
 /* alert title */
+"Error reading file" = "Fehler beim Lesen der Datei";
+
+/* alert title */
 "Error receiving file" = "Fehler beim Herunterladen der Datei";
 
 /* No comment provided by engineer. */
@@ -2625,11 +2898,17 @@ chat item action */
 /* No comment provided by engineer. */
 "Error saving ICE servers" = "Fehler beim Speichern der ICE-Server";
 
+/* alert title */
+"Error saving name" = "Fehler beim Speichern des Namens";
+
 /* No comment provided by engineer. */
 "Error saving passcode" = "Fehler beim Speichern des Zugangscodes";
 
 /* No comment provided by engineer. */
 "Error saving passphrase to keychain" = "Fehler beim Speichern des Passworts in den Schlüsselbund";
+
+/* alert title */
+"Error saving profile" = "Fehler beim Speichern des Profils";
 
 /* alert title */
 "Error saving servers" = "Fehler beim Speichern der Server";
@@ -2640,11 +2919,11 @@ chat item action */
 /* No comment provided by engineer. */
 "Error saving user password" = "Fehler beim Speichern des Benutzer-Passworts";
 
-/* No comment provided by engineer. */
+/* alert message */
 "Error scanning code: %@" = "Fehler beim Scannen des Codes: %@";
 
 /* No comment provided by engineer. */
-"Error sending email" = "Fehler beim Senden der eMail";
+"Error sending email" = "Fehler beim Senden der E-Mail";
 
 /* No comment provided by engineer. */
 "Error sending member contact invitation" = "Fehler beim Senden einer Mitglied-Kontakt-Einladung";
@@ -2657,6 +2936,9 @@ chat item action */
 
 /* No comment provided by engineer. */
 "Error setting delivery receipts!" = "Fehler beim Setzen von Empfangsbestätigungen!";
+
+/* alert title */
+"Error sharing address" = "Fehler beim Teilen der Adresse";
 
 /* alert title */
 "Error sharing channel" = "Fehler beim Teilen des Kanals";
@@ -2707,6 +2989,7 @@ chat item action */
 "error: %@" = "Fehler: %@";
 
 /* alert message
+conn error description
 file error text
 snd error text */
 "Error: %@" = "Fehler: %@";
@@ -2741,6 +3024,9 @@ server test error */
 
 /* token status text */
 "Expired" = "Abgelaufen";
+
+/* No comment provided by engineer. */
+"Expires" = "Läuft ab";
 
 /* No comment provided by engineer. */
 "Export database" = "Datenbank exportieren";
@@ -2784,11 +3070,17 @@ server test error */
 /* No comment provided by engineer. */
 "Favorites" = "Favoriten";
 
+/* No comment provided by engineer. */
+"File available until" = "Datei verfügbar bis zum";
+
 /* file error alert title */
 "File error" = "Datei-Fehler";
 
 /* alert message */
 "File errors:\n%@" = "Datei-Fehler:\n%@";
+
+/* file error alert title */
+"File expired" = "Datei nicht mehr verfügbar";
 
 /* file error text */
 "File is blocked by server operator:\n%@." = "Die Datei wurde vom Serverbetreiber blockiert:\n%@.";
@@ -2800,10 +3092,22 @@ server test error */
 "File server error: %@" = "Datei-Server Fehler: %@";
 
 /* No comment provided by engineer. */
+"File servers" = "Datei-Server";
+
+/* copied message info */
+"File servers: %@" = "Datei-Server: %@";
+
+/* No comment provided by engineer. */
 "File status" = "Datei-Status";
 
 /* copied message info */
 "File status: %@" = "Datei-Status: %@";
+
+/* No comment provided by engineer. */
+"File was available until" = "Datei war verfügbar bis zum";
+
+/* file error text */
+"File was available until %@." = "Datei war verfügbar bis zum %@.";
 
 /* No comment provided by engineer. */
 "File will be deleted from servers." = "Die Datei wird von den Servern gelöscht.";
@@ -2821,7 +3125,7 @@ server test error */
 "Files" = "Dateien";
 
 /* No comment provided by engineer. */
-"Files & media" = "Dateien & Medien";
+"Files & media" = "Dateien und Medien";
 
 /* chat feature */
 "Files and media" = "Dateien und Medien";
@@ -2837,6 +3141,24 @@ server test error */
 
 /* No comment provided by engineer. */
 "Files and media prohibited!" = "Dateien und Medien sind nicht erlaubt!";
+
+/* alert message */
+"Files being sent or received will never complete. Videos in unsent drafts will be sent without the file." = "Dateien, die gerade gesendet oder empfangen werden, können nicht abgeschlossen werden. Videos in nicht gesendeten Entwürfen werden ohne die Datei versendet.";
+
+/* file alert */
+"Files larger than %@ cannot be sent in incognito chats." = "Dateien, die größer als %@ sind, können in Inkognito-Chats nicht gesendet werden.";
+
+/* No comment provided by engineer. */
+"Files up to 2 GB" = "Dateien bis zu 2 GB";
+
+/* No comment provided by engineer. */
+"Files up to 2 GB, stored for 7 days." = "Dateien bis zu 2 GB, für 7 Tage gespeichert.";
+
+/* No comment provided by engineer. */
+"Files up to 5 GB" = "Dateien bis zu 5 GB";
+
+/* No comment provided by engineer. */
+"Files up to 5 GB, stored for 21 days." = "Dateien bis zu 5 GB, für 21 Tage gespeichert.";
 
 /* No comment provided by engineer. */
 "Filter" = "Filter";
@@ -2888,6 +3210,15 @@ server test error */
 "Fix not supported by group member" = "Reparatur wird vom Gruppenmitglied nicht unterstützt";
 
 /* No comment provided by engineer. */
+"Flat layout and markdown" = "Flaches Layout und Markdown";
+
+/* No comment provided by engineer. */
+"Follow SimpleX Network News" = "Folgen Sie den SimpleX-Netzwerk-Neuigkeiten";
+
+/* No comment provided by engineer. */
+"For %@ only" = "Nur für %@";
+
+/* No comment provided by engineer. */
 "For all moderators" = "Für alle Moderatoren";
 
 /* No comment provided by engineer. */
@@ -2912,6 +3243,9 @@ servers warning */
 /* No comment provided by engineer. */
 "For social media" = "Für soziale Medien";
 
+/* No comment provided by engineer. */
+"For you only" = "Nur für Sie";
+
 /* chat item action */
 "Forward" = "Weiterleiten";
 
@@ -2935,6 +3269,9 @@ servers warning */
 
 /* No comment provided by engineer. */
 "Forwarded" = "Weitergeleitet";
+
+/* No comment provided by engineer. */
+"forwarded from" = "weitergeleitet aus";
 
 /* No comment provided by engineer. */
 "Forwarded from" = "Weitergeleitet aus";
@@ -2963,6 +3300,9 @@ servers warning */
 /* No comment provided by engineer. */
 "French interface" = "Französische Bedienoberfläche";
 
+/* ledger entry field */
+"From purchase key" = "Aus dem Einkaufs-Schlüssel";
+
 /* No comment provided by engineer. */
 "Full link" = "Vollständiger Link";
 
@@ -2978,11 +3318,20 @@ servers warning */
 /* No comment provided by engineer. */
 "Further reduced battery usage" = "Weiter reduzierter Batterieverbrauch";
 
+/* No comment provided by engineer. */
+"Get a badge to send larger files (2-5GB) that stay available longer (7-21 days), and to show it on your profile." = "Holen Sie sich einen Badge, um größere Dateien (2-5 GB) zu senden, die länger verfügbar bleiben (7-21 Tage), und um ihn in Ihrem Profil anzuzeigen.";
+
+/* No comment provided by engineer. */
+"Get badge + better files" = "Badge erhalten + bessere Dateien";
+
 /* relay test step */
 "Get link" = "Link erhalten";
 
 /* No comment provided by engineer. */
 "Get notified when mentioned." = "Bei Erwähnung benachrichtigt werden.";
+
+/* No comment provided by engineer. */
+"Get SimpleX name (BETA)" = "Einen SimpleX-Namen erhalten (BETA)";
 
 /* No comment provided by engineer. */
 "Get started" = "Jetzt starten";
@@ -3030,6 +3379,9 @@ servers warning */
 "Group invitation is no longer valid, it was removed by sender." = "Die Gruppeneinladung ist nicht mehr gültig, da sie vom Absender entfernt wurde.";
 
 /* No comment provided by engineer. */
+"Group invitations" = "Gruppeneinladungen";
+
+/* No comment provided by engineer. */
 "group is deleted" = "Gruppe wurde gelöscht";
 
 /* chat link info line */
@@ -3060,6 +3412,9 @@ servers warning */
 "Group profile was changed. If you save it, the updated profile will be sent to group members." = "Das Gruppenprofil wurde geändert. Wenn Sie es speichern, wird das aktualisierte Profil an die Gruppenmitglieder gesendet.";
 
 /* No comment provided by engineer. */
+"Group webpage" = "Webseite der Gruppe";
+
+/* No comment provided by engineer. */
 "Group welcome message" = "Gruppen-Begrüßungsmeldung";
 
 /* No comment provided by engineer. */
@@ -3073,6 +3428,9 @@ servers warning */
 
 /* No comment provided by engineer. */
 "Help" = "Hilfe";
+
+/* No comment provided by engineer. */
+"Help & support" = "Hilfe & Unterstützung";
 
 /* No comment provided by engineer. */
 "Help admins moderating their groups." = "Helfen Sie Administratoren bei der Moderation ihrer Gruppen.";
@@ -3111,6 +3469,9 @@ servers warning */
 "hours" = "Stunden";
 
 /* No comment provided by engineer. */
+"How badges protect your privacy" = "Wie Badges Ihre Privatsphäre schützen";
+
+/* No comment provided by engineer. */
 "How it affects privacy" = "Wie es die Privatsphäre beeinflusst";
 
 /* No comment provided by engineer. */
@@ -3120,16 +3481,25 @@ servers warning */
 "How it works" = "Wie es funktioniert";
 
 /* No comment provided by engineer. */
+"How long?" = "Wie lang?";
+
+/* No comment provided by engineer. */
 "How SimpleX works" = "Wie SimpleX funktioniert";
 
 /* No comment provided by engineer. */
 "How to" = "Anleitung";
 
 /* No comment provided by engineer. */
+"How to register a test name" = "Wie man einen Test-Namen registriert";
+
+/* No comment provided by engineer. */
 "How to use it" = "Wie man SimpleX nutzt";
 
 /* No comment provided by engineer. */
 "How to use your servers" = "Wie Sie Ihre Server nutzen";
+
+/* No comment provided by engineer. */
+"https://" = "https://";
 
 /* No comment provided by engineer. */
 "Hungarian interface" = "Ungarische Bedienoberfläche";
@@ -3320,7 +3690,7 @@ servers warning */
 /* alert title */
 "Invalid name!" = "Ungültiger Name!";
 
-/* No comment provided by engineer. */
+/* alert title */
 "Invalid QR code" = "Ungültiger QR-Code";
 
 /* alert title */
@@ -3337,6 +3707,18 @@ servers warning */
 
 /* item status text */
 "Invalid status" = "Ungültiger Status";
+
+/* No comment provided by engineer. */
+"Invest $100+ and get a free badge." = "Investieren Sie ab $100 und erhalten Sie einen kostenlosen Badge.";
+
+/* No comment provided by engineer. */
+"Invest $1000+ and get a free legend badge." = "Investieren Sie ab $1000 und erhalten Sie einen kostenlosen Legenden-Badge.";
+
+/* No comment provided by engineer. */
+"Invest in SimpleX Chat!" = "Investieren Sie in SimpleX-Chat!";
+
+/* badge type */
+"Investor" = "Investor";
 
 /* No comment provided by engineer. */
 "Invitation expired!" = "Einladung abgelaufen!";
@@ -3377,6 +3759,9 @@ servers warning */
 /* rcv group event chat item */
 "invited via your group link" = "wurde über Ihren Gruppen-Link eingeladen";
 
+/* ledger entry field */
+"Invoice ID" = "Rechnungs-ID";
+
 /* No comment provided by engineer. */
 "iOS Keychain is used to securely store passphrase - it allows receiving push notifications." = "Für die sichere Speicherung des Passworts wird der iOS Schlüsselbund verwendet - dies erlaubt den Empfang von Push-Benachrichtigungen.";
 
@@ -3396,6 +3781,9 @@ servers warning */
 "Irreversible message deletion is prohibited." = "In dieser Gruppe ist das unwiederbringliche Löschen von Nachrichten nicht erlaubt.";
 
 /* No comment provided by engineer. */
+"Issuing your badge" = "Badge wird erstellt";
+
+/* No comment provided by engineer. */
 "It allows having many anonymous connections without any shared data between them in a single chat profile." = "Er ermöglicht mehrere anonyme Verbindungen in einem einzigen Chat-Profil ohne Daten zwischen diesen zu teilen.";
 
 /* No comment provided by engineer. */
@@ -3411,10 +3799,16 @@ servers warning */
 "It seems like you are already connected via this link. If it is not the case, there was an error (%@)." = "Es sieht so aus, als ob Sie bereits über diesen Link verbunden sind. Wenn das nicht der Fall ist, gab es einen Fehler (%@).";
 
 /* No comment provided by engineer. */
+"It will be shown to subscribers and used to allow loading the preview." = "Dies wird Abonnenten angezeigt und zum Laden der Vorschau genutzt.";
+
+/* No comment provided by engineer. */
 "Italian interface" = "Italienische Bedienoberfläche";
 
 /* No comment provided by engineer. */
 "italic" = "kursiv";
+
+/* badge link, profile has a badge */
+"Its code is on the page you bought it on, under Show code." = "Den Code finden Sie auf der Seite, auf der Sie ihn gekauft haben, unter “Code anzeigen“.";
 
 /* No comment provided by engineer. */
 "Japanese interface" = "Japanische Benutzeroberfläche";
@@ -3427,6 +3821,9 @@ servers warning */
 
 /* No comment provided by engineer. */
 "Join channel" = "Kanal beitreten";
+
+/* new chat action */
+"Join channel %@" = "Kanal %@ beitreten";
 
 /* new chat sheet title */
 "Join group" = "Treten Sie der Gruppe bei";
@@ -3467,11 +3864,23 @@ servers warning */
 /* No comment provided by engineer. */
 "KeyChain error" = "KeyChain Fehler";
 
-/* No comment provided by engineer. */
+/* file alert title */
 "Large file!" = "Große Datei!";
 
 /* No comment provided by engineer. */
+"Larger files available for longer." = "Größere Dateien, die länger verfügbar bleiben.";
+
+/* No comment provided by engineer. */
+"Larger files that stay available longer." = "Größere Dateien, die länger verfügbar bleiben.";
+
+/* No comment provided by engineer. */
+"Last attempt" = "Letzter Versuch";
+
+/* badge alert button */
 "Learn more" = "Mehr erfahren";
+
+/* No comment provided by engineer. */
+"Learn more on Wefunder" = "Mehr erfahren auf Wefunder";
 
 /* swipe action */
 "Leave" = "Verlassen";
@@ -3497,8 +3906,23 @@ servers warning */
 /* rcv group event chat item */
 "left" = "hat die Gruppe verlassen";
 
+/* badge type */
+"Legend" = "Legende";
+
+/* badge required to send a large file */
+"legend badge" = "Legenden-Badge";
+
+/* No comment provided by engineer. */
+"Legend: 5 GB files available for 21 days." = "Legende: Dateien bis 5 GB sind 21 Tage lang verfügbar.";
+
 /* No comment provided by engineer. */
 "Less traffic on mobile networks." = "Weniger Datenverkehr in mobilen Netzen.";
+
+/* No comment provided by engineer. */
+"Let people connect to you via name registered with your SimpleX address." = "Lassen Sie sich über den mit Ihrer SimpleX‑Adresse registrierten Namen verbinden.";
+
+/* No comment provided by engineer. */
+"Let people join via name registered with this channel link." = "Ermöglichen Sie Beitritte über den mit diesem Kanal‑Link registrierten Namen.";
 
 /* No comment provided by engineer. */
 "Let someone connect to you" = "Jemand mit Ihnen verbinden lassen";
@@ -3552,6 +3976,9 @@ servers warning */
 "Loading profile…" = "Profil wird geladen…";
 
 /* No comment provided by engineer. */
+"Loading…" = "Wird geladen…";
+
+/* No comment provided by engineer. */
 "Local name" = "Lokaler Name";
 
 /* No comment provided by engineer. */
@@ -3573,6 +4000,12 @@ servers warning */
 "Make sure WebRTC ICE server addresses are in correct format, line separated and are not duplicated." = "Stellen Sie sicher, dass die WebRTC ICE-Server Adressen das richtige Format haben, zeilenweise getrennt und nicht doppelt vorhanden sind.";
 
 /* No comment provided by engineer. */
+"Manage subscription" = "Abonnement verwalten";
+
+/* No comment provided by engineer. */
+"Manage your relays." = "Ihre Relais verwalten.";
+
+/* No comment provided by engineer. */
 "Mark deleted for everyone" = "Für Alle als gelöscht markieren";
 
 /* No comment provided by engineer. */
@@ -3589,6 +4022,9 @@ servers warning */
 
 /* No comment provided by engineer. */
 "Max 30 seconds, received instantly." = "Max. 30 Sekunden, sofort erhalten.";
+
+/* file alert */
+"Maximum supported file size is %1$@, with a %2$@." = "Die maximal unterstützte Dateigröße beträgt %1$@ mit einem %2$@.";
 
 /* No comment provided by engineer. */
 "Media & file servers" = "Medien- und Datei-Server";
@@ -3628,15 +4064,6 @@ servers warning */
 
 /* chat feature */
 "Member reports" = "Mitglieder-Meldungen";
-
-/* No comment provided by engineer. */
-"Member role will be changed to \"%@\". All chat members will be notified." = "Die Rolle des Mitglieds wird auf \"%@\" geändert. Alle Chat-Mitglieder werden darüber informiert.";
-
-/* No comment provided by engineer. */
-"Member role will be changed to \"%@\". All group members will be notified." = "Die Mitgliederrolle wird auf \"%@\" geändert. Alle Mitglieder der Gruppe werden benachrichtigt.";
-
-/* No comment provided by engineer. */
-"Member role will be changed to \"%@\". The member will receive a new invitation." = "Die Mitgliederrolle wird auf \"%@\" geändert. Das Mitglied wird eine neue Einladung erhalten.";
 
 /* alert message */
 "Member will be removed from chat - this cannot be undone!" = "Das Mitglied wird aus dem Chat entfernt. Dies kann nicht rückgängig gemacht werden!";
@@ -3725,11 +4152,20 @@ servers warning */
 /* No comment provided by engineer. */
 "Message reception" = "Nachrichtenempfang";
 
+/* rcv group event chat item */
+"message rejected: bad signature" = "Nachricht abgelehnt: Ungültige Signatur";
+
 /* No comment provided by engineer. */
 "Message servers" = "Nachrichten-Server";
 
 /* No comment provided by engineer. */
 "Message shape" = "Nachrichten-Form";
+
+/* No comment provided by engineer. */
+"Message signing is not required." = "Nachrichten müssen nicht signiert werden.";
+
+/* No comment provided by engineer. */
+"Message signing is required." = "Nachrichten müssen signiert werden.";
 
 /* No comment provided by engineer. */
 "Message source remains private." = "Die Nachrichtenquelle bleibt privat.";
@@ -3842,14 +4278,23 @@ servers warning */
 /* member role */
 "moderator" = "Moderator";
 
+/* No comment provided by engineer. */
+"Monthly" = "Monatlich";
+
 /* time unit */
 "months" = "Monate";
+
+/* No comment provided by engineer. */
+"Months left" = "Verbleibende Monate";
 
 /* swipe action */
 "More" = "Mehr";
 
 /* No comment provided by engineer. */
 "More improvements are coming soon!" = "Weitere Verbesserungen sind bald verfügbar!";
+
+/* No comment provided by engineer. */
+"More privacy" = "Weitere Privatsphäre";
 
 /* No comment provided by engineer. */
 "More reliable network connection." = "Zuverlässigere Netzwerkverbindung.";
@@ -3872,11 +4317,17 @@ servers warning */
 /* No comment provided by engineer. */
 "Muted when inactive!" = "Bei Inaktivität stummgeschaltet!";
 
+/* badges preview placeholder */
+"My nickname" = "Mein Nickname";
+
 /* swipe action */
 "Name" = "Name";
 
 /* No comment provided by engineer. */
-"Network & servers" = "Netzwerk & Server";
+"Name not found" = "Name wurde nicht gefunden";
+
+/* No comment provided by engineer. */
+"Network & servers" = "Netzwerk und Server";
 
 /* No comment provided by engineer. */
 "Network commitments" = "Netzwerk Verpflichtungen";
@@ -3975,10 +4426,13 @@ servers warning */
 "New server" = "Neuer Server";
 
 /* No comment provided by engineer. */
-"New SOCKS credentials will be used every time you start the app." = "Jedes Mal wenn Sie die App starten, werden neue SOCKS-Anmeldeinformationen genutzt";
+"New SOCKS credentials will be used every time you start the app." = "Bei jedem Neustart der App, werden neue SOCKS-Anmeldeinformationen genutzt.";
 
 /* No comment provided by engineer. */
-"New SOCKS credentials will be used for each server." = "Für jeden Server werden neue SOCKS-Anmeldeinformationen genutzt";
+"New SOCKS credentials will be used for each server." = "Für jeden Server werden neue SOCKS-Anmeldeinformationen genutzt.";
+
+/* No comment provided by engineer. */
+"Next check" = "Nächste Überprüfung";
 
 /* pref value */
 "no" = "Nein";
@@ -3987,13 +4441,19 @@ servers warning */
 "No" = "Nein";
 
 /* No comment provided by engineer. */
-"No account. No phone. No email. No ID.\nThe most secure encryption." = "Kein Account. Keine Telefonnummer. Keine E‑Mail. Keine ID.\nDie sicherste Verschlüsselung.";
+"No account. No phone. No email. No ID.\nThe most secure encryption." = "Kein Benutzerkonto. Keine Telefonnummer. Keine E‑Mail. Keine ID.\nDie sicherste Verschlüsselung.";
 
 /* No comment provided by engineer. */
 "No active relays" = "Keine aktiven Relais";
 
 /* Authentication unavailable */
 "No app password" = "Kein App-Passwort";
+
+/* alert message */
+"No App Store purchase waiting to be added was found." = "Es wurde kein ausstehender App-Store-Kauf gefunden, der hinzugefügt werden kann.";
+
+/* No comment provided by engineer. */
+"No available relays" = "Keine verfügbaren Relais";
 
 /* No comment provided by engineer. */
 "No chat relays" = "Keine Chat-Relais";
@@ -4032,6 +4492,9 @@ servers warning */
 "no e2e encryption" = "Keine E2E-Verschlüsselung";
 
 /* No comment provided by engineer. */
+"No entries" = "Keine Einträge";
+
+/* No comment provided by engineer. */
 "No filtered chats" = "Keine gefilterten Chats";
 
 /* No comment provided by engineer. */
@@ -4042,6 +4505,9 @@ servers warning */
 
 /* No comment provided by engineer. */
 "No info, try to reload" = "Keine Information - es wird versucht neu zu laden";
+
+/* file alert */
+"No key to verify contact's badge." = "Kein Schlüssel zur Badge-Verifizierung des Kontakts.";
 
 /* servers error */
 "No media & file servers." = "Keine Medien- und Dateiserver.";
@@ -4073,14 +4539,23 @@ servers warning */
 /* No comment provided by engineer. */
 "No received or sent files" = "Keine herunter- oder hochgeladenen Dateien";
 
+/* No comment provided by engineer. */
+"No relays" = "Keine Relais";
+
+/* No comment provided by engineer. */
+"No renewal: the badge ends when the prepaid months run out." = "Keine Verlängerung: Der Badge endet, wenn die vorausbezahlten Monate aufgebraucht sind.";
+
 /* servers error */
-"No servers for private message routing." = "Keine Server für privates Nachrichten-Routing.";
+"No servers for private message routing." = "Keine Router für privates Nachrichten-Routing.";
 
 /* servers error */
 "No servers to receive files." = "Keine Server für das Herunterladen von Dateien.";
 
 /* servers error */
 "No servers to receive messages." = "Keine Server für den Empfang von Nachrichten.";
+
+/* servers warning */
+"No servers to resolve names." = "Keine Server für die Namensauflösung konfiguriert.";
 
 /* servers error */
 "No servers to send files." = "Keine Server für das Versenden von Dateien.";
@@ -4098,16 +4573,28 @@ servers warning */
 "No unread chats" = "Keine ungelesenen Chats";
 
 /* No comment provided by engineer. */
-"Nobody tracked your conversations. No one drew a map of where you'd been. Privacy was never a feature - it was the way of life." = "Niemand verfolgte Ihre Gespräche. Niemand erstellte eine Karte, wo Sie sich aufgehalten haben. Privatsphäre war nie ein Feature - sie war selbstverständlich.";
+"No valid link" = "Kein gültiger Link";
+
+/* No comment provided by engineer. */
+"Nobody can link two different proofs to each other or to the purchase." = "Niemand kann zwei verschiedene Nachweise miteinander oder mit dem Kauf in Verbindung bringen.";
+
+/* No comment provided by engineer. */
+"Nobody tracked your conversations. No one drew a map of where you'd been. Privacy was never a feature - it was the way of life." = "Niemand verfolgte Ihre Gespräche. Niemand hat eine Karte erstellt, wo Sie überall waren. Privatsphäre war nie ein Feature – sie war eine Selbstverständlichkeit.";
 
 /* No comment provided by engineer. */
 "Non-profit governance" = "Non‑Profit‑Governance";
+
+/* No comment provided by engineer. */
+"None of your servers are set to resolve SimpleX names. Configure servers, or use a connection link." = "Keiner Ihrer Server ist zum Auflösen von SimpleX‑Namen konfiguriert. Konfigurieren Sie Server oder verwenden Sie einen Verbindungslink.";
 
 /* No comment provided by engineer. */
 "Not a better lock on someone else's door. Not a nicer landlord that respects your privacy, but still keeps the record of all visitors. You are not a guest. You are home. No king can enter it - you are sovereign." = "Nicht ein besseres Schloss an der Tür eines Anderen. Kein freundlicher Vermieter, der Ihre Privatsphäre respektiert, aber dennoch jeden Besucher registriert. Sie sind kein Gast. Sie sind zu Hause. Kein Vermieter, kein Fremder kann es betreten - Sie sind souverän.";
 
 /* alert title */
 "Not all relays connected" = "Es sind nicht alle Relais verbunden";
+
+/* No comment provided by engineer. */
+"Not available" = "Nicht verfügbar";
 
 /* No comment provided by engineer. */
 "Not compatible!" = "Nicht kompatibel!";
@@ -4119,10 +4606,16 @@ servers warning */
 "Notes" = "Anmerkungen";
 
 /* No comment provided by engineer. */
+"Nothing has been charged." = "Es wurde nichts berechnet.";
+
+/* No comment provided by engineer. */
 "Nothing selected" = "Nichts ausgewählt";
 
 /* alert title */
 "Nothing to forward!" = "Es gibt nichts zum Weiterleiten!";
+
+/* alert title */
+"Nothing to restore" = "Nichts zum Wiederherstellen vorhanden";
 
 /* No comment provided by engineer. */
 "Notifications" = "Benachrichtigungen";
@@ -4255,6 +4748,9 @@ new chat action */
 /* No comment provided by engineer. */
 "Only your contact can send voice messages." = "Nur Ihr Kontakt kann Sprachnachrichten versenden.";
 
+/* No comment provided by engineer. */
+"Only your page above can show the preview." = "Nur Ihre oben genannte Seite kann die Vorschau anzeigen.";
+
 /* alert action
 alert button */
 "Open" = "Öffnen";
@@ -4293,13 +4789,7 @@ alert button */
 "Open migration to another device" = "Migration auf ein anderes Gerät öffnen";
 
 /* new chat action */
-"Open new channel" = "Neuen Kanal öffnen";
-
-/* new chat action */
 "Open new chat" = "Neuen Chat öffnen";
-
-/* new chat action */
-"Open new group" = "Neue Gruppe öffnen";
 
 /* No comment provided by engineer. */
 "Open Settings" = "Geräte-Einstellungen öffnen";
@@ -4367,6 +4857,12 @@ alert button */
 /* alert message */
 "Other file errors:\n%@" = "Andere(r) Datei-Fehler:\n%@";
 
+/* No comment provided by engineer. */
+"Own a part of SimpleX Chat" = "Werden Sie Miteigentümer von SimpleX Chat";
+
+/* No comment provided by engineer. */
+"Own a part of SimpleX Chat! 🚀" = "Werden Sie Miteigentümer von SimpleX Chat! 🚀";
+
 /* member role */
 "owner" = "Eigentümer";
 
@@ -4377,7 +4873,7 @@ alert button */
 "owners" = "Eigentümer";
 
 /* No comment provided by engineer. */
-"Owners" = "Eigentümer";
+"Owners & contributors" = "Eigentümer und Mitwirkende";
 
 /* No comment provided by engineer. */
 "Ownership: you can run your own relays." = "Volle Kontrolle: Sie können Ihre eigenen Relais betreiben.";
@@ -4404,6 +4900,9 @@ alert button */
 "Password to show" = "Passwort anzeigen";
 
 /* No comment provided by engineer. */
+"Paste" = "Einfügen";
+
+/* No comment provided by engineer. */
 "Paste desktop address" = "Desktop-Adresse einfügen";
 
 /* No comment provided by engineer. */
@@ -4416,7 +4915,28 @@ alert button */
 "Paste link to connect!" = "Zum Verbinden den Link einfügen!";
 
 /* No comment provided by engineer. */
+"Paste the code you received." = "Fügen Sie den erhaltenen Code ein.";
+
+/* No comment provided by engineer. */
 "Paste the link you received" = "Fügen Sie den erhaltenen Link ein";
+
+/* ledger entry field */
+"Paused since" = "Pausiert seit";
+
+/* No comment provided by engineer. */
+"Pay %@" = "Bezahlen Sie %@";
+
+/* No comment provided by engineer. */
+"Pay %@/month" = "Bezahlen Sie %@/Monat";
+
+/* No comment provided by engineer. */
+"Pay %@/year" = "Bezahlen Sie %@/Jahr";
+
+/* No comment provided by engineer. */
+"Payment failed. Update your payment method in the App Store." = "Zahlung fehlgeschlagen. Aktualisieren Sie Ihre Zahlungsmethode im App Store.";
+
+/* No comment provided by engineer. */
+"Payment problem" = "Zahlungsproblem";
 
 /* No comment provided by engineer. */
 "peer-to-peer" = "Peer-to-Peer";
@@ -4539,16 +5059,13 @@ alert button */
 "Previously connected servers" = "Bisher verbundene Server";
 
 /* No comment provided by engineer. */
-"Privacy & security" = "Datenschutz & Sicherheit";
-
-/* No comment provided by engineer. */
 "Privacy for your customers." = "Schutz der Privatsphäre Ihrer Kunden.";
 
 /* No comment provided by engineer. */
 "Privacy policy and conditions of use." = "Datenschutz- und Nutzungsbedingungen.";
 
 /* No comment provided by engineer. */
-"Privacy: for owners and subscribers." = "Privatsphäre: für Besitzer und Abonnenten.";
+"Privacy: for owners and subscribers." = "Privatsphäre: Für Eigentümer und Abonnenten.";
 
 /* No comment provided by engineer. */
 "Private and secure messaging." = "Private und sichere Kommunikation.";
@@ -4577,8 +5094,8 @@ alert button */
 /* alert title */
 "Private routing timeout" = "Zeitüberschreitung der privaten Routing-Sitzung";
 
-/* alert action */
-"Proceed" = "Fortfahren";
+/* No comment provided by engineer. */
+"Profile already has a badge" = "Dieses Profil hat bereits einen Badge";
 
 /* No comment provided by engineer. */
 "Profile and server connections" = "Profil und Serververbindungen";
@@ -4595,7 +5112,8 @@ alert button */
 /* No comment provided by engineer. */
 "Profile theme" = "Profil-Design";
 
-/* alert message */
+/* alert message
+alert title */
 "Profile update will be sent to your SimpleX contacts." = "Profil-Aktualisierung wird an Ihre SimpleX-Kontakte gesendet.";
 
 /* No comment provided by engineer. */
@@ -4644,7 +5162,7 @@ alert button */
 "Protect your chat profiles with a password!" = "Ihre Chat-Profile mit einem Passwort schützen!";
 
 /* No comment provided by engineer. */
-"Protect your IP address from the messaging relays chosen by your contacts.\nEnable in *Network & servers* settings." = "Schützen Sie Ihre IP-Adresse vor den Nachrichten-Relais, die Ihre Kontakte ausgewählt haben.\nAktivieren Sie es in den *Netzwerk & Server* Einstellungen.";
+"Protect your IP address from the messaging relays chosen by your contacts.\nEnable in *Network & servers* settings." = "Schützen Sie Ihre IP-Adresse vor den Nachrichten-Routern, die Ihre Kontakte ausgewählt haben.\nAktivieren Sie es in den *Netzwerk und Server* Einstellungen.";
 
 /* No comment provided by engineer. */
 "Protocol background timeout" = "Protokoll Hintergrund-Zeitüberschreitung";
@@ -4666,6 +5184,18 @@ alert button */
 
 /* No comment provided by engineer. */
 "Public channels - speak freely 🚀" = "Öffentliche Kanäle – frei sprechen 🚀";
+
+/* No comment provided by engineer. */
+"Public names for your channel or business." = "Öffentliche Namen für Ihren Kanal oder Ihr Unternehmen.";
+
+/* alert title */
+"Purchase error" = "Fehler beim Kauf";
+
+/* No comment provided by engineer. */
+"Purchase ID" = "Kauf-ID";
+
+/* alert message */
+"Purchases are off on this device." = "Käufe sind auf diesem Gerät deaktiviert.";
 
 /* No comment provided by engineer. */
 "Push notifications" = "Push-Benachrichtigungen";
@@ -4691,8 +5221,11 @@ alert button */
 /* swipe action */
 "Read" = "Gelesen";
 
-/* No comment provided by engineer. */
+/* profile description teaser */
 "Read more" = "Mehr erfahren";
+
+/* No comment provided by engineer. */
+"Read more in our blog." = "Mehr in unserem Blog erfahren.";
 
 /* No comment provided by engineer. */
 "Read more in our GitHub repository." = "Erfahren Sie in unserem GitHub-Repository mehr dazu.";
@@ -4770,10 +5303,22 @@ alert button */
 "Reconnect servers?" = "Die Server neu verbinden?";
 
 /* No comment provided by engineer. */
+"reconnecting…" = "Erneut verbinden…";
+
+/* No comment provided by engineer. */
 "Record updated at" = "Datensatz aktualisiert um";
 
 /* copied message info */
 "Record updated at: %@" = "Datensatz aktualisiert um: %@";
+
+/* No comment provided by engineer. */
+"Redeem" = "Einlösen";
+
+/* No comment provided by engineer. */
+"Redeem badge code" = "Badge-Code einlösen";
+
+/* No comment provided by engineer. */
+"Redeem code" = "Code einlösen";
 
 /* No comment provided by engineer. */
 "Reduced battery usage" = "Reduzierter Batterieverbrauch";
@@ -4829,13 +5374,22 @@ swipe action */
 "Relay server is only used if necessary. Another party can observe your IP address." = "Relais-Server werden nur genutzt, wenn sie benötigt werden. Ihre IP-Adresse kann von Anderen erfasst werden.";
 
 /* No comment provided by engineer. */
-"Relay server protects your IP address, but it can observe the duration of the call." = "Relais-Server schützen Ihre IP-Adresse, aber sie können die Anrufdauer erfassen.";
+"Relay server protects your IP address, but it can observe the duration of the call." = "Relais-Server schützen Ihre IP-Adresse, können aber die Anrufdauer erfassen.";
 
 /* No comment provided by engineer. */
 "Relay test failed!" = "Relais-Test fehlgeschlagen!";
 
+/* alert message */
+"Relay will be removed from channel - this cannot be undone!" = "Relais wird aus dem Kanal entfernt. Dies kann nicht rückgängig gemacht werden!";
+
+/* alert message */
+"Relays added: %@." = "Relais hinzugefügt: %@.";
+
 /* No comment provided by engineer. */
-"Reliability: many relays per channel." = "Zuverlässigkeit: mehrere Relais pro Kanal.";
+"Reliability: many relays per channel." = "Zuverlässigkeit: Mehrere Relais pro Kanal.";
+
+/* alert button */
+"Remind me later" = "Später erneut erinnern";
 
 /* alert action */
 "Remove" = "Entfernen";
@@ -4859,10 +5413,16 @@ swipe action */
 "Remove member?" = "Das Mitglied entfernen?";
 
 /* No comment provided by engineer. */
+"Remove name" = "Name entfernen";
+
+/* No comment provided by engineer. */
 "Remove passphrase from keychain?" = "Passwort aus dem Schlüsselbund entfernen?";
 
 /* No comment provided by engineer. */
-"Remove subscriber" = "Abonnent entfernen";
+"Remove relay" = "Relais entfernen";
+
+/* alert title */
+"Remove relay?" = "Relais entfernen?";
 
 /* alert title */
 "Remove subscriber?" = "Abonnent entfernen?";
@@ -4902,6 +5462,36 @@ swipe action */
 
 /* No comment provided by engineer. */
 "Renegotiate encryption?" = "Verschlüsselung neu aushandeln?";
+
+/* No comment provided by engineer. */
+"Renewing" = "Wird verlängert…";
+
+/* No comment provided by engineer. */
+"Renews %@" = "Verlängert sich am %@";
+
+/* No comment provided by engineer. */
+"Renews %@ · %@" = "Verlängert sich am %@ · %@";
+
+/* No comment provided by engineer. */
+"Renews at %@ a month until you cancel it in the App Store." = "Verlängert sich zu %@ pro Monat, bis Sie es im App Store kündigen.";
+
+/* No comment provided by engineer. */
+"Renews at %@ a year until you cancel it in the App Store." = "Verlängert sich zu %@ pro Jahr, bis Sie es im App Store kündigen.";
+
+/* No comment provided by engineer. */
+"Renews automatically until you cancel it in the App Store." = "Verlängert sich automatisch, bis Sie es im App Store kündigen.";
+
+/* No comment provided by engineer. */
+"Renews on %@ for %@." = "Verlängert sich am %@ für %@.";
+
+/* No comment provided by engineer. */
+"Renews on %@." = "Verlängert sich am %@.";
+
+/* No comment provided by engineer. */
+"Renews on %@. Cancel anytime." = "Verlängert sich am %@. Jederzeit kündbar.";
+
+/* No comment provided by engineer. */
+"Renews once the App Store charges your subscription." = "Wird verlängert, sobald der App Store die Zahlung für Ihr Abonnement einzieht.";
 
 /* No comment provided by engineer. */
 "Repeat download" = "Herunterladen wiederholen";
@@ -4964,6 +5554,9 @@ swipe action */
 "requested to connect" = "Zur Verbindung aufgefordert";
 
 /* No comment provided by engineer. */
+"Require signing messages." = "Signatur für Nachrichten erforderlich.";
+
+/* No comment provided by engineer. */
 "Required" = "Erforderlich";
 
 /* No comment provided by engineer. */
@@ -4991,6 +5584,9 @@ swipe action */
 "Reset to user theme" = "Auf das Benutzer-spezifische Design zurücksetzen";
 
 /* No comment provided by engineer. */
+"Resolver error: %@" = "Namensauflösungs-Fehler: %@";
+
+/* No comment provided by engineer. */
 "Restart the app to create a new chat profile" = "Um ein neues Chat-Profil zu erstellen, starten Sie die App neu";
 
 /* No comment provided by engineer. */
@@ -5007,6 +5603,12 @@ swipe action */
 
 /* No comment provided by engineer. */
 "Restore database error" = "Fehler bei der Wiederherstellung der Datenbank";
+
+/* alert title */
+"Restore failed" = "Wiederherstellung fehlgeschlagen";
+
+/* No comment provided by engineer. */
+"Restore purchases" = "Käufe wiederherstellen";
 
 /* alert action */
 "Retry" = "Wiederholen";
@@ -5045,6 +5647,18 @@ swipe action */
 "Role" = "Rolle";
 
 /* No comment provided by engineer. */
+"Role will be changed to \"%@\". All chat members will be notified." = "Die Rolle wird auf \"%@\" geändert. Alle Chat-Mitglieder werden darüber informiert.";
+
+/* No comment provided by engineer. */
+"Role will be changed to \"%@\". All group members will be notified." = "Die Rolle wird auf \"%@\" geändert. Alle Gruppenmitglieder werden benachrichtigt.";
+
+/* No comment provided by engineer. */
+"Role will be changed to \"%@\". All subscribers will be notified." = "Die Rolle wird auf \"%@\" geändert. Alle Abonnenten werden benachrichtigt.";
+
+/* No comment provided by engineer. */
+"Role will be changed to \"%@\". The member will receive a new invitation." = "Die Rolle wird auf \"%@\" geändert. Das Mitglied wird eine neue Einladung erhalten.";
+
+/* No comment provided by engineer. */
 "Run chat" = "Chat starten";
 
 /* No comment provided by engineer. */
@@ -5054,9 +5668,19 @@ swipe action */
 "Safely receive files" = "Dateien sicher herunterladen";
 
 /* No comment provided by engineer. */
+"Safer channels" = "Sicherere Kanäle";
+
+/* No comment provided by engineer. */
 "Safer groups" = "Sicherere Gruppen";
 
-/* alert button
+/* No comment provided by engineer. */
+"Sale starts on December 12." = "Der Verkauf startet am 12. Dezember.";
+
+/* alert title */
+"Sandbox purchase" = "Test-Kauf";
+
+/* alert action
+alert button
 chat item action */
 "Save" = "Speichern";
 
@@ -5077,6 +5701,9 @@ chat item action */
 
 /* No comment provided by engineer. */
 "Save and notify group members" = "Speichern und Gruppenmitglieder benachrichtigen";
+
+/* No comment provided by engineer. */
+"Save and notify members" = "Speichern und Mitglieder benachrichtigen";
 
 /* No comment provided by engineer. */
 "Save and notify subscribers" = "Speichern und Abonnenten benachrichtigen";
@@ -5120,6 +5747,12 @@ chat item action */
 /* alert title */
 "Save servers?" = "Alle Server speichern?";
 
+/* alert title */
+"Save SimpleX name?" = "SimpleX-Name speichern?";
+
+/* alert title */
+"Save webpage settings?" = "Webseiten-Einstellungen sichern?";
+
 /* No comment provided by engineer. */
 "Save welcome message?" = "Begrüßungsmeldung speichern?";
 
@@ -5133,10 +5766,10 @@ chat item action */
 "Saved" = "Abgespeichert";
 
 /* No comment provided by engineer. */
-"Saved from" = "Abgespeichert von";
+"saved from" = "abgespeichert von";
 
 /* No comment provided by engineer. */
-"saved from %@" = "abgespeichert von %@";
+"Saved from" = "Abgespeichert von";
 
 /* message info title */
 "Saved message" = "Gespeicherte Nachricht";
@@ -5223,7 +5856,7 @@ chat item action */
 "security code changed" = "Sicherheitscode wurde geändert";
 
 /* No comment provided by engineer. */
-"Security: owners hold channel keys." = "Sicherheit: Eigentümer besitzen die Kanalschlüssel.";
+"Security: owners hold channel keys." = "Sicherheit: Nur die Eigentümer des Kanals besitzen die Schlüssel.";
 
 /* chat item action */
 "Select" = "Auswählen";
@@ -5280,10 +5913,10 @@ chat item action */
 "Send message to enable calls." = "Nachricht senden, um Anrufe zu aktivieren.";
 
 /* No comment provided by engineer. */
-"Send messages directly when IP address is protected and your or destination server does not support private routing." = "Nachrichten werden direkt versendet, wenn die IP-Adresse geschützt ist, und Ihr oder der Zielserver kein privates Routing unterstützt.";
+"Send messages directly when IP address is protected and your or destination server does not support private routing." = "Nachrichten werden direkt versendet, wenn die IP-Adresse geschützt ist, und Ihr oder der Ziel-Server kein privates Routing unterstützt.";
 
 /* No comment provided by engineer. */
-"Send messages directly when your or destination server does not support private routing." = "Nachrichten werden direkt versendet, wenn Ihr oder der Zielserver kein privates Routing unterstützt.";
+"Send messages directly when your or destination server does not support private routing." = "Nachrichten werden direkt versendet, wenn Ihr oder der Ziel-Server kein privates Routing unterstützt.";
 
 /* No comment provided by engineer. */
 "Send notifications" = "Benachrichtigungen senden";
@@ -5320,9 +5953,6 @@ chat item action */
 
 /* alert message */
 "Sender cancelled file transfer." = "Der Absender hat die Dateiübertragung abgebrochen.";
-
-/* No comment provided by engineer. */
-"Sender may have deleted the connection request." = "Der Absender hat möglicherweise die Verbindungsanfrage gelöscht.";
 
 /* alert message */
 "Sending a link preview may reveal your IP address to the website. You can change this in Privacy settings later." = "Das Senden einer Link-Vorschau kann Ihre IP‑Adresse an die Website übermitteln. Sie können dies später in den Datenschutzeinstellungen ändern.";
@@ -5381,6 +6011,12 @@ chat item action */
 /* No comment provided by engineer. */
 "Server" = "Server";
 
+/* No comment provided by engineer. */
+"Server %@ does not support name resolution. Configure servers, or use a connection link." = "Der Server %@ unterstützt keine Namensauflösung. Konfigurieren Sie Server oder verwenden Sie einen Verbindungslink.";
+
+/* servers error */
+"Server %@ has more than two host names." = "Der Server %@ hat mehr als zwei Hostnamen.";
+
 /* alert message */
 "Server added to operator %@." = "Der Server wurde dem Betreiber %@ hinzugefügt.";
 
@@ -5406,7 +6042,7 @@ chat item action */
 "server queue info: %@\n\nlast received msg: %@" = "Server-Warteschlangen-Information: %1$@\n\nZuletzt empfangene Nachricht: %2$@";
 
 /* relay test error */
-"Server requires authorization to connect to relay, check password." = "Der Server erfordert eine Autorisierung, um eine Verbindung zum Relais herzustellen. Bitte Passwort überprüfen.";
+"Server requires authorization to connect to relay, check password." = "Der Server erfordert eine Autorisierung, um eine Verbindung zum Router herzustellen. Bitte Passwort überprüfen.";
 
 /* server test error */
 "Server requires authorization to create queues, check password." = "Der Server erfordert zum Erstellen von Warteschlangen eine Autorisierung. Bitte überprüfen Sie das Passwort.";
@@ -5539,7 +6175,7 @@ chat item action */
 "Share profile" = "Profil teilen";
 
 /* No comment provided by engineer. */
-"Share relay address" = "Relais-Adresse teilen";
+"Share relay address" = "Router-Adresse teilen";
 
 /* No comment provided by engineer. */
 "Share SimpleX address on social media." = "Die SimpleX-Adresse auf sozialen Medien teilen.";
@@ -5578,6 +6214,9 @@ chat item action */
 "Show developer options" = "Entwickleroptionen anzeigen";
 
 /* No comment provided by engineer. */
+"Show encryption" = "Verschlüsselung anzeigen";
+
+/* No comment provided by engineer. */
 "Show last messages" = "Letzte Nachrichten anzeigen";
 
 /* No comment provided by engineer. */
@@ -5594,6 +6233,28 @@ chat item action */
 
 /* No comment provided by engineer. */
 "Show:" = "Anzeigen:";
+
+/* No comment provided by engineer. */
+"shown on your profile" = "Sichtbar auf Ihrem Profil";
+
+/* No comment provided by engineer. */
+"Sign message" = "Nachricht signieren";
+
+/* chat feature */
+"Sign messages" = "Nachrichten signieren";
+
+/* alert title
+copied message info */
+"Signature missing" = "Signatur fehlt";
+
+/* copied message info */
+"Signed" = "Signiert";
+
+/* copied message info */
+"Signed & verified" = "Signiert und verifiziert";
+
+/* No comment provided by engineer. */
+"Signing proves you authored this message and can't be denied later." = "Die Signatur bestätigt, dass Sie diese Nachricht verfasst haben und sie später nicht abstreiten können.";
 
 /* No comment provided by engineer. */
 "SimpleX" = "SimpleX";
@@ -5652,17 +6313,38 @@ chat item action */
 /* No comment provided by engineer. */
 "SimpleX Lock turned on" = "SimpleX-Sperre aktiviert";
 
+/* No comment provided by engineer. */
+"SimpleX name" = "SimpleX-Name";
+
+/* No comment provided by engineer. */
+"SimpleX name error" = "Fehler beim SimpleX-Namen";
+
+/* alert title */
+"SimpleX name not verified" = "SimpleX-Name ist nicht verifiziert";
+
+/* No comment provided by engineer. */
+"SimpleX name sale starts in" = "Der Verkauf von SimpleX-Namen startet in";
+
 /* simplex link type */
 "SimpleX one-time invitation" = "SimpleX-Einmal-Einladung";
 
 /* No comment provided by engineer. */
 "SimpleX protocols reviewed by Trail of Bits." = "Die SimpleX-Protokolle wurden von Trail of Bits überprüft.";
 
+/* No comment provided by engineer. */
+"SimpleX public names" = "Öffentliche SimpleX-Namen";
+
+/* No comment provided by engineer. */
+"SimpleX public names (BETA)" = "Öffentliche SimpleX-Namen (BETA)";
+
 /* simplex link type */
 "SimpleX relay address" = "SimpleX Relais-Adresse";
 
 /* No comment provided by engineer. */
 "Simplified incognito mode" = "Vereinfachter Inkognito-Modus";
+
+/* No comment provided by engineer. */
+"Since" = "Seit";
 
 /* No comment provided by engineer. */
 "Size" = "Größe";
@@ -5735,10 +6417,16 @@ report reason */
 "Statistics" = "Statistiken";
 
 /* No comment provided by engineer. */
+"Status" = "Status";
+
+/* No comment provided by engineer. */
 "Stop" = "Beenden";
 
 /* No comment provided by engineer. */
 "Stop chat" = "Chat beenden";
+
+/* No comment provided by engineer. */
+"Stop chat in Settings → Chat data → Database passphrase & export to delete temp data." = "Beenden Sie den Chat unter Einstellungen → Chatdaten → Datenbank-Passwort & Export, um temporäre Daten zu löschen.";
 
 /* No comment provided by engineer. */
 "Stop chat to export, import or delete chat database. You will not be able to receive and send messages while the chat is stopped." = "Beenden Sie den Chat, um die Chat-Datenbank zu exportieren, zu importieren oder zu löschen. Solange der Chat angehalten ist, können Sie keine Nachrichten empfangen oder senden.";
@@ -5771,6 +6459,12 @@ report reason */
 "Storage" = "Ablage";
 
 /* No comment provided by engineer. */
+"Stored for 7 days" = "Für 7 Tage gespeichert";
+
+/* No comment provided by engineer. */
+"Stored for 21 days" = "Für 21 Tage gespeichert";
+
+/* No comment provided by engineer. */
 "strike" = "durchstreichen";
 
 /* blur media */
@@ -5781,6 +6475,12 @@ report reason */
 
 /* No comment provided by engineer. */
 "Subscribed" = "Abonniert";
+
+/* alert message */
+"Subscribed on another profile." = "Auf einem anderen Profil abonniert.";
+
+/* member role */
+"subscriber" = "Abonnent";
 
 /* No comment provided by engineer. */
 "Subscriber" = "Abonnent";
@@ -5825,13 +6525,44 @@ report reason */
 "Subscribers use relay link to connect to the channel.\nRelay address was used to set up this relay for the channel." = "Abonnenten verbinden sich über den Relais‑Link mit dem Kanal.\nDie Relais-Adresse wurde zur Einrichtung dieses Relais für diesen Kanal verwendet.";
 
 /* No comment provided by engineer. */
+"Subscription" = "Abonnement";
+
+/* alert title */
+"Subscription cancelled" = "Abonnement gekündigt";
+
+/* No comment provided by engineer. */
+"Subscription ended. The badge will be removed." = "Abonnement beendet. Der Badge wird entfernt.";
+
+/* No comment provided by engineer. */
 "Subscription errors" = "Fehler beim Abonnieren";
 
 /* No comment provided by engineer. */
 "Subscriptions ignored" = "Nicht beachtete Abonnements";
 
+/* alert button
+alert title */
+"Support SimpleX" = "SimpleX unterstützen";
+
 /* No comment provided by engineer. */
-"Support SimpleX Chat" = "Unterstützung von SimpleX Chat";
+"Support SimpleX and get a badge." = "Unterstützen Sie SimpleX und erhalten Sie einen Badge.";
+
+/* No comment provided by engineer. */
+"Support SimpleX to send larger files that stay available longer" = "Unterstützen Sie SimpleX, um größere Dateien zu senden, die länger verfügbar bleiben";
+
+/* No comment provided by engineer. */
+"Support the project" = "Unterstützen Sie das Projekt";
+
+/* badge type */
+"Supporter" = "Unterstützer";
+
+/* badge required to send a large file */
+"supporter badge" = "Unterstützer-Badge";
+
+/* No comment provided by engineer. */
+"Supporter badges" = "Unterstützer-Badges";
+
+/* No comment provided by engineer. */
+"Supporter: 2 GB files available for 7 days." = "Unterstützer: Dateien bis 2 GB sind 7 Tage lang verfügbar.";
 
 /* No comment provided by engineer. */
 "Switch audio and video during the call." = "Während des Anrufs zwischen Audio und Video wechseln";
@@ -5940,10 +6671,10 @@ server test failure */
 "Thank you for installing SimpleX Chat!" = "Vielen Dank, dass Sie SimpleX Chat installiert haben!";
 
 /* No comment provided by engineer. */
-"Thanks to the users – [contribute via Weblate](https://github.com/simplex-chat/simplex-chat/tree/stable#help-translating-simplex-chat)!" = "Dank der Nutzer - [Tragen Sie per Weblate bei](https://github.com/simplex-chat/simplex-chat/tree/stable#help-translating-simplex-chat)!";
+"Thanks to the users – [contribute via Weblate](https://github.com/simplex-chat/simplex-chat/tree/stable#help-translating-simplex-chat)!" = "Dank der Nutzer - [Wirken Sie per Weblate mit](https://github.com/simplex-chat/simplex-chat/tree/stable#help-translating-simplex-chat)!";
 
 /* No comment provided by engineer. */
-"Thanks to the users – contribute via Weblate!" = "Dank der Nutzer - Tragen Sie per Weblate bei!";
+"Thanks to the users – contribute via Weblate!" = "Dank der Nutzer - Wirken Sie per Weblate mit!";
 
 /* alert message */
 "The address will be short, and your profile will be shared via the address." = "Die Adresse wird gekürzt sein, und Ihr Profil wird über die Adresse geteilt.";
@@ -5962,6 +6693,48 @@ server test failure */
 
 /* No comment provided by engineer. */
 "The attempt to change database passphrase was not completed." = "Die Änderung des Datenbank-Passworts konnte nicht abgeschlossen werden.";
+
+/* badge alert */
+"The badge is signed with a key that this version of the app does not recognize. Update the app to verify this badge." = "Der Badge ist mit einem Schlüssel signiert, den diese App‑Version nicht erkennt. Aktualisieren Sie die App, um diesen Badge zu verifizieren.";
+
+/* badge renewal error */
+"The badge issued by the service cannot be verified." = "Der vom Dienst ausgestellte Badge kann nicht verifiziert werden.";
+
+/* badge renewal error */
+"The badge service could not be reached." = "Der Badge-Dienst konnte nicht erreicht werden.";
+
+/* badge renewal error */
+"The badge service did not respond." = "Der Badge-Dienst hat nicht geantwortet.";
+
+/* alert message */
+"The badge service does not recognize this badge." = "Der Badge-Dienst erkennt diesen Badge nicht.";
+
+/* badge purchase error */
+"The badge service refused the purchase: %@" = "Der Badge-Dienst hat den Kauf abgelehnt: %@";
+
+/* badge renewal error */
+"The badge service refused the renewal: %@" = "Der Badge-Dienst hat die Verlängerung abgelehnt: %@";
+
+/* alert message */
+"The badge service reported an internal error." = "Der Badge-Dienst hat einen internen Fehler gemeldet.";
+
+/* alert message */
+"The badge service sent an unexpected response: %@" = "Der Badge-Dienst hat eine unerwartete Antwort gesendet: %@";
+
+/* alert message */
+"The badge was added to the profile %@." = "Der Badge wurde dem Profil %@ hinzugefügt.";
+
+/* badge link confirmation */
+"The badge will be added to the profile %@." = "Der Badge wird dem Profil %@ hinzugefügt.";
+
+/* badge link, being issued */
+"The badge will be added to this profile." = "Der Badge wird diesem Profil hinzugefügt.";
+
+/* alert message */
+"The code was accepted, but the badge it grants has already ended." = "Der Code wurde akzeptiert, aber der zugehörige Badge ist bereits abgelaufen.";
+
+/* alert message */
+"The code you scanned is not a badge code." = "Der eingescannte Code ist kein Badge-Code.";
 
 /* No comment provided by engineer. */
 "The code you scanned is not a SimpleX link QR code." = "Der von Ihnen gescannte Code ist kein SimpleX-Link-QR-Code.";
@@ -6014,6 +6787,9 @@ server test failure */
 /* No comment provided by engineer. */
 "The oldest human freedom - to speak to another person without being watched - built on infrastructure that cannot betray it." = "Die älteste Freiheit des Menschen - mit einem anderen Menschen sprechen zu können, ohne beobachtet zu werden - gestützt auf einer Infrastruktur, die Sie nicht verraten kann.";
 
+/* alert message */
+"The payment has not been confirmed yet." = "Die Zahlung wurde noch nicht bestätigt.";
+
 /* No comment provided by engineer. */
 "The same conditions will apply to operator **%@**." = "Dieselben Nutzungsbedingungen gelten auch für den Betreiber **%@**.";
 
@@ -6023,6 +6799,9 @@ server test failure */
 /* No comment provided by engineer. */
 "The second tick we missed! ✅" = "Wir haben das zweite Häkchen vermisst! ✅";
 
+/* No comment provided by engineer. */
+"The sender deleted the connection request." = "Der Absender hat die Verbindungsanfrage gelöscht.";
+
 /* alert message */
 "The sender will NOT be notified" = "Der Absender wird NICHT benachrichtigt";
 
@@ -6031,6 +6810,30 @@ server test failure */
 
 /* No comment provided by engineer. */
 "The servers for new files of your current chat profile **%@**." = "Medien- und Datei-Server für neue Daten über Ihr aktuelles Chat-Profil **%@**.";
+
+/* alert message */
+"The service did not respond. Please try again." = "Der Dienst hat nicht geantwortet. Bitte versuchen Sie es erneut.";
+
+/* alert message */
+"The SimpleX name @%@ is registered without SimpleX address. Add your SimpleX address to the name via the registration page." = "Der SimpleX‑Name @%@ wurde ohne SimpleX-Adresse registriert. Fügen Sie die SimpleX-Adresse über die Registrierungsseite hinzu.";
+
+/* alert message */
+"The SimpleX name #%@ is registered without channel link. Add channel link to the name via the registration page." = "Der SimpleX‑Name #%@ wurde ohne Kanal‑Link registriert. Fügen Sie den Kanal‑Link über die Registrierungsseite hinzu.";
+
+/* No comment provided by engineer. */
+"The SimpleX name %@ is registered, but it has no valid link." = "Der SimpleX-Name %@ wurde registriert, hat aber keinen gültigen Link.";
+
+/* No comment provided by engineer. */
+"The SimpleX name %@ is registered, but not added to profile. Please add it to your address or channel profile, if you are the owner." = "Der SimpleX‑Name %@ wurde registriert, jedoch nicht in Ihrem Profil hinterlegt. Bitte fügen Sie ihn zu Ihrer Adresse oder zum Kanalprofil hinzu, sofern Sie der Besitzer sind.";
+
+/* alert message */
+"The store could not be reached." = "Der Store konnte nicht erreicht werden.";
+
+/* No comment provided by engineer. */
+"The store could not charge your payment method." = "Der Store konnte Ihre Zahlungsmethode nicht belasten.";
+
+/* alert message */
+"The store did not confirm this purchase." = "Der Store hat diesen Kauf nicht bestätigt.";
 
 /* No comment provided by engineer. */
 "The text you pasted is not a SimpleX link." = "Der von Ihnen eingefügte Text ist kein SimpleX-Link.";
@@ -6045,7 +6848,7 @@ server test failure */
 "Then we moved online, and every platform asked for a piece of you - your name, your number, your friends. We accepted that the price of talking to others is letting someone know who we talk to. Every generation, people and tech, had it this way - telephone, email, messengers, social media. It seemed the only way possible." = "Dann sind wir online gegangen, und jede Plattform wollte Etwas von Ihnen - Ihren Namen, Ihre Nummer, Ihre Freunde. Wir akzeptierten, dass es der Preis mit Anderen zu kommunizieren ist, Jemandem preiszugeben, mit wem und wie wir miteinander kommunizieren. Jede Generation, Menschen und Technologien, kannten es nur so - Telefon, E-Mail, Messenger, soziale Medien. Es schien der einzig mögliche Weg zu sein.";
 
 /* No comment provided by engineer. */
-"There is another way. A network with no phone numbers. No usernames. No accounts. No user identities of any kind. A network that connects people and carries encrypted messages without knowing who is connected." = "Es gibt einen anderen Weg. Ein Netzwerk ohne Telefonnummern, ohne Benutzernamen, ohne Benutzerkennungen und ohne jegliche Benutzeridentität. Ein Netzwerk, welches Menschen verbindet und verschlüsselte Nachrichten überträgt, ohne zu wissen, wer mit wem verbunden ist.";
+"There is another way. A network with no phone numbers. No usernames. No accounts. No user identities of any kind. A network that connects people and carries encrypted messages without knowing who is connected." = "Es gibt einen anderen Weg. Ein Netzwerk ohne Telefonnummern, ohne Benutzerkonten, ohne Benutzerkennungen und ohne jegliche Benutzeridentität. Ein Netzwerk, welches Menschen verbindet und verschlüsselte Nachrichten überträgt, ohne zu wissen, wer mit wem verbunden ist.";
 
 /* No comment provided by engineer. */
 "These conditions will also apply for: **%@**." = "Diese Nutzungsbedingungen gelten auch für: **%@**.";
@@ -6066,13 +6869,40 @@ server test failure */
 "This action cannot be undone - the messages sent and received in this chat earlier than selected will be deleted." = "Dieser Vorgang kann nicht rückgängig gemacht werden - die in diesem Chat früher als ausgewählt gesendeten und empfangenen Nachrichten werden gelöscht.";
 
 /* No comment provided by engineer. */
-"This action cannot be undone - your profile, contacts, messages and files will be irreversibly lost." = "Ihr Profil, Ihre Kontakte, Nachrichten und Dateien gehen unwiderruflich verloren. Diese Aktion kann nicht rückgängig gemacht werden!";
+"This action cannot be undone - your profile, contacts, messages and files will be irreversibly lost." = "Ihr Profil, Ihre Kontakte, Nachrichten und Dateien gehen unwiderruflich verloren. Diese Aktion kann nicht rückgängig gemacht werden.";
+
+/* alert message */
+"This app version cannot buy badges." = "Diese App-Version kann keine Badges kaufen.";
+
+/* alert message */
+"This app version cannot redeem badge codes." = "Diese App-Version kann keine Badge-Codes einlösen.";
+
+/* alert message */
+"This app version cannot verify this badge. Please update the app." = "Diese App-Version kann diesen Badge nicht überprüfen. Bitte aktualisieren Sie die App.";
+
+/* badge alert */
+"This badge could not be verified and may not be genuine." = "Dieser Badge konnte nicht verifiziert werden und ist möglicherweise nicht echt.";
+
+/* alert message */
+"This badge is not on sale." = "Dieser Badge steht nicht zum Verkauf.";
 
 /* E2EE info chat item */
 "This chat is protected by end-to-end encryption." = "Dieser Chat ist durch Ende-zu-Ende-Verschlüsselung geschützt.";
 
 /* E2EE info chat item */
 "This chat is protected by quantum resistant end-to-end encryption." = "Dieser Chat ist durch Quantum-resistente Ende-zu-Ende-Verschlüsselung geschützt.";
+
+/* alert message */
+"This code has already been used." = "Dieser Code wurde bereits verwendet.";
+
+/* alert message */
+"This code has expired." = "Dieser Code ist abgelaufen.";
+
+/* alert message */
+"This code is not valid." = "Dieser Code ist nicht gültig.";
+
+/* alert message */
+"This code was not recognized." = "Dieser Code wurde nicht erkannt.";
 
 /* notification title */
 "this contact" = "Dieser Kontakt";
@@ -6084,13 +6914,23 @@ server test failure */
 "This display name is invalid. Please choose another name." = "Der Anzeigename ist ungültig. Bitte wählen Sie einen anderen Namen.";
 
 /* No comment provided by engineer. */
+"This file has text direction characters. The text can be shown in a different order than it is written." = "Diese Datei enthält Zeichen zur Steuerung der Textrichtung. Dadurch kann der Text in einer anderen Reihenfolge angezeigt werden, als er geschrieben wurde.";
+
+/* No comment provided by engineer. */
 "This group has over %lld members, delivery receipts are not sent." = "Es werden keine Empfangsbestätigungen gesendet, da diese Gruppe über %lld Mitglieder hat.";
 
 /* No comment provided by engineer. */
 "This group no longer exists." = "Diese Gruppe existiert nicht mehr.";
 
+/* alert message
+alert subtitle */
+"This group requires a newer version of the app. Please update the app to join." = "Diese Gruppe erfordert eine neuere App‑Version. Bitte aktualisieren Sie die App, um beizutreten.";
+
 /* alert message */
 "This is a chat relay address, it cannot be used to connect." = "Dies ist eine Chat‑Relais-Adresse, welche nicht zum Verbinden verwendet werden kann.";
+
+/* alert message */
+"This is the last active relay. Removing it will prevent message delivery to subscribers." = "Dies ist das letzte aktive Relais. Wenn Sie es entfernen, können keine Nachrichten mehr an Abonnenten zugestellt werden.";
 
 /* new chat action */
 "This is your link for channel %@!" = "Dies ist Ihr Link für den Kanal %@!";
@@ -6104,11 +6944,20 @@ server test failure */
 /* No comment provided by engineer. */
 "This message was deleted or not received yet." = "Diese Nachricht wurde gelöscht oder bisher noch nicht empfangen.";
 
+/* alert message */
+"This profile already has a badge." = "Dieses Profil hat bereits einen Badge.";
+
+/* alert message */
+"This purchase is already used on another profile." = "Dieser Kauf wird bereits auf einem anderen Profil verwendet.";
+
+/* alert message */
+"This purchase was moved to another device or profile recently." = "Dieser Kauf wurde kürzlich auf ein anderes Gerät oder Profil übertragen.";
+
 /* No comment provided by engineer. */
 "This setting applies to messages in your current chat profile **%@**." = "Diese Einstellung gilt für Nachrichten in Ihrem aktuellen Chat-Profil **%@**.";
 
 /* No comment provided by engineer. */
-"This setting is for your current profile **%@**." = "Diese Einstellung gilt für Ihr aktuelles Profil **%@**.";
+"This SimpleX name is not registered. Please check the name." = "Dieser SimpleX-Name wurde nicht registriert. Bitte überprüfen Sie den Namen.";
 
 /* No comment provided by engineer. */
 "Time to disappear is set only for new contacts." = "Die Zeit bis zum Verschwinden wird nur für neue Kontakte eingestellt.";
@@ -6141,10 +6990,16 @@ server test failure */
 "To protect your information, turn on SimpleX Lock.\nYou will be prompted to complete authentication before this feature is enabled." = "Um Ihre Informationen zu schützen, schalten Sie die SimpleX-Sperre ein.\nSie werden aufgefordert, die Authentifizierung abzuschließen, bevor diese Funktion aktiviert wird.";
 
 /* No comment provided by engineer. */
-"To protect your IP address, private routing uses your SMP servers to deliver messages." = "Zum Schutz Ihrer IP-Adresse, wird für die Nachrichten-Auslieferung privates Routing über Ihre konfigurierten SMP-Server genutzt.";
+"To protect your IP address, private routing uses your SMP servers to deliver messages." = "Zum Schutz Ihrer IP-Adresse, wird für die Nachrichten-Auslieferung privates Routing über Ihre konfigurierten SMP-Router genutzt.";
 
 /* No comment provided by engineer. */
 "To protect your privacy, SimpleX uses separate IDs for each of your contacts." = "Zum Schutz Ihrer Privatsphäre verwendet SimpleX an Stelle von Benutzerkennungen, die von allen anderen Plattformen verwendet werden, Kennungen für Nachrichtenwarteschlangen, die für jeden Ihrer Kontakte individuell sind.";
+
+/* No comment provided by engineer. */
+"To prove to a contact or a server that you have a badge, the app generates a new proof that reveals only the badge type and the expiry date, rounded to a week." = "Um einem Kontakt oder Server nachzuweisen, dass Sie einen Badge besitzen, erzeugt die App einen neuen Nachweis, der nur den Badge-Typ und das auf eine Woche gerundete Ablaufdatum offenlegt.";
+
+/* ledger entry field */
+"To purchase key" = "Zum Einkaufs-Schlüssel";
 
 /* No comment provided by engineer. */
 "To receive" = "Für den Empfang";
@@ -6157,6 +7012,9 @@ server test failure */
 
 /* No comment provided by engineer. */
 "To record voice message please grant permission to use Microphone." = "Bitte erlauben Sie die Nutzung des Mikrofons, um Sprachnachrichten aufnehmen zu können.";
+
+/* No comment provided by engineer. */
+"To resolve names" = "Für Namensauflösung";
 
 /* No comment provided by engineer. */
 "To reveal your hidden profile, enter a full password into a search field in **Your chat profiles** page." = "Geben Sie ein vollständiges Passwort in das Suchfeld auf der Seite **Ihre Chat-Profile** ein, um Ihr verborgenes Profil zu sehen.";
@@ -6180,10 +7038,16 @@ server test failure */
 "To verify end-to-end encryption with your contact compare (or scan) the code on your devices." = "Um die Ende-zu-Ende-Verschlüsselung mit Ihrem Kontakt zu überprüfen, müssen Sie den Sicherheitscode in Ihren Apps vergleichen oder scannen.";
 
 /* No comment provided by engineer. */
+"To verify keys with this subscriber, compare (or scan) the code on your devices." = "Für die Überprüfung der Schlüssel mit diesem Abonnenten vergleichen oder scannen Sie den Code auf Ihren Geräten.";
+
+/* No comment provided by engineer. */
 "Toggle incognito when connecting." = "Inkognito beim Verbinden einschalten.";
 
 /* token status */
 "Token status: %@." = "Token-Status: %@.";
+
+/* alert message */
+"Too many attempts. Please try again later." = "Zu viele Versuche. Bitte versuchen Sie es später erneut.";
 
 /* No comment provided by engineer. */
 "Toolbar opacity" = "Deckkraft der Symbolleiste";
@@ -6237,7 +7101,13 @@ server test failure */
 "unblocked %@" = "hat %@ freigegeben";
 
 /* No comment provided by engineer. */
+"Unconfirmed name" = "Unbestätigter Name";
+
+/* No comment provided by engineer. */
 "Undelivered messages" = "Nicht ausgelieferte Nachrichten";
+
+/* badge renewal error */
+"Unexpected error: %@" = "Unerwarteter Fehler: %@";
 
 /* No comment provided by engineer. */
 "Unexpected migration state" = "Unerwarteter Migrationsstatus";
@@ -6270,7 +7140,7 @@ server test failure */
 "Unknown error" = "Unbekannter Fehler";
 
 /* No comment provided by engineer. */
-"unknown servers" = "Unbekannte Relais";
+"unknown servers" = "Unbekannte Server";
 
 /* alert title */
 "Unknown servers!" = "Unbekannte Server!";
@@ -6280,9 +7150,6 @@ server test failure */
 
 /* No comment provided by engineer. */
 "Unless you use iOS call interface, enable Do Not Disturb mode to avoid interruptions." = "Aktivieren Sie den Modus \"Bitte nicht stören\", um Unterbrechungen zu vermeiden, es sei denn, Sie verwenden die iOS Anrufschnittstelle.";
-
-/* No comment provided by engineer. */
-"Unless your contact deleted the connection or this link was already used, it might be a bug - please report it.\nTo connect, please ask your contact to create another connection link and check that you have a stable network connection." = "Entweder hat Ihr Kontakt die Verbindung gelöscht, oder dieser Link wurde bereits verwendet, es könnte sich um einen Fehler handeln - Bitte melden Sie es uns.\nBitten Sie Ihren Kontakt darum einen weiteren Verbindungs-Link zu erzeugen, um sich neu verbinden zu können und stellen Sie sicher, dass Sie eine stabile Netzwerk-Verbindung haben.";
 
 /* No comment provided by engineer. */
 "Unlink" = "Entkoppeln";
@@ -6309,6 +7176,12 @@ server test failure */
 "Unsupported connection link" = "Verbindungs-Link wird nicht unterstützt";
 
 /* No comment provided by engineer. */
+"until you can register a SimpleX domain" = "bis Sie eine SimpleX-Domain registrieren können";
+
+/* badge alert title */
+"Unverified badge" = "Badge nicht verifiziert";
+
+/* No comment provided by engineer. */
 "Up to 100 last messages are sent to new members." = "Bis zu 100 der letzten Nachrichten werden an neue Mitglieder gesendet.";
 
 /* No comment provided by engineer. */
@@ -6325,6 +7198,15 @@ server test failure */
 
 /* No comment provided by engineer. */
 "Update settings?" = "Einstellungen aktualisieren?";
+
+/* No comment provided by engineer. */
+"Update the app to open this link." = "Aktualisieren Sie die App, um diesen Link zu öffnen.";
+
+/* No comment provided by engineer. */
+"Update the app to register a SimpleX domain" = "Aktualisieren Sie die App, um eine SimpleX-Domain registrieren zu können";
+
+/* alert message */
+"Update the app to use badges." = "Aktualisieren Sie die App, um Badges zu verwenden.";
 
 /* rcv group event chat item */
 "updated channel profile" = "Kanalprofil aktualisiert";
@@ -6347,7 +7229,8 @@ server test failure */
 /* No comment provided by engineer. */
 "Upgrade address" = "Adresse aktualisieren";
 
-/* alert message */
+/* alert message
+alert title */
 "Upgrade address?" = "Adresse aktualisieren?";
 
 /* No comment provided by engineer. */
@@ -6417,10 +7300,10 @@ server test failure */
 "Use only local notifications?" = "Nur lokale Benachrichtigungen nutzen?";
 
 /* No comment provided by engineer. */
-"Use private routing with unknown servers when IP address is not protected." = "Sie nutzen privates Routing mit unbekannten Servern, wenn Ihre IP-Adresse nicht geschützt ist.";
+"Use private routing with unknown servers when IP address is not protected." = "Bei unbekannten Servern privates Routing nutzen, wenn Ihre IP-Adresse nicht geschützt ist.";
 
 /* No comment provided by engineer. */
-"Use private routing with unknown servers." = "Sie nutzen privates Routing mit unbekannten Servern.";
+"Use private routing with unknown servers." = "Bei unbekannten Servern privates Routing nutzen.";
 
 /* No comment provided by engineer. */
 "Use relay" = "Relais verwenden";
@@ -6456,6 +7339,9 @@ server test failure */
 "Use web port" = "Web-Port nutzen";
 
 /* No comment provided by engineer. */
+"Used chat relays do not support webpages." = "Die verwendeten Chat‑Relais unterstützen keine Webseiten.";
+
+/* No comment provided by engineer. */
 "User selection" = "Benutzer-Auswahl";
 
 /* No comment provided by engineer. */
@@ -6466,9 +7352,6 @@ server test failure */
 
 /* No comment provided by engineer. */
 "v%@" = "v%@";
-
-/* No comment provided by engineer. */
-"v%@ (%@)" = "v%@ (%@)";
 
 /* relay test step */
 "Verify" = "Überprüfen";
@@ -6489,10 +7372,16 @@ server test failure */
 "Verify database passphrase" = "Überprüfen Sie das Datenbank-Passwort";
 
 /* No comment provided by engineer. */
+"Verify name" = "Name überprüfen";
+
+/* No comment provided by engineer. */
 "Verify passphrase" = "Überprüfen Sie das Passwort";
 
 /* No comment provided by engineer. */
 "Verify security code" = "Sicherheitscode überprüfen";
+
+/* No comment provided by engineer. */
+"Verify SimpleX names" = "SimpleX-Namen überprüfen";
 
 /* relay hostname */
 "via %@" = "via %@";
@@ -6545,6 +7434,9 @@ server test failure */
 /* No comment provided by engineer. */
 "View updated conditions" = "Aktualisierte Nutzungsbedingungen anschauen";
 
+/* No comment provided by engineer. */
+"View your badge" = "Ihren Badge anzeigen";
+
 /* chat feature */
 "Visible history" = "Sichtbarer Nachrichtenverlauf";
 
@@ -6574,6 +7466,9 @@ server test failure */
 
 /* No comment provided by engineer. */
 "waiting for answer…" = "Warten auf Antwort…";
+
+/* No comment provided by engineer. */
+"Waiting for approval" = "Warten auf Bestätigung";
 
 /* No comment provided by engineer. */
 "Waiting for channel owner to add relays." = "Warte auf das Hinzufügen von Relais durch den Eigentümer des Kanals.";
@@ -6610,6 +7505,12 @@ server test failure */
 
 /* No comment provided by engineer. */
 "We made connecting simpler for new users." = "Wir haben das Verbinden für neue Nutzer vereinfacht.";
+
+/* No comment provided by engineer. */
+"Webpage code" = "Webseiten-Code";
+
+/* alert message */
+"Webpage settings were changed. If you save, the updated settings will be sent to subscribers." = "Die Webseiten-Einstellungen wurden geändert. Wenn Sie sie abspeichern, werden die aktualisierten Einstellungen an die Abonnenten gesendet.";
 
 /* No comment provided by engineer. */
 "WebRTC ICE servers" = "WebRTC ICE-Server";
@@ -6672,7 +7573,7 @@ server test failure */
 "Without Tor or VPN, your IP address will be visible to file servers." = "Ohne Tor- oder VPN-Nutzung wird Ihre IP-Adresse für Datei-Server sichtbar sein.";
 
 /* alert message */
-"Without Tor or VPN, your IP address will be visible to these XFTP relays: %@." = "Ohne Tor- oder VPN-Nutzung wird Ihre IP-Adresse für diese XFTP-Relais sichtbar sein: %@.";
+"Without Tor or VPN, your IP address will be visible to these XFTP relays: %@." = "Ohne Tor- oder VPN-Nutzung wird Ihre IP-Adresse für diese XFTP-Router sichtbar sein: %@.";
 
 /* No comment provided by engineer. */
 "Wrong database passphrase" = "Falsches Datenbank-Passwort";
@@ -6708,7 +7609,22 @@ server test failure */
 "You allow" = "Sie erlauben";
 
 /* No comment provided by engineer. */
+"You already have a badge!" = "Sie haben bereits einen Badge!";
+
+/* No comment provided by engineer. */
 "You already have a chat profile with the same display name. Please choose another name." = "Sie haben schon ein Chat-Profil mit dem gleichen Anzeigenamen. Bitte wählen Sie einen anderen Namen aus.";
+
+/* new chat alert */
+"You are a contributor" = "Sie sind Mitwirkender";
+
+/* new chat alert */
+"You are a member" = "Sie sind Mitglied";
+
+/* new chat alert */
+"You are a moderator" = "Sie sind Moderator";
+
+/* new chat alert */
+"You are a subscriber" = "Sie sind Abonnent";
 
 /* No comment provided by engineer. */
 "You are already connected to %@." = "Sie sind bereits mit %@ verbunden.";
@@ -6733,6 +7649,15 @@ server test failure */
 
 /* new chat sheet title */
 "You are already joining the group!\nRepeat join request?" = "Sie sind bereits Mitglied dieser Gruppe!\nVerbindungsanfrage wiederholen?";
+
+/* new chat alert */
+"You are an admin" = "Sie sind Admin";
+
+/* new chat alert */
+"You are an observer" = "Sie sind Beobachter";
+
+/* new chat alert */
+"You are an owner" = "Sie sind Eigentümer";
 
 /* subscription status explanation */
 "You are connected to the server used to receive messages from this connection." = "Sie sind mit dem Server verbunden, der für den Empfang von Nachrichten dieser Verbindung genutzt wird.";
@@ -6759,7 +7684,7 @@ server test failure */
 "You can accept calls from lock screen, without device and app authentication." = "Sie können Anrufe ohne Geräte- und App-Authentifizierung vom Sperrbildschirm aus annehmen.";
 
 /* No comment provided by engineer. */
-"You can change it in Appearance settings." = "Kann von Ihnen in den Erscheinungsbild-Einstellungen geändert werden.";
+"You can change it in Appearance settings." = "Sie können dies in den Einstellungen unter „Darstellung“ ändern.";
 
 /* No comment provided by engineer. */
 "You can configure servers via settings." = "Sie können die Server über die Einstellungen konfigurieren.";
@@ -6771,7 +7696,7 @@ server test failure */
 "You can enable later via Settings" = "Sie können diese später in den Einstellungen aktivieren";
 
 /* No comment provided by engineer. */
-"You can enable them later via app Privacy & Security settings." = "Sie können diese später in den Datenschutz & Sicherheits-Einstellungen der App aktivieren.";
+"You can enable them later via app Your privacy settings." = "Sie können diese später in Ihren Privatsphäre-Einstellungen der App aktivieren.";
 
 /* No comment provided by engineer. */
 "You can give another try." = "Sie können es nochmal probieren.";
@@ -6808,6 +7733,9 @@ server test failure */
 
 /* No comment provided by engineer. */
 "You can still view conversation with %@ in the list of chats." = "Sie können in der Chat-Liste weiterhin die Unterhaltung mit %@ einsehen.";
+
+/* alert message */
+"You can support SimpleX later in Settings." = "Sie können SimpleX später in den Einstellungen unterstützen.";
 
 /* No comment provided by engineer. */
 "You can turn on SimpleX Lock via Settings." = "Sie können die SimpleX-Sperre über die Einstellungen aktivieren.";
@@ -6872,6 +7800,9 @@ server test failure */
 /* No comment provided by engineer. */
 "You must use the most recent version of your chat database on one device ONLY, otherwise you may stop receiving the messages from some contacts." = "Sie dürfen die neueste Version Ihrer Chat-Datenbank NUR auf einem Gerät verwenden, andernfalls erhalten Sie möglicherweise keine Nachrichten mehr von einigen Ihrer Kontakte.";
 
+/* file alert */
+"You need a %1$@ to send files larger than %2$@." = "Sie benötigen ein %1$@, um Dateien zu senden, die größer als %2$@ sind.";
+
 /* No comment provided by engineer. */
 "You need to allow your contact to call to be able to call them." = "Sie müssen Ihrem Kontakt Anrufe zu Ihnen erlauben, bevor Sie ihn selbst anrufen können.";
 
@@ -6882,7 +7813,7 @@ server test failure */
 "You rejected group invitation" = "Sie haben die Gruppeneinladung abgelehnt";
 
 /* snd group event chat item */
-"you removed %@" = "entfernt %@ aus der Gruppe";
+"you removed %@" = "Sie haben %@ aus der Gruppe entfernt";
 
 /* No comment provided by engineer. */
 "You sent group invitation" = "Sie haben eine Gruppeneinladung gesendet";
@@ -6900,7 +7831,7 @@ server test failure */
 "you unblocked %@" = "Sie haben %@ freigegeben";
 
 /* No comment provided by engineer. */
-"You were born without an account" = "Sie wurden ohne eine Benutzerkennung geboren.";
+"You were born without an account" = "Sie wurden ohne ein Benutzerkonto geboren.";
 
 /* No comment provided by engineer. */
 "You will be able to send messages **only after your request is accepted**." = "Sie können erst dann Nachrichten versenden, **sobald Ihre Anfrage angenommen wurde**.";
@@ -6945,6 +7876,30 @@ server test failure */
 "You're using an incognito profile for this group - to prevent sharing your main profile inviting contacts is not allowed" = "Sie verwenden ein Inkognito-Profil für diese Gruppe. Um zu verhindern, dass Sie Ihr Hauptprofil teilen, ist in diesem Fall das Einladen von Kontakten nicht erlaubt";
 
 /* No comment provided by engineer. */
+"Your badge" = "Ihr Badge";
+
+/* No comment provided by engineer. */
+"Your badge could not be renewed." = "Ihr Badge konnte nicht verlängert werden.";
+
+/* alert title */
+"Your badge expired" = "Ihr Badge ist abgelaufen";
+
+/* No comment provided by engineer. */
+"Your badge expired on %@." = "Ihr Badge ist am %@ abgelaufen.";
+
+/* file alert */
+"Your badge expired." = "Ihr Badge ist abgelaufen.";
+
+/* alert title */
+"Your badge renews soon" = "Ihr Badge wird bald verlängert";
+
+/* No comment provided by engineer. */
+"Your badge stays until %@." = "Ihr Badge bleibt bis %@ aktiv.";
+
+/* No comment provided by engineer. */
+"Your badge subscription ended on %@." = "Ihr Abonnement für den Badge endete am %@.";
+
+/* No comment provided by engineer. */
 "Your business contact" = "Ihr geschäftlicher Kontakt";
 
 /* No comment provided by engineer. */
@@ -6952,9 +7907,6 @@ server test failure */
 
 /* No comment provided by engineer. */
 "Your channel" = "Ihr Kanal";
-
-/* No comment provided by engineer. */
-"Your chat database" = "Chat-Datenbank";
 
 /* No comment provided by engineer. */
 "Your chat database is not encrypted - set passphrase to encrypt it." = "Ihre Chat-Datenbank ist nicht verschlüsselt. Bitte legen Sie ein Passwort fest, um sie zu schützen.";
@@ -6975,7 +7927,7 @@ server test failure */
 "Your contact" = "Ihr Kontakt";
 
 /* No comment provided by engineer. */
-"Your contact sent a file that is larger than currently supported maximum size (%@)." = "Ihr Kontakt hat eine Datei gesendet, die größer ist als die derzeit unterstützte maximale Größe (%@).";
+"Your contact removed this link, or it was a one-time link that was already used.\nTo connect, ask your contact to create a new link." = "Ihr Kontakt hat diesen Link entfernt oder es war ein Einmal‑Link, welcher bereits verwendet wurde.\nUm sich zu verbinden, bitten Sie Ihren Kontakt, einen neuen Link zu erstellen.";
 
 /* No comment provided by engineer. */
 "Your contacts can allow full message deletion." = "Ihre Kontakte können die unwiederbringliche Löschung von Nachrichten erlauben.";
@@ -7002,7 +7954,16 @@ server test failure */
 "Your ICE servers" = "Ihre ICE-Server";
 
 /* No comment provided by engineer. */
+"Your legend badge" = "Ihr Legenden-Badge";
+
+/* No comment provided by engineer. */
 "Your network" = "Ihr Netzwerk";
+
+/* alert message */
+"Your new channel %@ is connected to %d of %d relays.\nIf you cancel, the channel will be deleted - you can create it again." = "Ihr neuer Kanal %1$@ ist mit %2$d von %3$d Relais verbunden.\nWenn Sie abbrechen, wird der Kanal gelöscht. Sie können ihn später erneut erstellen.";
+
+/* No comment provided by engineer. */
+"Your payment is complete. The badge will be added to this profile." = "Ihre Zahlung wurde abgeschlossen. Der Badge wird diesem Profil hinzugefügt.";
 
 /* No comment provided by engineer. */
 "Your preferences" = "Ihre Präferenzen";
@@ -7051,4 +8012,13 @@ server test failure */
 
 /* No comment provided by engineer. */
 "Your SimpleX address" = "Ihre SimpleX-Adresse";
+
+/* No comment provided by engineer. */
+"Your SimpleX name" = "Ihr SimpleX-Name";
+
+/* alert title */
+"Your subscription ended" = "Ihr Abonnement ist abgelaufen";
+
+/* No comment provided by engineer. */
+"Your subscription is cancelled. The badge stays until %@." = "Ihr Abonnement wurde gekündigt. Der Badge bleibt bis %@ aktiv.";
 

@@ -21,6 +21,7 @@ revision: 13.08.2025
 - [Why cannot I delete messages I sent from my contact's device?](#why-cannot-i-delete-messages-i-sent-from-my-contacts-device)
 - [What do group roles mean?](#what-do-group-roles-mean)
 - [I don't want to share a web link or a QR code. How can I connect?](#i-dont-want-to-share-a-web-link-or-a-qr-code-how-can-i-connect)
+- [How to change servers to my own](#how-to-change-servers-to-my-own)
 
 [Troubleshooting](#troubleshooting)
 - [I do not receive messages or message notifications](#i-do-not-receive-messages-or-message-notifications)
@@ -81,7 +82,7 @@ When "Incognito Mode” is turned on, your currently chosen profile name and ima
 
 It is quite a complex process, but fortunately all of this happens in the background, so it's simple to use.
 
-Whenever somebody connects to you via your address, they basically ask your client whether they want to establish connection. After that, you can either agree or disagree.
+Whenever somebody connects to you via your address, they basically ask your client whether they want to establish connection. After that, you can either agree or disagree.\
 If interested, please read more: [Addresses and invitations](./guide/making-connections.md).
 
 ### How to configure and delete groups?
@@ -96,7 +97,7 @@ Yes! Currently, there are six emojis available. What's more, you can respond to 
 
 It's quite simple:
 - one checkmark - message is delivered to the relay (the server).
-- two checkmarks - message is delivered to the recipient's device.
+- two checkmarks - message is delivered to the recipient's device.\
 "sent" means accepted by the relay for delivery, "delivered" - stored on the recipient device.
 
 Also see: [I do not see the second tick on the messages I sent](#i-do-not-see-the-second-tick-on-the-messages-i-sent)
@@ -174,6 +175,16 @@ You can replace the server part of the link (e.g., `https://smp18.simplex.im/`) 
 For example, this link: `https://smp18.simplex.im/i#E74vSxMwDnEx6DAvRCZmzBeZwwAseJUD/yVTHjaaH_EzL19DG7fvd46Mjry3IBqYT0UMo5G7l4jQ`
 
 becomes: `simplex:/i#E74vSxMwDnEx6DAvRCZmzBeZwwAseJUD/yVTHjaaH_EzL19DG7fvd46Mjry3IBqYT0UMo5G7l4jQ?h=smp18.simplex.im`
+
+### How to change servers to my own?
+
+Add your server in Settings -> Network & servers -> Your servers. If you have multiple profiles, you need to add your server in every profile.\
+After that, disable all preset servers. If you have multiple profiles, you must first add your server to all profiles for this option to be available.
+
+To resolve SimpleX public names, if your server does not support it, you may leave preset servers enabled only for resolving the public names.
+
+Please note: configured servers only determine which servers will be used for the new connections (members/contacts). Previously created connections don't switch automatically. You can manually switch all existing contacts and small/important groups (each member needs to be switched), and then leave and re-join all large groups.\
+You can switch contacts/members manually to another server by going to their profile and clicking on "Change receiving address", note that the current server must be online for the address change to work.
 
 ## Troubleshooting
 
@@ -409,7 +420,7 @@ SimpleX Chat Ltd is funded by private investors and venture capital. As an open-
 
 Here are some reflections on VC funding being a necessity for a project at this scale, as well as sustainability and profitability for longtime operations: https://www.poberezkin.com/posts/2023-10-31-why-privacy-impossible-without-venture-funding.html
 
-And another perspective from a team member on the delicate balance of venture-backed and nonprofit structures, and the plans for the SimpleX network protocols to evolve under the stewardship of nonprofit entities in various jurisdictions, so that its continued evolution aligns more closely with the vision of community-driven, independent and transparent governance:
+And another perspective from a team member on the delicate balance of venture-backed and nonprofit structures, and the plans for the SimpleX network protocols to evolve under the stewardship of nonprofit entities in various jurisdictions, so that its continued evolution aligns more closely with the vision of community-driven, independent and transparent governance:\
 [https://simplex.chat/blog/20240404-why-i-joined-simplex-chat-esraa-al-shafei.html](../blog/20240404-why-i-joined-simplex-chat-esraa-al-shafei.md).
 
 ### What will be the business model?

@@ -34,7 +34,7 @@ import chat.simplex.common.views.chat.topPaddingToContent
 import chat.simplex.common.views.chatlist.*
 import chat.simplex.common.views.contacts.*
 import chat.simplex.common.views.helpers.*
-import chat.simplex.res.MR
+import chat.simplex.res.*
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
@@ -64,7 +64,7 @@ fun ModalData.NewChatSheet(rh: RemoteHostInfo?, close: () -> Unit) {
           ModalManager.start.showCustomModal { close -> AddGroupView(chatModel, chatModel.currentRemoteHost.value, close, closeAll) }
         },
         createChannel = {
-          ModalManager.start.showCustomModal { close -> AddChannelView(chatModel, close, closeAll) }
+          ModalManager.start.showCustomModal { close -> AddChannelView(chatModel, chatModel.currentRemoteHost.value, close, closeAll) }
         },
         rh = rh,
         close = close
@@ -136,7 +136,8 @@ private fun ModalData.NewChatSheetLayout(
   }
   val searchText = rememberSaveable(stateSaver = TextFieldValue.Saver) { mutableStateOf(TextFieldValue("")) }
   val searchShowingSimplexLink = remember { mutableStateOf(false) }
-  val searchChatFilteredBySimplexLink = remember { mutableStateOf<String?>(null) }
+  val searchChatFilteredBySimplexLink = remember { mutableStateOf<Set<String>>(emptySet()) }
+  val connectNameCandidate = remember { mutableStateOf<String?>(null) }
   val showUnreadAndFavorites = remember { ChatController.appPrefs.showUnreadAndFavorites.state }.value
   val baseContactTypes = remember { listOf(ContactType.CARD, ContactType.CONTACT_WITH_REQUEST, ContactType.REQUEST, ContactType.RECENT) }
   val contactTypes by remember(searchText.value.text.isEmpty()) {
@@ -200,7 +201,7 @@ private fun ModalData.NewChatSheetLayout(
     ),
     Triple(
       painterResource(MR.images.ic_bigtop_updates),
-      stringResource(MR.strings.create_channel_beta_button),
+      stringResource(MR.strings.create_channel_button),
       createChannel,
     )
   )
@@ -313,8 +314,13 @@ private fun ModalData.NewChatSheetLayout(
               searchText = searchText,
               searchShowingSimplexLink = searchShowingSimplexLink,
               searchChatFilteredBySimplexLink = searchChatFilteredBySimplexLink,
+              connectNameCandidate = connectNameCandidate,
               close = close,
             )
+            connectNameCandidate.value?.let { candidate ->
+              Divider()
+              ConnectByNameRow(candidate, searchText, connectNameCandidate, close = close)
+            }
             Spacer(Modifier.windowInsetsBottomHeight(WindowInsets.ime))
           }
         }
@@ -399,8 +405,13 @@ private fun ModalData.NewChatSheetLayout(
             searchText = searchText,
             searchShowingSimplexLink = searchShowingSimplexLink,
             searchChatFilteredBySimplexLink = searchChatFilteredBySimplexLink,
+            connectNameCandidate = connectNameCandidate,
             close = close,
           )
+          connectNameCandidate.value?.let { candidate ->
+            Divider()
+            ConnectByNameRow(candidate, searchText, connectNameCandidate, close = close)
+          }
           Divider()
         }
       }
@@ -466,7 +477,8 @@ private fun ContactsSearchBar(
   listState: LazyListState,
   searchText: MutableState<TextFieldValue>,
   searchShowingSimplexLink: MutableState<Boolean>,
-  searchChatFilteredBySimplexLink: MutableState<String?>,
+  searchChatFilteredBySimplexLink: MutableState<Set<String>>,
+  connectNameCandidate: MutableState<String?>,
   close: () -> Unit,
 ) {
   var focused by remember { mutableStateOf(false) }
@@ -485,6 +497,8 @@ private fun ContactsSearchBar(
       alwaysVisible = true,
       searchText = searchText,
       trailingContent = null,
+      // the clear button must line up with the filter icon it replaces, so no reduction here
+      reducedCloseButtonPadding = 0.dp,
     ) {
       searchText.value = searchText.value.copy(it)
     }
@@ -523,34 +537,37 @@ private fun ContactsSearchBar(
       snapshotFlow { searchText.value.text }
         .distinctUntilChanged()
         .collect {
-          val link = strHasSingleSimplexLink(it.trim())
-          if (link != null) {
-            // if SimpleX link is pasted, show connection dialogue
+          val target = strConnectTarget(it.trim())
+          if (target is ConnectTarget.Link) {
             hideKeyboard(view)
-            if (link.format is Format.SimplexLink) {
-              val linkText = link.format.simplexLinkText
-              searchText.value = searchText.value.copy(linkText, selection = TextRange.Zero)
-            }
+            searchText.value = searchText.value.copy(target.linkText, selection = TextRange.Zero)
             searchShowingSimplexLink.value = true
-            searchChatFilteredBySimplexLink.value = null
+            searchChatFilteredBySimplexLink.value = emptySet()
+            connectNameCandidate.value = null
             connect(
-              link = link.text,
+              link = target.text,
               searchChatFilteredBySimplexLink = searchChatFilteredBySimplexLink,
               close = close,
               cleanup = { searchText.value = TextFieldValue() }
             )
-          } else if (!searchShowingSimplexLink.value || it.isEmpty()) {
-            if (it.isNotEmpty()) {
-              // if some other text is pasted, enter search mode
-              focusRequester.requestFocus()
-            } else {
-              connectProgressManager.cancelConnectProgress()
-              if (listState.layoutInfo.totalItemsCount > 0) {
-                listState.scrollToItem(0)
+          } else {
+            // A name is resolved only when its "Connect to …" row is tapped, not on every keystroke. The
+            // simplex-name filter is chat-list only: this contacts/deleted view is a scoped subset, so a
+            // resolved chat id (channel, business, unlisted or active-only contact) may not be present in it.
+            val candidate = nameSearchCandidate(it.trim())
+            connectNameCandidate.value = candidate
+            if (candidate == null && (!searchShowingSimplexLink.value || it.isEmpty())) {
+              if (it.isNotEmpty()) {
+                focusRequester.requestFocus()
+              } else {
+                connectProgressManager.cancelConnectProgress()
+                if (listState.layoutInfo.totalItemsCount > 0) {
+                  listState.scrollToItem(0)
+                }
               }
+              searchShowingSimplexLink.value = false
+              searchChatFilteredBySimplexLink.value = emptySet()
             }
-            searchShowingSimplexLink.value = false
-            searchChatFilteredBySimplexLink.value = null
           }
         }
     }
@@ -576,12 +593,12 @@ private fun ToggleFilterButton() {
   }
 }
 
-private fun connect(link: String, searchChatFilteredBySimplexLink: MutableState<String?>, close: () -> Unit, cleanup: (() -> Unit)?) {
+private fun connect(link: String, searchChatFilteredBySimplexLink: MutableState<Set<String>>, close: () -> Unit, cleanup: (() -> Unit)?) {
   withBGApi {
     planAndConnect(
       chatModel.remoteHostId(),
       link,
-      filterKnownContact = { searchChatFilteredBySimplexLink.value = it.id },
+      filterKnownContact = { searchChatFilteredBySimplexLink.value = setOf(it.id) },
       close = close,
       cleanup = cleanup,
     )
@@ -591,15 +608,15 @@ private fun connect(link: String, searchChatFilteredBySimplexLink: MutableState<
 private fun filteredContactChats(
   showUnreadAndFavorites: Boolean,
   searchShowingSimplexLink: State<Boolean>,
-  searchChatFilteredBySimplexLink: State<String?>,
+  searchChatFilteredBySimplexLink: State<Set<String>>,
   searchText: String,
   contactChats: List<Chat>
 ): List<Chat> {
-  val linkChatId = searchChatFilteredBySimplexLink.value
+  val linkChatIds = searchChatFilteredBySimplexLink.value
   val s = if (searchShowingSimplexLink.value) "" else searchText.trim().lowercase()
 
-  return if (linkChatId != null) {
-    contactChats.filter { it.id == linkChatId }
+  return if (linkChatIds.isNotEmpty()) {
+    contactChats.filter { it.id in linkChatIds }
   } else {
     contactChats.filter { chat ->
       filterChat(
@@ -655,7 +672,9 @@ private fun ModalData.DeletedContactsView(rh: RemoteHostInfo?, closeDeletedChats
     val listState = remember { appBarHandler.listState }
     val searchText = rememberSaveable(stateSaver = TextFieldValue.Saver) { mutableStateOf(TextFieldValue("")) }
     val searchShowingSimplexLink = remember { mutableStateOf(false) }
-    val searchChatFilteredBySimplexLink = remember { mutableStateOf<String?>(null) }
+    val searchChatFilteredBySimplexLink = remember { mutableStateOf<Set<String>>(emptySet()) }
+    // deleted contacts are not connected to by name, so this candidate only stops per-keystroke resolution
+    val connectNameCandidate = remember { mutableStateOf<String?>(null) }
     val showUnreadAndFavorites = remember { appPrefs.showUnreadAndFavorites.state }.value
     val allChats by remember(chatModel.chats.value) {
       derivedStateOf { filterContactTypes(chatModel.chats.value, listOf(ContactType.CHAT_DELETED)) }
@@ -698,6 +717,7 @@ private fun ModalData.DeletedContactsView(rh: RemoteHostInfo?, closeDeletedChats
               searchText = searchText,
               searchShowingSimplexLink = searchShowingSimplexLink,
               searchChatFilteredBySimplexLink = searchChatFilteredBySimplexLink,
+              connectNameCandidate = connectNameCandidate,
               close = close,
             )
           } else {
@@ -707,6 +727,7 @@ private fun ModalData.DeletedContactsView(rh: RemoteHostInfo?, closeDeletedChats
                 searchText = searchText,
                 searchShowingSimplexLink = searchShowingSimplexLink,
                 searchChatFilteredBySimplexLink = searchChatFilteredBySimplexLink,
+                connectNameCandidate = connectNameCandidate,
                 close = close,
               )
               Spacer(Modifier.windowInsetsBottomHeight(WindowInsets.ime))
@@ -851,7 +872,7 @@ fun ActionButton(
 
 @Preview
 @Composable
-private fun PreviewNewChatSheet() {
+internal fun PreviewNewChatSheet() {
   SimpleXTheme {
     ModalData().NewChatSheet(rh = null, close = {})
   }

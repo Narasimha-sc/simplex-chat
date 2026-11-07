@@ -45,7 +45,7 @@ import chat.simplex.common.views.onboarding.*
 import chat.simplex.common.views.usersettings.DeleteImageButton
 import chat.simplex.common.views.usersettings.EditImageButton
 import chat.simplex.common.views.usersettings.SettingsActionItem
-import chat.simplex.res.MR
+import chat.simplex.res.*
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
@@ -164,7 +164,7 @@ fun CreateProfile(chatModel: ChatModel, close: () -> Unit) {
             if (chatModel.localUserCreated.value == true) {
               createProfileInProfiles(chatModel, displayName.value, shortDescr.value, profileImage.value, close)
             } else {
-              createProfileInNoProfileSetup(displayName.value, profileImage.value, close)
+              createProfileInNoProfileSetup(displayName.value, shortDescr.value, profileImage.value, close)
             }
           },
         )
@@ -353,9 +353,9 @@ private fun CreateFirstProfileDesktop(chatModel: ChatModel, close: () -> Unit) {
   }
 }
 
-fun createProfileInNoProfileSetup(displayName: String, image: String? = null, close: () -> Unit) {
+fun createProfileInNoProfileSetup(displayName: String, shortDescr: String, image: String? = null, close: () -> Unit) {
   withBGApi {
-    val user = controller.apiCreateActiveUser(null, Profile(displayName.trim(), "", null, image)) ?: return@withBGApi
+    val user = controller.apiCreateActiveUser(null, Profile(displayName.trim(), "", shortDescr.trim().ifEmpty { null }, image = image)) ?: return@withBGApi
     if (!chatModel.connectedToRemote()) {
       chatModel.localUserCreated.value = true
     }
@@ -370,7 +370,7 @@ fun createProfileInProfiles(chatModel: ChatModel, displayName: String, shortDesc
   withBGApi {
     val rhId = chatModel.remoteHostId()
     val user = chatModel.controller.apiCreateActiveUser(
-      rhId, Profile(displayName.trim(), "", shortDescr.trim().ifEmpty { null }, image)
+      rhId, Profile(displayName.trim(), "", shortDescr.trim().ifEmpty { null }, image = image)
     ) ?: return@withBGApi
     chatModel.currentUser.value = user
     if (chatModel.users.isEmpty()) {
@@ -392,6 +392,8 @@ fun createProfileOnboarding(chatModel: ChatModel, displayName: String, close: ()
       null, Profile(displayName.trim(), "", null, null)
     ) ?: return@withBGApi
     chatModel.localUserCreated.value = true
+    // new users don't need the local file encryption indicator (all files are encrypted); existing users keep it on
+    chatModel.controller.appPrefs.privacyShowEncryption.set(false)
     val onboardingStage = chatModel.controller.appPrefs.onboardingStage
     // No users or no visible users
     if (chatModel.users.none { u -> !u.user.hidden }) {

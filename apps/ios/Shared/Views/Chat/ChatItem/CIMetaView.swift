@@ -23,6 +23,8 @@ struct CIMetaView: View {
     var invertedMaterial = false
 
     @AppStorage(DEFAULT_SHOW_SENT_VIA_RPOXY) private var showSentViaProxy = false
+    @AppStorage(DEFAULT_PRIVACY_SHOW_SIGNATURE) private var showSignature = true
+    @AppStorage(DEFAULT_PRIVACY_SHOW_FILE_ENCRYPTION) private var showFileEncryption = true
 
     var body: some View {
         if chatItem.isDeletedContent {
@@ -41,7 +43,10 @@ struct CIMetaView: View {
                     showStatus: showStatus,
                     showEdited: showEdited,
                     showViaProxy: showSentViaProxy,
-                    showTimesamp: showTimestamp
+                    showTimesamp: showTimestamp,
+                    signedFileVerified: chatItem.file?.loaded,
+                    showSignature: showSignature,
+                    showFileEncryption: showFileEncryption
                 ).invertedForegroundStyle(enabled: invertedMaterial)
                 if invertedMaterial {
                     ciMetaText(
@@ -53,7 +58,10 @@ struct CIMetaView: View {
                         showStatus: showStatus,
                         showEdited: showEdited,
                         showViaProxy: showSentViaProxy,
-                        showTimesamp: showTimestamp
+                        showTimesamp: showTimestamp,
+                        signedFileVerified: chatItem.file?.loaded,
+                        showSignature: showSignature,
+                        showFileEncryption: showFileEncryption
                     )
                 }
             }
@@ -102,10 +110,16 @@ func ciMetaText(
     showStatus: Bool = true,
     showEdited: Bool = true,
     showViaProxy: Bool,
-    showTimesamp: Bool
+    showTimesamp: Bool,
+    signedFileVerified: Bool? = nil,
+    showSignature: Bool = true,
+    showFileEncryption: Bool = true,
+    unbreakable: Bool = false
 ) -> Text {
     var r = Text("")
     var space: Text? = nil
+    let separator = unbreakable ? Text(verbatim: "\u{00A0}") : textSpace
+    let joiner = Text(verbatim: unbreakable ? "\u{2060}" : "")
     let appendSpace = {
         if let sp = space {
             r = r + sp
@@ -114,19 +128,19 @@ func ciMetaText(
     }
     let resolved = colorMode.resolve(color)
     if showEdited, meta.itemEdited {
-        r = r + statusIconText("pencil", resolved)
+        r = r + statusIconText("pencil", resolved) + joiner
     }
     if meta.disappearing {
-        r = r + statusIconText("timer", resolved).font(.caption2)
+        r = r + statusIconText("timer", resolved).font(.caption2) + joiner
         let ttl = meta.itemTimed?.ttl
         if ttl != chatTTL {
             r = r + colored(Text(shortTimeText(ttl)), resolved)
         }
-        space = textSpace
+        space = separator
     }
     if showViaProxy, meta.sentViaProxy == true {
         appendSpace()
-        r = r + statusIconText("arrow.forward", resolved?.opacity(0.67)).font(.caption2)
+        r = r + statusIconText("arrow.forward", resolved?.opacity(0.67)).font(.caption2) + joiner
     }
     if showStatus {
         appendSpace()
@@ -140,16 +154,25 @@ func ciMetaText(
         } else if !meta.disappearing {
             r = r + colorMode.statusSpacer(meta.itemStatus.sent)
         }
-        space = textSpace
+        space = separator
     }
-    if let enc = encrypted {
+    if let enc = encrypted, showFileEncryption {
         appendSpace()
         r = r + statusIconText(enc ? "lock" : "lock.open", resolved)
-        space = textSpace
+        space = separator
+    }
+    if showSignature, meta.msgVerified?.verified == true && signedFileVerified != false {
+        appendSpace()
+        r = r + colored(Text(Image(systemName: "checkmark.seal")), resolved)
+        space = separator
+    } else if meta.msgVerified == .sigMissing {
+        appendSpace()
+        r = r + colored(Text(Image(systemName: "xmark.seal")), colorMode.resolve(.red))
+        space = separator
     }
     if showTimesamp {
         appendSpace()
-        r = r + colored(meta.timestampText, resolved)
+        r = r + colored(unbreakable ? Text(verbatim: formatTimestampMeta(meta.itemTs).replacingOccurrences(of: " ", with: "\u{00A0}")) : meta.timestampText, resolved)
     }
     return r.font(.caption)
 }
@@ -173,13 +196,13 @@ struct CIMetaView_Previews: PreviewProvider {
     static let metaColor = Color.secondary
     static var previews: some View {
         Group {
-            CIMetaView(chat: Chat.sampleData, chatItem: ChatItem.getSample(2, .directSnd, .now, "https://simplex.chat", .sndSent(sndProgress: .complete)), metaColor: metaColor)
-            CIMetaView(chat: Chat.sampleData, chatItem: ChatItem.getSample(2, .directSnd, .now, "https://simplex.chat", .sndSent(sndProgress: .partial)), metaColor: metaColor)
-            CIMetaView(chat: Chat.sampleData, chatItem: ChatItem.getSample(2, .directSnd, .now, "https://simplex.chat", .sndRcvd(msgRcptStatus: .ok, sndProgress: .complete)), metaColor: metaColor)
-            CIMetaView(chat: Chat.sampleData, chatItem: ChatItem.getSample(2, .directSnd, .now, "https://simplex.chat", .sndRcvd(msgRcptStatus: .ok, sndProgress: .partial)), metaColor: metaColor)
-            CIMetaView(chat: Chat.sampleData, chatItem: ChatItem.getSample(2, .directSnd, .now, "https://simplex.chat", .sndRcvd(msgRcptStatus: .badMsgHash, sndProgress: .complete)), metaColor: metaColor)
-            CIMetaView(chat: Chat.sampleData, chatItem: ChatItem.getSample(2, .directSnd, .now, "https://simplex.chat", .sndSent(sndProgress: .complete), itemEdited: true), metaColor: metaColor)
-            CIMetaView(chat: Chat.sampleData, chatItem: ChatItem.getDeletedContentSample(), metaColor: metaColor)
+            CIMetaView(chat: Chat.sampleData, chatItem: ChatItem.getSample(2, .directSnd, previewDate, "https://simplex.chat", .sndSent(sndProgress: .complete)), metaColor: metaColor)
+            CIMetaView(chat: Chat.sampleData, chatItem: ChatItem.getSample(2, .directSnd, previewDate, "https://simplex.chat", .sndSent(sndProgress: .partial)), metaColor: metaColor)
+            CIMetaView(chat: Chat.sampleData, chatItem: ChatItem.getSample(2, .directSnd, previewDate, "https://simplex.chat", .sndRcvd(msgRcptStatus: .ok, sndProgress: .complete)), metaColor: metaColor)
+            CIMetaView(chat: Chat.sampleData, chatItem: ChatItem.getSample(2, .directSnd, previewDate, "https://simplex.chat", .sndRcvd(msgRcptStatus: .ok, sndProgress: .partial)), metaColor: metaColor)
+            CIMetaView(chat: Chat.sampleData, chatItem: ChatItem.getSample(2, .directSnd, previewDate, "https://simplex.chat", .sndRcvd(msgRcptStatus: .badMsgHash, sndProgress: .complete)), metaColor: metaColor)
+            CIMetaView(chat: Chat.sampleData, chatItem: ChatItem.getSample(2, .directSnd, previewDate, "https://simplex.chat", .sndSent(sndProgress: .complete), itemEdited: true), metaColor: metaColor)
+            CIMetaView(chat: Chat.sampleData, chatItem: ChatItem.getDeletedContentSample(1, previewDate), metaColor: metaColor)
         }
         .previewLayout(.fixed(width: 360, height: 100))
     }

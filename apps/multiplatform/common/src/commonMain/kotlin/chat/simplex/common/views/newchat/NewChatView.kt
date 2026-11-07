@@ -42,7 +42,7 @@ import chat.simplex.common.views.chat.topPaddingToContent
 import chat.simplex.common.views.helpers.*
 import chat.simplex.common.views.usersettings.*
 import chat.simplex.common.BuildConfigCommon
-import chat.simplex.res.MR
+import chat.simplex.res.*
 import kotlinx.coroutines.*
 
 enum class NewChatOption {
@@ -230,7 +230,8 @@ private fun ProfilePickerOption(
   disabled: Boolean,
   onSelected: () -> Unit,
   image: @Composable () -> Unit,
-  onInfo: (() -> Unit)? = null
+  onInfo: (() -> Unit)? = null,
+  badge: LocalBadge? = null
 ) {
   Row(
     Modifier
@@ -243,7 +244,7 @@ private fun ProfilePickerOption(
   ) {
     image()
     TextIconSpaced(false)
-    Text(title, modifier = Modifier.align(Alignment.CenterVertically))
+    NameWithBadge(title, badge, Modifier.align(Alignment.CenterVertically))
     if (onInfo != null) {
       Spacer(Modifier.padding(6.dp))
       Column(Modifier
@@ -365,7 +366,8 @@ fun ActiveProfilePicker(
           }
         }
       },
-        image = { ProfileImage(size = 42.dp, image = user.image) }
+        image = { ProfileImage(size = 42.dp, image = user.image) },
+        badge = user.profile.localBadge
     )
   }
 
@@ -671,13 +673,18 @@ private fun PasteLinkView(rhId: Long?, pastedLink: MutableState<String>, showQRC
     val clipboard = LocalClipboardManager.current
     SectionItemView({
       val str = clipboard.getText()?.text ?: return@SectionItemView
-      val link = strHasSingleSimplexLink(str.trim())
-      if (link != null) {
-        pastedLink.value = link.text
-        showQRCodeScanner.value = false
-        withBGApi { connect(rhId, link.text, close) { pastedLink.value = "" } }
-      } else {
-        AlertManager.shared.showAlertMsg(
+      when (val target = strConnectTarget(str.trim())) {
+        is ConnectTarget.Link -> {
+          pastedLink.value = target.text
+          showQRCodeScanner.value = false
+          withBGApi { connect(rhId, target.text, close) { pastedLink.value = "" } }
+        }
+        is ConnectTarget.Name -> {
+          pastedLink.value = target.text
+          showQRCodeScanner.value = false
+          withBGApi { connect(rhId, target.text, close) { pastedLink.value = "" } }
+        }
+        null -> AlertManager.shared.showAlertMsg(
           title = generalGetString(MR.strings.invalid_contact_link),
           text = generalGetString(MR.strings.the_text_you_pasted_is_not_a_link)
         )
@@ -819,12 +826,25 @@ fun strIsSimplexLink(str: String): Boolean {
   return parsedMd != null && parsedMd.size == 1 && parsedMd[0].format is Format.SimplexLink
 }
 
-fun strHasSingleSimplexLink(str: String): FormattedText? {
-  val parsedMd = parseToMarkdown(str) ?: return null
-  val parsedLinks = parsedMd.filter { it.format?.isSimplexLink ?: false }
-  if (parsedLinks.size != 1) return null
+sealed class ConnectTarget {
+  class Link(val text: String, val linkType: SimplexLinkType, val linkText: String) : ConnectTarget()
+  class Name(val text: String, val nameInfo: SimplexNameInfo) : ConnectTarget()
+}
 
-  return parsedLinks[0]
+fun strConnectTarget(str: String): ConnectTarget? {
+  val parsedMd = parseToMarkdown(str) ?: return null
+  val links = parsedMd.filter { it.format?.isSimplexLink ?: false }
+  if (links.size == 1) {
+    val fmt = links[0].format as Format.SimplexLink
+    val text = if (fmt.showText != null) fmt.simplexUri else links[0].text
+    return ConnectTarget.Link(text, fmt.linkType, fmt.simplexLinkText)
+  }
+  if (links.isEmpty()) {
+    val nameFt = parsedMd.firstOrNull { it.format is Format.SimplexName }
+    val nameInfo = (nameFt?.format as? Format.SimplexName)?.nameInfo
+    if (nameFt != null && nameInfo != null) return ConnectTarget.Name(nameFt.text, nameInfo)
+  }
+  return null
 }
 
 @Composable

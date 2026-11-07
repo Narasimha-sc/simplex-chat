@@ -3,7 +3,7 @@ package chat.simplex.common.platform
 import androidx.compose.runtime.*
 import chat.simplex.common.model.*
 import chat.simplex.common.views.helpers.*
-import chat.simplex.res.MR
+import chat.simplex.res.*
 import kotlinx.coroutines.*
 import uk.co.caprica.vlcj.factory.MediaPlayerFactory
 import uk.co.caprica.vlcj.player.base.MediaPlayer
@@ -13,9 +13,14 @@ import java.io.File
 import java.util.*
 import kotlin.math.max
 
-internal val vlcFactory: MediaPlayerFactory by lazy { MediaPlayerFactory() }
+// Serialize the two factory constructions: each MediaPlayerFactory() runs VLC native discovery via
+// a JDK ServiceLoader, which is not thread-safe. Building both factories concurrently (e.g. vlcFactory
+// on the render thread while vlcPreviewFactory is built on the preview thread) corrupts the ServiceLoader
+// enumeration and throws NoSuchElementException from CompoundEnumeration.nextElement.
+private val vlcFactoryLock = Any()
+internal val vlcFactory: MediaPlayerFactory by lazy { synchronized(vlcFactoryLock) { MediaPlayerFactory() } }
 // No hardware acceleration - more secure for previews
-internal val vlcPreviewFactory: MediaPlayerFactory by lazy { MediaPlayerFactory("--avcodec-hw=none") }
+internal val vlcPreviewFactory: MediaPlayerFactory by lazy { synchronized(vlcFactoryLock) { MediaPlayerFactory("--avcodec-hw=none") } }
 
 actual class RecorderNative: RecorderInterface {
   private var player: MediaPlayer? = null
@@ -308,7 +313,9 @@ actual object CallSoundsPlayer: CallSoundsPlayerInterface {
   override fun startConnectingCallSound(scope: CoroutineScope) {
     // Taken from https://github.com/TelegramOrg/Telegram-Android
     // https://github.com/TelegramOrg/Telegram-Android/blob/master/LICENSE
-    start("/media/connecting_call.mp3", 3000, scope)
+    // the delay is the length of the track exactly, so it repeats with no delay, which already happens on ios and android
+    // Android (isLooping) and iOS (which sleeps for the track duration)
+    start("/media/connecting_call.mp3", 3536, scope)
   }
 
   override fun startInCallSound(scope: CoroutineScope) {

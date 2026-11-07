@@ -27,11 +27,14 @@ import chat.simplex.common.model.SMPProxyMode.Always
 import dev.icerock.moko.resources.compose.painterResource
 import chat.simplex.common.platform.*
 import chat.simplex.common.ui.theme.*
+import chat.simplex.common.views.badges.BadgeStore
+import chat.simplex.common.views.badges.BadgeStoreError
 import chat.simplex.common.views.call.*
 import chat.simplex.common.views.chat.item.contentModerationPostLink
 import chat.simplex.common.views.chat.item.showContentBlockedAlert
 import chat.simplex.common.views.chat.item.showQuotedItemDoesNotExistAlert
 import chat.simplex.common.views.chatlist.openGroupChat
+import chat.simplex.common.views.database.deleteDatabaseBackups
 import chat.simplex.common.views.migration.MigrationFileLinkData
 import chat.simplex.common.views.onboarding.OnboardingStage
 import chat.simplex.common.views.usersettings.*
@@ -39,7 +42,7 @@ import chat.simplex.common.views.usersettings.networkAndServers.defaultCondition
 import chat.simplex.common.views.usersettings.networkAndServers.serverHostname
 import com.charleskorn.kaml.Yaml
 import com.charleskorn.kaml.YamlConfiguration
-import chat.simplex.res.MR
+import chat.simplex.res.*
 import com.russhwolf.settings.Settings
 import dev.icerock.moko.resources.ImageResource
 import dev.icerock.moko.resources.StringResource
@@ -70,6 +73,8 @@ val CREATE_MEMBER_CONTACT_VERSION = 2
 
 // support group knocking (MsgScope)
 val GROUP_KNOCKING_VERSION = 15
+
+val CALL_RECONNECT_VERSION = 22
 
 enum class CallOnLockScreen {
   DISABLE,
@@ -122,12 +127,15 @@ class AppPreferences {
   val privacyProtectScreen = mkBoolPreference(SHARED_PREFS_PRIVACY_PROTECT_SCREEN, true)
   val privacyAcceptImages = mkBoolPreference(SHARED_PREFS_PRIVACY_ACCEPT_IMAGES, true)
   val privacyLinkPreviews = mkBoolPreference(SHARED_PREFS_PRIVACY_LINK_PREVIEWS, true)
+  val privacyVerifySimplexNames = mkBoolPreference(SHARED_PREFS_PRIVACY_VERIFY_SIMPLEX_NAMES, false)
   val privacyLinkPreviewsShowAlert = mkBoolPreference(SHARED_PREFS_PRIVACY_LINK_PREVIEWS_SHOW_ALERT, true)
   val privacySanitizeLinks = mkBoolPreference(SHARED_PREFS_PRIVACY_SANITIZE_LINKS, false)
   // TODO remove
   val privacyChatListOpenLinks = mkEnumPreference(SHARED_PREFS_PRIVACY_CHAT_LIST_OPEN_LINKS, PrivacyChatListOpenLinksMode.ASK) { PrivacyChatListOpenLinksMode.values().firstOrNull { it.name == this } }
   val simplexLinkMode: SharedPreference<SimplexLinkMode> = mkSafeEnumPreference(SHARED_PREFS_PRIVACY_SIMPLEX_LINK_MODE, SimplexLinkMode.default)
   val privacyShowChatPreviews = mkBoolPreference(SHARED_PREFS_PRIVACY_SHOW_CHAT_PREVIEWS, true)
+  val privacyShowSignature = mkBoolPreference(SHARED_PREFS_PRIVACY_SHOW_SIGNATURE, true)
+  val privacyShowEncryption = mkBoolPreference(SHARED_PREFS_PRIVACY_SHOW_FILE_ENCRYPTION, true)
   val privacySaveLastDraft = mkBoolPreference(SHARED_PREFS_PRIVACY_SAVE_LAST_DRAFT, true)
   val privacyDeliveryReceiptsSet = mkBoolPreference(SHARED_PREFS_PRIVACY_DELIVERY_RECEIPTS_SET, false)
   val privacyEncryptLocalFiles = mkBoolPreference(SHARED_PREFS_PRIVACY_ENCRYPT_LOCAL_FILES, true)
@@ -139,6 +147,7 @@ class AppPreferences {
   val experimentalCalls = mkBoolPreference(SHARED_PREFS_EXPERIMENTAL_CALLS, false)
   val showUnreadAndFavorites = mkBoolPreference(SHARED_PREFS_SHOW_UNREAD_AND_FAVORITES, false)
   val relativeTimestamps = mkBoolPreference(SHARED_PREFS_RELATIVE_TIMESTAMPS, false)
+  val markdownFileTextView = mkBoolPreference(SHARED_PREFS_MARKDOWN_FILE_TEXT_VIEW, false)
   val chatArchiveName = mkStrPreference(SHARED_PREFS_CHAT_ARCHIVE_NAME, null)
   val chatArchiveTime = mkDatePreference(SHARED_PREFS_CHAT_ARCHIVE_TIME, null)
   val chatLastStart = mkDatePreference(SHARED_PREFS_CHAT_LAST_START, null)
@@ -186,9 +195,14 @@ class AppPreferences {
   val networkTCPKeepCnt = mkIntPreference(SHARED_PREFS_NETWORK_TCP_KEEP_CNT, KeepAliveOpts.defaults.keepCnt)
   val incognito = mkBoolPreference(SHARED_PREFS_INCOGNITO, false)
   val liveMessageAlertShown = mkBoolPreference(SHARED_PREFS_LIVE_MESSAGE_ALERT_SHOWN, false)
+  val signMessageAlertShown = mkBoolPreference(SHARED_PREFS_SIGN_MESSAGE_ALERT_SHOWN, false)
   val showHiddenProfilesNotice = mkBoolPreference(SHARED_PREFS_SHOW_HIDDEN_PROFILES_NOTICE, true)
   val oneHandUICardShown = mkBoolPreference(SHARED_PREFS_ONE_HAND_UI_CARD_SHOWN, false)
   val addressCreationCardShown = mkBoolPreference(SHARED_PREFS_ADDRESS_CREATION_CARD_SHOWN, false)
+  val supporterBannerShown = mkBoolPreference(SHARED_PREFS_SUPPORTER_BANNER_SHOWN, false)
+  val supporterBannerTapped = mkBoolPreference(SHARED_PREFS_SUPPORTER_BANNER_TAPPED, false)
+  val getStakeBannerTapped = mkBoolPreference(SHARED_PREFS_GET_STAKE_BANNER_TAPPED, false)
+  val getStakeBannerDismissed = mkBoolPreference(SHARED_PREFS_GET_STAKE_BANNER_DISMISSED, false)
   val showMuteProfileAlert = mkBoolPreference(SHARED_PREFS_SHOW_MUTE_PROFILE_ALERT, true)
   val showReportsInSupportChatAlert = mkBoolPreference(SHARED_PREFS_SHOW_REPORTS_IN_SUPPORT_CHAT_ALERT, true)
   val appLanguage = mkStrPreference(SHARED_PREFS_APP_LANGUAGE, null)
@@ -208,6 +222,7 @@ class AppPreferences {
   val encryptedSelfDestructPassphrase = mkStrPreference(SHARED_PREFS_ENCRYPTED_SELF_DESTRUCT_PASSPHRASE, null)
   val initializationVectorSelfDestructPassphrase = mkStrPreference(SHARED_PREFS_INITIALIZATION_VECTOR_SELF_DESTRUCT_PASSPHRASE, null)
   val encryptionStartedAt = mkDatePreference(SHARED_PREFS_ENCRYPTION_STARTED_AT, null)
+  val shouldDeleteDatabaseBackups = mkBoolPreference(SHARED_PREFS_SHOULD_DELETE_DATABASE_BACKUPS, false)
   val confirmDBUpgrades = mkBoolPreference(SHARED_PREFS_CONFIRM_DB_UPGRADES, false)
   val selfDestruct = mkBoolPreference(SHARED_PREFS_SELF_DESTRUCT, false)
   val selfDestructDisplayName = mkStrPreference(SHARED_PREFS_SELF_DESTRUCT_DISPLAY_NAME, null)
@@ -265,12 +280,21 @@ class AppPreferences {
 
   val oneHandUI = mkBoolPreference(SHARED_PREFS_ONE_HAND_UI, true)
   val chatBottomBar = mkBoolPreference(SHARED_PREFS_CHAT_BOTTOM_BAR, true)
+  val chatLayout = SharedPreference(
+    get = fun() = ChatLayoutMode.fromText(settings.getString(SHARED_PREFS_CHAT_LAYOUT, ChatLayoutMode.Classic.text)),
+    set = fun(value: ChatLayoutMode) = settings.putString(SHARED_PREFS_CHAT_LAYOUT, value.text)
+  )
 
   val hintPreferences: List<HintPref> = listOf(
     hintPref(laNoticeShown, false),
     hintPref(oneHandUICardShown, false),
     hintPref(addressCreationCardShown, false),
+    hintPref(supporterBannerShown, false),
+    hintPref(supporterBannerTapped, false),
+    hintPref(getStakeBannerTapped, false),
+    hintPref(getStakeBannerDismissed, false),
     hintPref(liveMessageAlertShown, false),
+    hintPref(signMessageAlertShown, false),
     hintPref(showHiddenProfilesNotice, true),
     hintPref(showMuteProfileAlert, true),
     hintPref(showReportsInSupportChatAlert, true),
@@ -398,11 +422,14 @@ class AppPreferences {
     private const val SHARED_PREFS_PRIVACY_ACCEPT_IMAGES = "PrivacyAcceptImages"
     private const val SHARED_PREFS_PRIVACY_TRANSFER_IMAGES_INLINE = "PrivacyTransferImagesInline"
     private const val SHARED_PREFS_PRIVACY_LINK_PREVIEWS = "PrivacyLinkPreviews"
+    private const val SHARED_PREFS_PRIVACY_VERIFY_SIMPLEX_NAMES = "PrivacyVerifySimplexNames"
     private const val SHARED_PREFS_PRIVACY_LINK_PREVIEWS_SHOW_ALERT = "PrivacyLinkPreviewsShowAlert"
     private const val SHARED_PREFS_PRIVACY_SANITIZE_LINKS = "PrivacySanitizeLinks"
     private const val SHARED_PREFS_PRIVACY_CHAT_LIST_OPEN_LINKS = "ChatListOpenLinks" // TODO remove
     private const val SHARED_PREFS_PRIVACY_SIMPLEX_LINK_MODE = "PrivacySimplexLinkMode"
     private const val SHARED_PREFS_PRIVACY_SHOW_CHAT_PREVIEWS = "PrivacyShowChatPreviews"
+    private const val SHARED_PREFS_PRIVACY_SHOW_SIGNATURE = "PrivacyShowSignature"
+    private const val SHARED_PREFS_PRIVACY_SHOW_FILE_ENCRYPTION = "PrivacyShowEncryption"
     private const val SHARED_PREFS_PRIVACY_SAVE_LAST_DRAFT = "PrivacySaveLastDraft"
     private const val SHARED_PREFS_PRIVACY_DELIVERY_RECEIPTS_SET = "PrivacyDeliveryReceiptsSet"
     private const val SHARED_PREFS_RELATIVE_TIMESTAMPS = "RelativeTimestamps"
@@ -413,6 +440,7 @@ class AppPreferences {
     const val SHARED_PREFS_PRIVACY_FULL_BACKUP = "FullBackup"
     private const val SHARED_PREFS_EXPERIMENTAL_CALLS = "ExperimentalCalls"
     private const val SHARED_PREFS_SHOW_UNREAD_AND_FAVORITES = "ShowUnreadAndFavorites"
+    private const val SHARED_PREFS_MARKDOWN_FILE_TEXT_VIEW = "MarkdownFileTextView"
     private const val SHARED_PREFS_CHAT_ARCHIVE_NAME = "ChatArchiveName"
     private const val SHARED_PREFS_CHAT_ARCHIVE_TIME = "ChatArchiveTime"
     private const val SHARED_PREFS_APP_LANGUAGE = "AppLanguage"
@@ -454,9 +482,14 @@ class AppPreferences {
     private const val SHARED_PREFS_NETWORK_TCP_KEEP_CNT = "NetworkTCPKeepCnt"
     private const val SHARED_PREFS_INCOGNITO = "Incognito"
     private const val SHARED_PREFS_LIVE_MESSAGE_ALERT_SHOWN = "LiveMessageAlertShown"
+    private const val SHARED_PREFS_SIGN_MESSAGE_ALERT_SHOWN = "SignMessageAlertShown"
     private const val SHARED_PREFS_SHOW_HIDDEN_PROFILES_NOTICE = "ShowHiddenProfilesNotice"
     private const val SHARED_PREFS_ONE_HAND_UI_CARD_SHOWN = "OneHandUICardShown"
     private const val SHARED_PREFS_ADDRESS_CREATION_CARD_SHOWN = "AddressCreationCardShown"
+    private const val SHARED_PREFS_SUPPORTER_BANNER_SHOWN = "SupporterBannerShown"
+    private const val SHARED_PREFS_SUPPORTER_BANNER_TAPPED = "SupporterBannerTapped"
+    private const val SHARED_PREFS_GET_STAKE_BANNER_TAPPED = "GetStakeBannerTapped"
+    private const val SHARED_PREFS_GET_STAKE_BANNER_DISMISSED = "GetStakeBannerDismissed"
     private const val SHARED_PREFS_SHOW_MUTE_PROFILE_ALERT = "ShowMuteProfileAlert"
     private const val SHARED_PREFS_SHOW_REPORTS_IN_SUPPORT_CHAT_ALERT = "ShowReportsInSupportChatAlert"
     private const val SHARED_PREFS_STORE_DB_PASSPHRASE = "StoreDBPassphrase"
@@ -468,11 +501,13 @@ class AppPreferences {
     private const val SHARED_PREFS_ENCRYPTED_SELF_DESTRUCT_PASSPHRASE = "EncryptedSelfDestructPassphrase"
     private const val SHARED_PREFS_INITIALIZATION_VECTOR_SELF_DESTRUCT_PASSPHRASE = "InitializationVectorSelfDestructPassphrase"
     private const val SHARED_PREFS_ENCRYPTION_STARTED_AT = "EncryptionStartedAt"
+    private const val SHARED_PREFS_SHOULD_DELETE_DATABASE_BACKUPS = "ShouldDeleteDatabaseBackups"
     private const val SHARED_PREFS_NEW_DATABASE_INITIALIZED = "NewDatabaseInitialized"
     private const val SHARED_PREFS_SHOULD_IMPORT_APP_SETTINGS = "ShouldImportAppSettings"
     private const val SHARED_PREFS_CONFIRM_DB_UPGRADES = "ConfirmDBUpgrades"
     private const val SHARED_PREFS_ONE_HAND_UI = "OneHandUI"
     private const val SHARED_PREFS_CHAT_BOTTOM_BAR = "ChatBottomBar"
+    private const val SHARED_PREFS_CHAT_LAYOUT = "ChatLayout"
     private const val SHARED_PREFS_SELF_DESTRUCT = "LocalAuthenticationSelfDestruct"
     private const val SHARED_PREFS_SELF_DESTRUCT_DISPLAY_NAME = "LocalAuthenticationSelfDestructDisplayName"
     private const val SHARED_PREFS_PQ_EXPERIMENTAL_ENABLED = "PQExperimentalEnabled" // no longer used
@@ -552,6 +587,121 @@ object ChatController {
 
   suspend fun resetAgentServersStats(rh: Long?): Boolean = sendCommandOkResp(rh, CC.ResetAgentServersStats())
 
+  // log = false because the code is a bearer secret until it is redeemed - it is in the command.
+  // null when the user cancels the retry alert.
+  suspend fun apiRedeemBadgeCode(rh: Long?, userId: Long, code: String): BadgeRedeemResult? {
+    val r = sendCmdWithRetry(rh, CC.ApiRedeemBadgeCode(userId, code), log = false) ?: return null
+    return when {
+      // redeemedBadge is dropped: the user's profile carries what is shown
+      r is API.Result && r.res is CR.BadgeRedeemed -> BadgeRedeemResult.Redeemed(r.res.user.updateRemoteHostId(rh), r.res.newBadge, r.res.badgeState)
+      r is API.Error -> BadgeRedeemResult.Failed(r.err)
+      else -> {
+        // the response type alone - it names a case or a JSON key, never the service's message
+        Log.e(TAG, "apiRedeemBadgeCode: unexpected ${r.responseType}")
+        BadgeRedeemResult.Failed(null)
+      }
+    }
+  }
+
+  // log = false because a store receipt is a bearer secret, like a badge code - it is in the command.
+  suspend fun apiPurchaseBadge(rh: Long?, userId: Long, echoedInvoiceId: String?, origin: StoreReceiptOrigin, payment: ServicePayment): BadgePurchaseResult {
+    val r = sendCmd(rh, CC.ApiPurchaseBadge(userId, echoedInvoiceId, origin, payment), log = false)
+    return when {
+      r is API.Result && r.res is CR.BadgeStateR -> BadgePurchaseResult.Held(r.res.user, r.res.badgeState, r.res.storePurchases)
+      r is API.Result && r.res is CR.BadgeRedeemed -> BadgePurchaseResult.Credited(r.res.user.updateRemoteHostId(rh), r.res.badgeState)
+      r is API.Result && r.res is CR.StoreReceiptNotRecorded -> BadgePurchaseResult.NotRecorded
+      r is API.Error -> BadgePurchaseResult.Failed(r.err)
+      else -> {
+        // the response type alone - it names a case or a JSON key, never the service's message
+        Log.e(TAG, "apiPurchaseBadge: unexpected ${r.responseType}")
+        BadgePurchaseResult.Failed(null)
+      }
+    }
+  }
+
+  // the device store's view of a subscription it charges, which changes what is shown and alerted, and retires its badge once ended
+  suspend fun apiSetBadgeSubscriptionStatus(rh: Long?, status: BadgeSubscriptionState, payment: ServicePayment) {
+    val r = sendCmd(rh, CC.ApiSetBadgeSubscriptionStatus(status, payment), log = false)
+    if (r is API.Result && r.res is CR.CmdOk) return
+    if (r is API.Error) throw BadgeStoreError.ApiError(r.err)
+    throw Exception("apiSetBadgeSubscriptionStatus: unexpected ${r.responseType}")
+  }
+
+  suspend fun apiCreateBadgeInvoice(rh: Long?, userId: Long): String {
+    val r = sendCmd(rh, CC.ApiCreateBadgeInvoice(userId))
+    if (r is API.Result && r.res is CR.BadgeInvoice) return r.res.invoiceId
+    if (r is API.Error) throw BadgeStoreError.ApiError(r.err)
+    throw Exception("apiCreateBadgeInvoice: unexpected ${r.responseType}")
+  }
+
+  // localized where the user can act on it; otherwise the error itself, so a screenshot says what happened
+  fun redeemErrorText(err: ChatError?, purchase: Boolean): String {
+    if (err is ChatError.ChatErrorChat && err.errorType is ChatErrorType.CEBadgeRedeemError) {
+      when (val e = err.errorType.badgeRedeemError) {
+        is BadgeRedeemError.InvalidCode -> return generalGetString(MR.strings.badges_error_invalid_code)
+        is BadgeRedeemError.InvalidReceipt -> {}
+        is BadgeRedeemError.ServiceNotConfigured ->
+          return generalGetString(if (purchase) MR.strings.badges_error_service_not_configured_purchase else MR.strings.badges_error_service_not_configured)
+        is BadgeRedeemError.BadgeActive ->
+          return generalGetString(if (purchase) MR.strings.badges_error_already_active_purchase else MR.strings.badges_error_already_active)
+        is BadgeRedeemError.StorePurchaseOpen ->
+          return generalGetString(if (purchase) MR.strings.badges_error_store_purchase_open_purchase else MR.strings.badges_error_store_purchase_open)
+        is BadgeRedeemError.ServiceError -> badgeServiceErrorText(e.serviceError)?.let { return it }
+        is BadgeRedeemError.InvalidResponse -> return String.format(generalGetString(MR.strings.badges_error_bad_service_response), e.message)
+        is BadgeRedeemError.UnknownKeyIndex, is BadgeRedeemError.CredentialNotVerified -> return generalGetString(MR.strings.badges_error_credential_not_verified)
+      }
+    }
+    return "${generalGetString(MR.strings.error_prefix)}: ${err?.string ?: generalGetString(MR.strings.badges_error_unknown)}"
+  }
+
+  suspend fun apiGetBadgeState(rh: Long?, userId: Long): Pair<BadgeState?, List<OpenStorePurchase>> {
+    val r = sendCmd(rh, CC.ApiGetBadgeState(userId))
+    if (r is API.Result && r.res is CR.BadgeStateR) return r.res.badgeState to r.res.storePurchases
+    throw Exception("apiGetBadgeState: unexpected ${r.responseType}")
+  }
+
+  suspend fun apiGetBadgeLedger(rh: Long?, userId: Long, badgePurchaseId: Long): List<StatementEntry> {
+    val r = sendCmd(rh, CC.ApiGetBadgeLedger(userId, badgePurchaseId))
+    if (r is API.Result && r.res is CR.BadgeLedger) return r.res.badgeLedger
+    throw Exception("apiGetBadgeLedger: unexpected ${r.responseType}")
+  }
+
+  suspend fun apiAckBadgeAlert(rh: Long?, userId: Long, badgePurchaseId: Long, alertKind: BadgeAlertKind, snooze: Boolean, episode: String): BadgeState? {
+    val r = sendCmd(rh, CC.ApiAckBadgeAlert(userId, badgePurchaseId, alertKind, snooze, episode))
+    if (r is API.Result && r.res is CR.BadgeStateR) return r.res.badgeState
+    throw Exception("apiAckBadgeAlert: unexpected ${r.responseType}")
+  }
+
+  // An API call and not a stored flag: the ack is kept on the purchase in core, which then stops
+  // raising this occurrence on every pass and across restarts, or until a snooze lapses.
+  suspend fun ackBadgeAlert(snooze: Boolean) {
+    val rhId = BadgeModel.rhId.value
+    val userId = BadgeModel.userId.value ?: return
+    val purchaseId = BadgeModel.badgeState.value?.badgePurchaseId ?: return
+    val alert = BadgeModel.alert.value ?: return
+    try {
+      val badgeState = apiAckBadgeAlert(rhId, userId, purchaseId, alert.kind, snooze = snooze, episode = alert.episode)
+      withContext(Dispatchers.Main) { BadgeModel.set(rhId, userId, badgeState) }
+    } catch (e: Exception) {
+      Log.e(TAG, "ackBadgeAlert: ${e.message}")
+    }
+  }
+
+  // Not thrown: a failed badge read must not stop the app starting, and the model is left alone
+  // rather than set to nil, which would read as "no badge".
+  suspend fun loadBadgeState(rhId: Long?) {
+    try {
+      val userId = currentUserId("loadBadgeState")
+      val (badgeState, storePurchases) = apiGetBadgeState(rhId, userId)
+      withContext(Dispatchers.Main) {
+        BadgeModel.set(rhId, userId, badgeState)
+        BadgeStore.setStorePurchases(rhId, userId, storePurchases)
+      }
+    } catch (e: Exception) {
+      Log.e(TAG, "loadBadgeState: ${e.message}")
+    }
+  }
+
   private suspend fun currentUserId(funcName: String): Long = changingActiveUserMutex.withLock {
     val userId = chatModel.currentUser.value?.userId
     if (userId == null) {
@@ -591,6 +741,11 @@ object ChatController {
       }
       apiStartChat()
       appPrefs.chatStopped.set(false)
+      withLongRunningApi { BadgeStore.presentUnfinished() }
+      if (appPrefs.shouldDeleteDatabaseBackups.get()) {
+        deleteDatabaseBackups()
+        appPrefs.shouldDeleteDatabaseBackups.set(false)
+      }
     } catch (e: Throwable) {
       Log.e(TAG, "failed starting chat $e")
       throw e
@@ -656,6 +811,7 @@ object ChatController {
     chatModel.users.clear()
     chatModel.users.addAll(users)
     getUserChatData(rhId, keepingChatId = keepingChatId)
+    withLongRunningApi { BadgeStore.presentUnfinished() }
     val invitation = chatModel.callInvitations.values.firstOrNull { inv -> inv.user.userId == toUserId }
     if (invitation != null && currentUser != null) {
       chatModel.callManager.reportNewIncomingCall(invitation.copy(user = currentUser))
@@ -673,6 +829,7 @@ object ChatController {
     chatModel.userTags.value = if (hasUser) apiGetChatTags(rhId) ?: emptyList() else emptyList()
     chatModel.activeChatTagFilter.value = null
     chatModel.updateChatTags(rhId)
+    if (hasUser) loadBadgeState(rhId)
   }
 
   // Spec: spec/api.md#startReceiver
@@ -736,8 +893,8 @@ object ChatController {
     }
   }
 
-  private suspend fun sendCmdWithRetry(rhId: Long?, cmd: CC, inProgress: MutableState<Boolean>? = null, retryNum: Int = 0): API? {
-    val r = sendCmd(rhId, cmd, retryNum = retryNum)
+  private suspend fun sendCmdWithRetry(rhId: Long?, cmd: CC, inProgress: MutableState<Boolean>? = null, retryNum: Int = 0, log: Boolean = true): API? {
+    val r = sendCmd(rhId, cmd, retryNum = retryNum, log = log)
     val alert = if (r is API.Error) retryableNetworkErrorAlert(r.err) else null
     if ((inProgress == null || inProgress.value) && alert != null) {
       return suspendCancellableCoroutine { cont ->
@@ -757,7 +914,7 @@ object ChatController {
               safeResume(
                 runCatching {
                   coroutineScope {
-                    sendCmdWithRetry(rhId, cmd, inProgress = inProgress, retryNum = retryNum + 1)
+                    sendCmdWithRetry(rhId, cmd, inProgress = inProgress, retryNum = retryNum + 1, log = log)
                   }
                 }
               )
@@ -820,6 +977,10 @@ object ChatController {
             else -> null
           }
         }
+      is AgentErrorType.AGENT ->
+        if (e.agentErr is SMPAgentError.A_SERVICE && e.agentErr.serviceError is AgentServiceError.Timeout) {
+          return MR.strings.connection_timeout to generalGetString(MR.strings.service_request_timeout_desc)
+        }
       else -> return null
     }
     return null
@@ -841,7 +1002,7 @@ object ChatController {
       val r = json.decodeFromString<API>(rStr)
       if (log) {
         Log.d(TAG, "sendCmd response type ${r.responseType}")
-        if (r is API.Result && (r.res is CR.Response || r.res is CR.Invalid)) {
+        if (r is API.Result && ((r.res is CR.Response && !r.res.type.startsWith("call")) || r.res is CR.Invalid)) {
           Log.d(TAG, "sendCmd response json $rStr")
         }
         chatModel.addTerminalItem(TerminalItem.resp(rhId, r))
@@ -858,7 +1019,7 @@ object ChatController {
     } else {
       val r = json.decodeFromString<API>(rStr)
       Log.d(TAG, "chatRecvMsg: ${r.responseType}")
-      if (r is API.Result && (r.res is CR.Response || r.res is CR.Invalid)) Log.d(TAG, "chatRecvMsg json: $rStr")
+      if (r is API.Result && ((r.res is CR.Response && !r.res.type.startsWith("call")) || r.res is CR.Invalid)) Log.d(TAG, "chatRecvMsg json: $rStr")
       r
     }
   }
@@ -932,6 +1093,12 @@ object ChatController {
     val r = sendCmd(u.remoteHostId, CC.ApiSetUserAutoAcceptMemberContacts(u.userId, enable))
     if (r.result is CR.CmdOk) return
     throw Exception("failed to set auto-accept ${r.responseType} ${r.details}")
+  }
+
+  suspend fun apiSetUserAutoAcceptGroupInvitations(u: User, enable: Boolean) {
+    val r = sendCmd(u.remoteHostId, CC.ApiSetUserAutoAcceptGroupInvitations(u.userId, enable))
+    if (r.result is CR.CmdOk) return
+    throw Exception("failed to set auto-accept group invitations ${r.responseType} ${r.details}")
   }
 
   suspend fun apiHideUser(u: User, viewPwd: String): User =
@@ -1096,8 +1263,8 @@ object ChatController {
 
   suspend fun apiReorderChatTags(rh: Long?, tagIds: List<Long>) = sendCommandOkResp(rh, CC.ApiReorderChatTags(tagIds))
 
-  suspend fun apiSendMessages(rh: Long?, type: ChatType, id: Long, scope: GroupChatScope?, sendAsGroup: Boolean = false, live: Boolean = false, ttl: Int? = null, composedMessages: List<ComposedMessage>): List<AChatItem>? {
-    val cmd = CC.ApiSendMessages(type, id, scope, sendAsGroup, live, ttl, composedMessages)
+  suspend fun apiSendMessages(rh: Long?, type: ChatType, id: Long, scope: GroupChatScope?, sendAsGroup: Boolean = false, live: Boolean = false, ttl: Int? = null, sign: Boolean = false, composedMessages: List<ComposedMessage>): List<AChatItem>? {
+    val cmd = CC.ApiSendMessages(type, id, scope, sendAsGroup, live, ttl, sign, composedMessages)
     return processSendMessageCmd(rh, cmd)
   }
 
@@ -1148,9 +1315,9 @@ object ChatController {
     return null
   }
 
-  suspend fun apiGetChatItemInfo(rh: Long?, type: ChatType, id: Long, scope: GroupChatScope?, itemId: Long): ChatItemInfo? {
+  suspend fun apiGetChatItemInfo(rh: Long?, type: ChatType, id: Long, scope: GroupChatScope?, itemId: Long): Pair<ChatItem, ChatItemInfo>? {
     val r = sendCmd(rh, CC.ApiGetChatItemInfo(type, id, scope, itemId))
-    if (r is API.Result && r.res is CR.ApiChatItemInfo) return r.res.chatItemInfo
+    if (r is API.Result && r.res is CR.ApiChatItemInfo) return r.res.chatItem.chatItem to r.res.chatItemInfo
     apiErrorAlert("apiGetChatItemInfo", generalGetString(MR.strings.error_loading_details), r)
     return null
   }
@@ -1164,6 +1331,13 @@ object ChatController {
     val r = sendCmd(rh, CC.ApiShareChatMsgContent(shareChatType, shareChatId, toChatType, toChatId, toScope, sendAsGroup))
     if (r is API.Result && r.res is CR.ChatMsgContent) return r.res.msgContent
     apiErrorAlert("apiShareChatMsgContent", generalGetString(MR.strings.error_sharing_channel), r)
+    return null
+  }
+
+  suspend fun apiShareMyAddress(rh: Long?, toChatType: ChatType, toChatId: Long, toScope: GroupChatScope?, sendAsGroup: Boolean): MsgContent? {
+    val r = sendCmd(rh, CC.ApiShareMyAddress(toChatType, toChatId, toScope, sendAsGroup))
+    if (r is API.Result && r.res is CR.ChatMsgContent) return r.res.msgContent
+    apiErrorAlert("apiShareMyAddress", generalGetString(MR.strings.error_sharing_address), r)
     return null
   }
 
@@ -1517,10 +1691,12 @@ object ChatController {
     return null
   }
 
-  suspend fun apiConnectPlan(rh: Long?, connLink: String, linkOwnerSig: LinkOwnerSig? = null, inProgress: MutableState<Boolean>): Pair<CreatedConnLink, ConnectionPlan>? {
+  suspend fun apiConnectPlan(rh: Long?, connLink: String, resolveMode: PlanResolveMode = PlanResolveMode.PRMUnknown, linkOwnerSig: LinkOwnerSig? = null, inProgress: MutableState<Boolean>): ConnectionPlanResult? {
     val userId = kotlin.runCatching { currentUserId("apiConnectPlan") }.getOrElse { return null }
-    val r = sendCmdWithRetry(rh, CC.APIConnectPlan(userId, connLink, linkOwnerSig), inProgress = inProgress)
-    if (r is API.Result && r.res is CR.CRConnectionPlan) return r.res.connLink to r.res.connectionPlan
+    val r = sendCmdWithRetry(rh, CC.APIConnectPlan(userId, connLink, resolveMode, linkOwnerSig), inProgress = inProgress)
+    if (r is API.Result && r.res is CR.CRConnectionPlan) return ConnectionPlanResult(r.res.connLink, r.res.planSimplexName, r.res.otherSimplexName, r.res.connectionPlan)
+    // a PRMNever (typing) search that matches nothing locally is not an error to surface
+    if (r is API.Error && r.err is ChatError.ChatErrorChat && r.err.errorType is ChatErrorType.NotResolvedLocally) return null
     if (inProgress.value && r != null) apiConnectResponseAlert(r)
     return null
   }
@@ -1557,12 +1733,60 @@ object ChatController {
           generalGetString(MR.strings.link_requires_newer_app_version_please_upgrade)
         )
       }
+      r is API.Error && r.err is ChatError.ChatErrorChat
+          && r.err.errorType is ChatErrorType.SimplexDomainNotReady -> {
+        val domain = r.err.errorType.simplexDomain.fullDomainName
+        if (r.err.errorType.simplexDomainError is SimplexDomainError.NoValidLink) {
+          AlertManager.shared.showAlertMsg(
+            generalGetString(MR.strings.simplex_name_no_valid_link),
+            generalGetString(MR.strings.simplex_name_no_valid_link_desc).format(domain)
+          )
+        } else {
+          AlertManager.shared.showAlertMsg(
+            generalGetString(MR.strings.simplex_name_unconfirmed),
+            generalGetString(MR.strings.simplex_name_unconfirmed_desc).format(domain)
+          )
+        }
+      }
+      r is API.Error && r.err is ChatError.ChatErrorAgent
+          && r.err.agentError is AgentErrorType.NO_NAME_SERVERS -> {
+        AlertManager.shared.showAlertMsg(
+          generalGetString(MR.strings.simplex_name_error),
+          generalGetString(MR.strings.simplex_name_no_servers_desc)
+        )
+      }
+      r is API.Error && r.err is ChatError.ChatErrorAgent
+          && r.err.agentError is AgentErrorType.SMP
+          && r.err.agentError.smpErr is SMPErrorType.NAME -> {
+        when (val nameErr = r.err.agentError.smpErr.nameErr) {
+          is NameErrorType.NOT_FOUND -> AlertManager.shared.showAlertMsg(
+            generalGetString(MR.strings.simplex_name_not_found),
+            generalGetString(MR.strings.simplex_name_not_found_desc)
+          )
+          is NameErrorType.NO_RESOLVER -> AlertManager.shared.showAlertMsg(
+            generalGetString(MR.strings.simplex_name_error),
+            generalGetString(MR.strings.simplex_name_server_no_resolver_desc).format(r.err.agentError.serverAddress)
+          )
+          is NameErrorType.RESOLVER -> AlertManager.shared.showAlertMsg(
+            generalGetString(MR.strings.simplex_name_error),
+            generalGetString(MR.strings.simplex_name_resolver_error_desc).format(nameErr.resolverErr)
+          )
+        }
+      }
       r is API.Error && r.err is ChatError.ChatErrorAgent
           && r.err.agentError is AgentErrorType.SMP
           && r.err.agentError.smpErr is SMPErrorType.AUTH -> {
         AlertManager.shared.showAlertMsg(
           generalGetString(MR.strings.connection_error_auth),
           generalGetString(MR.strings.connection_error_auth_desc)
+        )
+      }
+      r is API.Error && r.err is ChatError.ChatErrorAgent
+          && r.err.agentError is AgentErrorType.CONN
+          && r.err.agentError.connErr is ConnectionErrorType.DUPLICATE -> {
+        AlertManager.shared.showAlertMsg(
+          generalGetString(MR.strings.connection_error_duplicate),
+          generalGetString(MR.strings.connection_error_duplicate_desc).format("CONN DUPLICATE")
         )
       }
       r is API.Error && r.err is ChatError.ChatErrorAgent
@@ -1589,11 +1813,29 @@ object ChatController {
     }
   }
 
+  // owner-specific wording for setting one's own/channel name; null for other errors (handled by apiConnectResponseAlert)
+  fun simplexNameOwnerError(err: ChatError, isChannel: Boolean): String? =
+    if (err is ChatError.ChatErrorChat && err.errorType is ChatErrorType.SimplexDomainNotReady && err.errorType.simplexDomainError is SimplexDomainError.NoValidLink) {
+      val domain = err.errorType.simplexDomain.fullDomainName
+      if (isChannel) generalGetString(MR.strings.simplex_name_owner_no_channel_link).format(domain)
+      else generalGetString(MR.strings.simplex_name_owner_no_address).format(domain)
+    } else null
+
   fun connErrorText(e: ChatError): String = when {
     e is ChatError.ChatErrorChat && e.errorType is ChatErrorType.InvalidConnReq ->
       generalGetString(MR.strings.invalid_connection_link)
     e is ChatError.ChatErrorChat && e.errorType is ChatErrorType.UnsupportedConnReq ->
       generalGetString(MR.strings.unsupported_connection_link)
+    e is ChatError.ChatErrorChat && e.errorType is ChatErrorType.SimplexDomainNotReady ->
+      if (e.errorType.simplexDomainError is SimplexDomainError.NoValidLink)
+        generalGetString(MR.strings.simplex_name_no_valid_link)
+      else generalGetString(MR.strings.simplex_name_unconfirmed)
+    e is ChatError.ChatErrorAgent && e.agentError is AgentErrorType.NO_NAME_SERVERS ->
+      generalGetString(MR.strings.simplex_name_error)
+    e is ChatError.ChatErrorAgent && e.agentError is AgentErrorType.SMP && e.agentError.smpErr is SMPErrorType.NAME ->
+      if (e.agentError.smpErr.nameErr is NameErrorType.NOT_FOUND)
+        generalGetString(MR.strings.simplex_name_not_found)
+      else generalGetString(MR.strings.simplex_name_error)
     e is ChatError.ChatErrorAgent && e.agentError is AgentErrorType.SMP && e.agentError.smpErr is SMPErrorType.AUTH ->
       generalGetString(MR.strings.connection_error_auth)
     e is ChatError.ChatErrorAgent && e.agentError is AgentErrorType.SMP && e.agentError.smpErr is SMPErrorType.BLOCKED ->
@@ -1606,19 +1848,19 @@ object ChatController {
       "${generalGetString(MR.strings.error_prefix)}: ${e.string}"
   }
 
-  suspend fun apiPrepareContact(rh: Long?, connLink: CreatedConnLink, contactShortLinkData: ContactShortLinkData): Chat? {
+  suspend fun apiPrepareContact(rh: Long?, connLink: CreatedConnLink, contactShortLinkData: ContactShortLinkData, verifiedDomain: SimplexDomain? = null): Chat? {
     val userId = try { currentUserId("apiPrepareContact") } catch (e: Exception) { return null }
-    val r = sendCmd(rh, CC.APIPrepareContact(userId, connLink, contactShortLinkData))
-    if (r is API.Result && r.res is CR.NewPreparedChat) return r.res.chat
+    val r = sendCmd(rh, CC.APIPrepareContact(userId, connLink, contactShortLinkData, verifiedDomain))
+    if (r is API.Result && r.res is CR.NewPreparedChat) return if (rh == null) r.res.chat else r.res.chat.copy(remoteHostId = rh)
     Log.e(TAG, "apiPrepareContact bad response: ${r.responseType} ${r.details}")
     AlertManager.shared.showAlertMsg(generalGetString(MR.strings.error_preparing_contact), "${r.responseType}: ${r.details}")
     return null
   }
 
-  suspend fun apiPrepareGroup(rh: Long?, connLink: CreatedConnLink, directLink: Boolean, groupShortLinkData: GroupShortLinkData): Chat? {
+  suspend fun apiPrepareGroup(rh: Long?, connLink: CreatedConnLink, directLink: Boolean, groupShortLinkData: GroupShortLinkData, verifiedDomain: SimplexDomain? = null): Chat? {
     val userId = try { currentUserId("apiPrepareGroup") } catch (e: Exception) { return null }
-    val r = sendCmd(rh, CC.APIPrepareGroup(userId, connLink, directLink, groupShortLinkData))
-    if (r is API.Result && r.res is CR.NewPreparedChat) return r.res.chat
+    val r = sendCmd(rh, CC.APIPrepareGroup(userId, connLink, directLink, groupShortLinkData, verifiedDomain))
+    if (r is API.Result && r.res is CR.NewPreparedChat) return if (rh == null) r.res.chat else r.res.chat.copy(remoteHostId = rh)
     Log.e(TAG, "apiPrepareGroup bad response: ${r.responseType} ${r.details}")
     AlertManager.shared.showAlertMsg(generalGetString(MR.strings.error_preparing_group), "${r.responseType}: ${r.details}")
     return null
@@ -1747,8 +1989,10 @@ object ChatController {
     val r = sendCmd(rh, CC.ApiUpdateProfile(userId, profile))
     if (r is API.Result && r.res is CR.UserProfileNoChange) return profile to emptyList()
     if (r is API.Result && r.res is CR.UserProfileUpdated) return r.res.toProfile to r.res.updateSummary.changedContacts
-    if (r is API.Error && r.err is ChatError.ChatErrorStore && r.err.storeError is StoreError.DuplicateName) {
+    if (r is API.Error && (r.err is ChatError.ChatErrorStore && r.err.storeError is StoreError.DuplicateName || r.err is ChatError.ChatErrorChat && r.err.errorType is ChatErrorType.UserExists)) {
       AlertManager.shared.showAlertMsg(generalGetString(MR.strings.failed_to_create_user_duplicate_title), generalGetString(MR.strings.failed_to_create_user_duplicate_desc))
+    } else if (!(networkErrorAlert(r))) {
+      AlertManager.shared.showAlertMsg(generalGetString(MR.strings.error_saving_profile), "${r.responseType}: ${r.details}")
     }
     Log.e(TAG, "apiUpdateProfile bad response: ${r.responseType} ${r.details}")
     return null
@@ -1760,8 +2004,45 @@ object ChatController {
     return when {
       r is API.Result && r.res is CR.UserProfileNoChange -> null
       r is API.Result && r.res is CR.UserProfileUpdated -> r.res.user.updateRemoteHostId(rh)
-      else -> throw Exception("failed to set profile address: ${r.responseType} ${r.details}")
+      else -> {
+        if (!(networkErrorAlert(r))) {
+          apiErrorAlert("apiSetProfileAddress", generalGetString(MR.strings.error_saving_profile), r)
+        }
+        throw Exception("failed to set profile address: ${r.responseType} ${r.details}")
+      }
     }
+  }
+
+  // name is the encoded SimplexName (e.g. "@alice.simplex"); null clears it. Throws on rejection.
+  suspend fun apiSetUserDomain(rh: Long?, simplexDomain: String?): User {
+    val userId = currentUserId("apiSetUserDomain")
+    val r = sendCmd(rh, CC.ApiSetUserDomain(userId, simplexDomain))
+    return when {
+      r is API.Result && r.res is CR.UserProfileUpdated -> r.res.user.updateRemoteHostId(rh)
+      r is API.Result && r.res is CR.UserProfileNoChange -> r.res.user.updateRemoteHostId(rh)
+      else -> {
+        if (r is API.Error) {
+          val ownerMsg = simplexNameOwnerError(r.err, isChannel = false)
+          if (ownerMsg != null) AlertManager.shared.showAlertMsg(generalGetString(MR.strings.error_saving_simplex_name), ownerMsg)
+          else apiConnectResponseAlert(r)
+        }
+        throw Exception("failed to set SimpleX name: ${r.responseType} ${r.details}")
+      }
+    }
+  }
+
+  suspend fun apiVerifyContactDomain(rh: Long?, contactId: Long): Pair<Contact, String?>? {
+    val r = sendCmd(rh, CC.ApiVerifyContactDomain(contactId))
+    if (r is API.Result && r.res is CR.ContactDomainVerified) return r.res.contact to r.res.verificationFailure
+    Log.e(TAG, "apiVerifyContactDomain bad response: ${r.responseType} ${r.details}")
+    return null
+  }
+
+  suspend fun apiVerifyGroupDomain(rh: Long?, groupId: Long): Pair<GroupInfo, String?>? {
+    val r = sendCmd(rh, CC.ApiVerifyGroupDomain(groupId))
+    if (r is API.Result && r.res is CR.GroupDomainVerified) return r.res.groupInfo to r.res.verificationFailure
+    Log.e(TAG, "apiVerifyGroupDomain bad response: ${r.responseType} ${r.details}")
+    return null
   }
 
   suspend fun apiSetContactPrefs(rh: Long?, contactId: Long, prefs: ChatPreferences): Contact? {
@@ -1932,8 +2213,8 @@ object ChatController {
     return r.result is CR.CmdOk
   }
 
-  suspend fun apiSendCallExtraInfo(rh: Long?, contact: Contact, rtcIceCandidates: String): Boolean {
-    val extraInfo = WebRTCExtraInfo(rtcIceCandidates)
+  suspend fun apiSendCallExtraInfo(rh: Long?, contact: Contact, rtcSession: String?, rtcIceCandidates: String): Boolean {
+    val extraInfo = WebRTCExtraInfo(rtcSession, rtcIceCandidates)
     val r = sendCmd(rh, CC.ApiSendCallExtraInfo(contact, extraInfo))
     return r.result is CR.CmdOk
   }
@@ -2174,8 +2455,8 @@ object ChatController {
     return null
   }
 
-  suspend fun apiGetGroupRelays(groupId: Long): List<GroupRelay> {
-    val r = sendCmd(null, CC.ApiGetGroupRelays(groupId))
+  suspend fun apiGetGroupRelays(rh: Long?, groupId: Long): List<GroupRelay> {
+    val r = sendCmd(rh, CC.ApiGetGroupRelays(groupId))
     if (r is API.Result && r.res is CR.GroupRelays) return r.res.groupRelays
     return emptyList()
   }
@@ -2185,8 +2466,8 @@ object ChatController {
     data class AddFailed(val addRelayResults: List<AddRelayResult>): AddGroupRelaysResult()
   }
 
-  suspend fun apiAddGroupRelays(groupId: Long, relayIds: List<Long>): AddGroupRelaysResult? {
-    val r = sendCmdWithRetry(null, CC.ApiAddGroupRelays(groupId, relayIds))
+  suspend fun apiAddGroupRelays(rh: Long?, groupId: Long, relayIds: List<Long>): AddGroupRelaysResult? {
+    val r = sendCmdWithRetry(rh, CC.ApiAddGroupRelays(groupId, relayIds))
     if (r is API.Result && r.res is CR.GroupRelaysAdded) return AddGroupRelaysResult.Added(r.res.groupInfo, r.res.groupLink, r.res.groupRelays)
     if (r is API.Result && r.res is CR.GroupRelaysAddFailed) return AddGroupRelaysResult.AddFailed(r.res.addRelayResults)
     if (r != null) throw Exception("${r.responseType}: ${r.details}")
@@ -2291,7 +2572,7 @@ object ChatController {
     return when {
       r is API.Result && r.res is CR.GroupUpdated -> r.res.toGroup
       r is API.Error -> {
-        AlertManager.shared.showAlertMsg(generalGetString(errorTitle), "$r.err")
+        AlertManager.shared.showAlertMsg(generalGetString(errorTitle), r.err.string)
         null
       }
       else -> {
@@ -2300,6 +2581,23 @@ object ChatController {
           generalGetString(errorTitle),
           "${r.responseType}: ${r.details}"
         )
+        null
+      }
+    }
+  }
+
+  suspend fun apiSetPublicGroupAccess(rh: Long?, groupId: Long, access: PublicGroupAccess): GroupInfo? {
+    val r = sendCmd(rh, CC.ApiSetPublicGroupAccess(groupId, access))
+    return when {
+      r is API.Result && r.res is CR.GroupUpdated -> r.res.toGroup
+      r is API.Error -> {
+        val ownerMsg = simplexNameOwnerError(r.err, isChannel = true)
+        if (ownerMsg != null) AlertManager.shared.showAlertMsg(generalGetString(MR.strings.error_saving_simplex_name), ownerMsg)
+        else apiConnectResponseAlert(r)
+        null
+      }
+      else -> {
+        Log.e(TAG, "apiSetPublicGroupAccess bad response: ${r.responseType} ${r.details}")
         null
       }
     }
@@ -2892,6 +3190,13 @@ object ChatController {
           // TODO NtfManager.shared.notifyGroupInvitation
         }
       }
+      is CR.ReceivedGroupInvitationViaGroup -> {
+        if (active(r.user)) {
+          withContext(Dispatchers.Main) {
+            chatModel.chatsContext.updateGroup(rhId, r.groupInfo)
+          }
+        }
+      }
       is CR.UserAcceptedGroupSent -> {
         if (!active(r.user)) return
 
@@ -3142,21 +3447,13 @@ object ChatController {
         chatModel.callManager.reportNewIncomingCall(r.callInvitation.copy(remoteHostId = rhId))
       }
       is CR.CallOffer -> {
-        // TODO askConfirmation?
-        // TODO check encryption is compatible
         withCall(r, r.contact) { call ->
-          chatModel.activeCall.value = call.copy(callState = CallState.OfferReceived, sharedKey = r.sharedKey)
-          val useRelay = appPrefs.webrtcPolicyRelay.get()
-          val iceServers = getIceServers()
-          Log.d(TAG, ".callOffer iceServers $iceServers")
-          chatModel.callCommand.add(WCallCommand.Offer(
-            offer = r.offer.rtcSession,
-            iceCandidates = r.offer.rtcIceCandidates,
-            media = r.callType.media,
-            aesKey = r.sharedKey,
-            iceServers = iceServers,
-            relay = useRelay
-          ))
+          chatModel.activeCall.value = call.copy(callState = CallState.OfferReceived, hasSharedKey = r.sharedKey != null)
+          if (r.askConfirmation) {
+            showUnencryptedCallAlert(call) { processCallOffer(r) }
+          } else {
+            processCallOffer(r)
+          }
         }
       }
       is CR.CallAnswer -> {
@@ -3167,7 +3464,7 @@ object ChatController {
       }
       is CR.CallExtraInfo -> {
         withCall(r, r.contact) { _ ->
-          chatModel.callCommand.add(WCallCommand.Ice(iceCandidates = r.extraInfo.rtcIceCandidates))
+          chatModel.callCommand.add(WCallCommand.Ice(iceCandidates = r.extraInfo.rtcIceCandidates, session = r.extraInfo.rtcSession))
         }
       }
       is CR.CallEnded -> {
@@ -3343,6 +3640,26 @@ object ChatController {
             chatModel.chatsContext.updateContact(rhId, r.contact)
           }
         }
+      is CR.BadgeChanged ->
+        if (rhId == chatModel.remoteHostId()) {
+          withContext(Dispatchers.Main) {
+            // read by core after retiring or presenting, so it carries the profile badge as changed
+            chatModel.updateUser(r.user.updateRemoteHostId(rhId))
+            if (active(r.user)) {
+              BadgeModel.set(rhId, r.user.userId, r.badgeState)
+            }
+          }
+        }
+      is CR.BadgeAlertR ->
+        if (active(r.user)) {
+          withContext(Dispatchers.Main) {
+            BadgeModel.setAlert(rhId, r.user.userId, r.badgeAlert)
+          }
+        }
+      is CR.StorePurchaseCredited ->
+        withLongRunningApi { BadgeStore.storePurchaseCredited(rhId, r.user, r.invoiceId) }
+      is CR.StorePurchaseRefused ->
+        withLongRunningApi { BadgeStore.storePurchaseRefused(rhId, r.user, r.invoiceId, r.refusal) }
       else ->
         Log.d(TAG , "unsupported event: ${msg.responseType}")
     }
@@ -3384,7 +3701,7 @@ object ChatController {
     getUserChatData(null)
   }
 
-  private fun activeUser(rhId: Long?, user: UserLike): Boolean =
+  fun activeUser(rhId: Long?, user: UserLike): Boolean =
     rhId == chatModel.remoteHostId() && user.userId == chatModel.currentUser.value?.userId
 
   private fun withCall(r: CR, contact: Contact, perform: (Call) -> Unit) {
@@ -3394,6 +3711,40 @@ object ChatController {
     } else {
       Log.d(TAG, "processReceivedMsg: ignoring ${r.responseType}, not in call with the contact ${contact.id}")
     }
+  }
+
+  private fun processCallOffer(r: CR.CallOffer) {
+    val useRelay = appPrefs.webrtcPolicyRelay.get()
+    val iceServers = getIceServers()
+    chatModel.callCommand.add(WCallCommand.Offer(
+      offer = r.offer.rtcSession,
+      iceCandidates = r.offer.rtcIceCandidates,
+      media = r.callType.media,
+      aesKey = r.sharedKey,
+      iceServers = iceServers,
+      relay = useRelay,
+      canReconnect = r.contact.callReconnectSupported
+    ))
+  }
+
+  private fun showUnencryptedCallAlert(call: Call, onContinue: () -> Unit) {
+    // the call may have ended, or a new one started with the same contact, while the alert was shown
+    fun offerPending(): Boolean {
+      val c = chatModel.activeCall.value
+      return c != null && c.remoteHostId == call.remoteHostId && c.contact.id == call.contact.id && c.callState == CallState.OfferReceived
+    }
+    val endCall = { if (offerPending()) withBGApi { chatModel.callManager.endCall(call) } }
+    AlertManager.shared.showAlertDialog(
+      title = generalGetString(MR.strings.call_not_encrypted_title),
+      text = generalGetString(MR.strings.call_not_encrypted_desc).format(call.contact.displayName),
+      confirmText = generalGetString(MR.strings.call_service_notification_end_call),
+      onConfirm = { endCall() },
+      dismissText = generalGetString(MR.strings.continue_to_next_step),
+      onDismiss = { if (offerPending()) onContinue() },
+      onDismissRequest = { endCall() },
+      destructive = true,
+      parseHtml = false
+    )
   }
 
   suspend fun leaveGroup(rh: Long?, groupId: Long) {
@@ -3445,7 +3796,7 @@ object ChatController {
             generalGetString(MR.strings.marked_deleted_description)
           )
         }
-        val deleted = if (r.member_ != null && (cItem.chatDir as CIDirection.GroupRcv?)?.groupMember?.groupMemberId != r.member_.groupMemberId) {
+        val deleted = if (r.member_ != null && (cItem.chatDir as? CIDirection.GroupRcv)?.groupMember?.groupMemberId != r.member_.groupMemberId) {
           CIDeleted.Moderated(Clock.System.now(), r.member_)
         } else {
           CIDeleted.Deleted(Clock.System.now())
@@ -3462,12 +3813,12 @@ object ChatController {
             // Stop voice playback only inside a chat, allow to play in a chat list
             AudioPlayer.stop(cItem)
           }
-          val deleted = if (r.member_ != null && (cItem.chatDir as CIDirection.GroupRcv?)?.groupMember?.groupMemberId != r.member_.groupMemberId) {
+          val deleted = if (r.member_ != null && (cItem.chatDir as? CIDirection.GroupRcv)?.groupMember?.groupMemberId != r.member_.groupMemberId) {
             CIDeleted.Moderated(Clock.System.now(), r.member_)
           } else {
             CIDeleted.Deleted(Clock.System.now())
           }
-          chatsCtx.upsertChatItem(rhId, cInfo, cItem.copy(meta = cItem.meta.copy(itemDeleted = deleted)))
+          chatsCtx.upsertChatItem(rhId, cInfo.copy(groupChatScope = chatsCtx.groupScopeInfo), cItem.copy(meta = cItem.meta.copy(itemDeleted = deleted)))
         }
       }
     }
@@ -3640,6 +3991,25 @@ class SharedPreference<T>(val get: () -> T, set: (T) -> Unit) {
   }
 }
 
+sealed class BadgeRedeemResult {
+  class Redeemed(val user: User, val newBadge: Boolean, val badgeState: BadgeState?): BadgeRedeemResult()
+  // err is null for a response of an unexpected type, which is logged where it is received
+  class Failed(val err: ChatError?): BadgeRedeemResult()
+}
+
+@Serializable
+data class OpenStorePurchase(val invoiceId: String? = null, val transactionRef: String? = null, val creditError: BadgeIssueFailure? = null)
+
+// a refusal is Failed, with the code in BREServiceError
+sealed class BadgePurchaseResult {
+  class Held(val user: UserRef, val badgeState: BadgeState?, val storePurchases: List<OpenStorePurchase>): BadgePurchaseResult()
+  class Credited(val user: User, val badgeState: BadgeState?): BadgePurchaseResult()
+  // listed, and no record here has it: another device's purchase on the same Google account
+  object NotRecorded: BadgePurchaseResult()
+  // err is null for a response of an unexpected type, which is logged where it is received
+  class Failed(val err: ChatError?): BadgePurchaseResult()
+}
+
 // ChatCommand
 // Spec: spec/api.md#CC
 sealed class CC {
@@ -3652,6 +4022,7 @@ sealed class CC {
   class ApiSetUserContactReceipts(val userId: Long, val userMsgReceiptSettings: UserMsgReceiptSettings): CC()
   class ApiSetUserGroupReceipts(val userId: Long, val userMsgReceiptSettings: UserMsgReceiptSettings): CC()
   class ApiSetUserAutoAcceptMemberContacts(val userId: Long, val enable: Boolean): CC()
+  class ApiSetUserAutoAcceptGroupInvitations(val userId: Long, val enable: Boolean): CC()
   class ApiHideUser(val userId: Long, val viewPwd: String): CC()
   class ApiUnhideUser(val userId: Long, val viewPwd: String): CC()
   class ApiMuteUser(val userId: Long): CC()
@@ -3675,7 +4046,7 @@ sealed class CC {
   class ApiGetChat(val type: ChatType, val id: Long, val scope: GroupChatScope?, val contentTag: MsgContentTag?, val pagination: ChatPagination, val search: String = ""): CC()
   class ApiGetChatContentTypes(val type: ChatType, val id: Long, val scope: GroupChatScope?): CC()
   class ApiGetChatItemInfo(val type: ChatType, val id: Long, val scope: GroupChatScope?, val itemId: Long): CC()
-  class ApiSendMessages(val type: ChatType, val id: Long, val scope: GroupChatScope?, val sendAsGroup: Boolean, val live: Boolean, val ttl: Int?, val composedMessages: List<ComposedMessage>): CC()
+  class ApiSendMessages(val type: ChatType, val id: Long, val scope: GroupChatScope?, val sendAsGroup: Boolean, val live: Boolean, val ttl: Int?, val sign: Boolean, val composedMessages: List<ComposedMessage>): CC()
   class ApiCreateChatTag(val tag: ChatTagData): CC()
   class ApiSetChatTags(val type: ChatType, val id: Long, val tagIds: List<Long>): CC()
   class ApiDeleteChatTag(val tagId: Long): CC()
@@ -3693,6 +4064,7 @@ sealed class CC {
   class ApiPlanForwardChatItems(val fromChatType: ChatType, val fromChatId: Long, val fromScope: GroupChatScope?, val chatItemIds: List<Long>): CC()
   class ApiForwardChatItems(val toChatType: ChatType, val toChatId: Long, val toScope: GroupChatScope?, val sendAsGroup: Boolean, val fromChatType: ChatType, val fromChatId: Long, val fromScope: GroupChatScope?, val itemIds: List<Long>, val ttl: Int?): CC()
   class ApiShareChatMsgContent(val shareChatType: ChatType, val shareChatId: Long, val toChatType: ChatType, val toChatId: Long, val toScope: GroupChatScope?, val sendAsGroup: Boolean): CC()
+  class ApiShareMyAddress(val toChatType: ChatType, val toChatId: Long, val toScope: GroupChatScope?, val sendAsGroup: Boolean): CC()
   class ApiNewGroup(val userId: Long, val incognito: Boolean, val groupProfile: GroupProfile): CC()
   class ApiNewPublicGroup(val userId: Long, val incognito: Boolean, val relayIds: List<Long>, val groupProfile: GroupProfile): CC()
   class ApiGetGroupRelays(val groupId: Long): CC()
@@ -3707,6 +4079,7 @@ sealed class CC {
   class ApiLeaveGroup(val groupId: Long): CC()
   class ApiListMembers(val groupId: Long): CC()
   class ApiUpdateGroupProfile(val groupId: Long, val groupProfile: GroupProfile): CC()
+  class ApiSetPublicGroupAccess(val groupId: Long, val access: PublicGroupAccess): CC()
   class APICreateGroupLink(val groupId: Long, val memberRole: GroupMemberRole): CC()
   class APIGroupLinkMemberRole(val groupId: Long, val memberRole: GroupMemberRole): CC()
   class APIDeleteGroupLink(val groupId: Long): CC()
@@ -3753,9 +4126,9 @@ sealed class CC {
   class APIAddContact(val userId: Long, val incognito: Boolean): CC()
   class ApiSetConnectionIncognito(val connId: Long, val incognito: Boolean): CC()
   class ApiChangeConnectionUser(val connId: Long, val userId: Long): CC()
-  class APIConnectPlan(val userId: Long, val connLink: String, val linkOwnerSig: LinkOwnerSig? = null): CC()
-  class APIPrepareContact(val userId: Long, val connLink: CreatedConnLink, val contactShortLinkData: ContactShortLinkData): CC()
-  class APIPrepareGroup(val userId: Long, val connLink: CreatedConnLink, val directLink: Boolean, val groupShortLinkData: GroupShortLinkData): CC()
+  class APIConnectPlan(val userId: Long, val connLink: String, val resolveMode: PlanResolveMode = PlanResolveMode.PRMUnknown, val linkOwnerSig: LinkOwnerSig? = null): CC()
+  class APIPrepareContact(val userId: Long, val connLink: CreatedConnLink, val contactShortLinkData: ContactShortLinkData, val verifiedDomain: SimplexDomain? = null): CC()
+  class APIPrepareGroup(val userId: Long, val connLink: CreatedConnLink, val directLink: Boolean, val groupShortLinkData: GroupShortLinkData, val verifiedDomain: SimplexDomain? = null): CC()
   class APIChangePreparedContactUser(val contactId: Long, val newUserId: Long): CC()
   class APIChangePreparedGroupUser(val groupId: Long, val newUserId: Long): CC()
   class APIConnectPreparedContact(val contactId: Long, val incognito: Boolean, val msg: MsgContent?): CC()
@@ -3777,6 +4150,9 @@ sealed class CC {
   class ApiShowMyAddress(val userId: Long): CC()
   class ApiAddMyAddressShortLink(val userId: Long): CC()
   class ApiSetProfileAddress(val userId: Long, val on: Boolean): CC()
+  class ApiSetUserDomain(val userId: Long, val simplexDomain: String?): CC()
+  class ApiVerifyContactDomain(val contactId: Long): CC()
+  class ApiVerifyGroupDomain(val groupId: Long): CC()
   class ApiSetAddressSettings(val userId: Long, val addressSettings: AddressSettings): CC()
   class ApiGetCallInvitations: CC()
   class ApiSendCallInvitation(val contact: Contact, val callType: CallType): CC()
@@ -3812,6 +4188,14 @@ sealed class CC {
   class ApiUploadStandaloneFile(val userId: Long, val file: CryptoFile): CC()
   class ApiDownloadStandaloneFile(val userId: Long, val url: String, val file: CryptoFile): CC()
   class ApiStandaloneFileInfo(val url: String): CC()
+  // badges
+  class ApiRedeemBadgeCode(val userId: Long, val code: String): CC()
+  class ApiPurchaseBadge(val userId: Long, val echoedInvoiceId: String?, val origin: StoreReceiptOrigin, val payment: ServicePayment): CC()
+  class ApiSetBadgeSubscriptionStatus(val status: BadgeSubscriptionState, val payment: ServicePayment): CC()
+  class ApiCreateBadgeInvoice(val userId: Long): CC()
+  class ApiGetBadgeState(val userId: Long): CC()
+  class ApiGetBadgeLedger(val userId: Long, val badgePurchaseId: Long): CC()
+  class ApiAckBadgeAlert(val userId: Long, val badgePurchaseId: Long, val alertKind: BadgeAlertKind, val snooze: Boolean, val episode: String): CC()
   // misc
   class ShowVersion(): CC()
   class ResetAgentServersStats(): CC()
@@ -3837,6 +4221,7 @@ sealed class CC {
       "/_set receipts groups $userId ${onOff(mrs.enable)} clear_overrides=${onOff(mrs.clearOverrides)}"
     }
     is ApiSetUserAutoAcceptMemberContacts -> "/_set accept member contacts $userId ${onOff(enable)}"
+    is ApiSetUserAutoAcceptGroupInvitations -> "/_set accept group invitations $userId ${onOff(enable)}"
     is ApiHideUser -> "/_hide user $userId ${json.encodeToString(viewPwd)}"
     is ApiUnhideUser -> "/_unhide user $userId ${json.encodeToString(viewPwd)}"
     is ApiMuteUser -> "/_mute user $userId"
@@ -3869,7 +4254,7 @@ sealed class CC {
     is ApiSendMessages -> {
       val msgs = json.encodeToString(composedMessages)
       val ttlStr = if (ttl != null) "$ttl" else "default"
-      "/_send ${chatRef(type, id, scope)}${if (sendAsGroup) "(as_group=on)" else ""} live=${onOff(live)} ttl=${ttlStr} json $msgs"
+      "/_send ${chatRef(type, id, scope)}${if (sendAsGroup) "(as_group=on)" else ""} live=${onOff(live)} ttl=${ttlStr} sign=${onOff(sign)} json $msgs"
     }
     is ApiCreateChatTag -> "/_create tag ${json.encodeToString(tag)}"
     is ApiSetChatTags -> "/_tags ${chatRef(type, id, scope = null)} ${tagIds.joinToString(",")}"
@@ -3895,6 +4280,7 @@ sealed class CC {
     is ApiShareChatMsgContent -> {
       "/_share chat content ${chatRef(shareChatType, shareChatId, null)} ${chatRef(toChatType, toChatId, toScope)}${if (sendAsGroup) "(as_group=on)" else ""}"
     }
+    is ApiShareMyAddress -> "/_share address ${chatRef(toChatType, toChatId, toScope)}${if (sendAsGroup) "(as_group=on)" else ""}"
     is ApiPlanForwardChatItems -> {
       "/_forward plan ${chatRef(fromChatType, fromChatId, fromScope)} ${chatItemIds.joinToString(",")}"
     }
@@ -3959,11 +4345,12 @@ sealed class CC {
     is ApiSetConnectionIncognito -> "/_set incognito :$connId ${onOff(incognito)}"
     is ApiChangeConnectionUser -> "/_set conn user :$connId $userId"
     is APIConnectPlan -> {
+      val resolveStr = if (resolveMode != PlanResolveMode.PRMUnknown) " resolve=${resolveMode.cmdString}" else ""
       val sigStr = if (linkOwnerSig != null) " sig=${json.encodeToString(linkOwnerSig)}" else ""
-      "/_connect plan $userId $connLink$sigStr"
+      "/_connect plan $userId $connLink$resolveStr$sigStr"
     }
-    is APIPrepareContact -> "/_prepare contact $userId ${connLink.connFullLink} ${connLink.connShortLink ?: ""} ${json.encodeToString(contactShortLinkData)}"
-    is APIPrepareGroup -> "/_prepare group $userId ${connLink.connFullLink} ${connLink.connShortLink ?: ""} direct=${onOff(directLink)} ${json.encodeToString(groupShortLinkData)}"
+    is APIPrepareContact -> "/_prepare contact $userId ${connLink.cmdString}${verifiedDomain?.let { " ${it.cmdString}" } ?: ""} ${json.encodeToString(contactShortLinkData)}"
+    is APIPrepareGroup -> "/_prepare group $userId ${connLink.cmdString} direct=${onOff(directLink)}${verifiedDomain?.let { " ${it.cmdString}" } ?: ""} ${json.encodeToString(groupShortLinkData)}"
     is APIChangePreparedContactUser -> "/_set contact user @$contactId $newUserId"
     is APIChangePreparedGroupUser -> "/_set group user #$groupId $newUserId"
     is APIConnectPreparedContact -> "/_connect contact @$contactId incognito=${onOff(incognito)}${maybeContent(msg)}"
@@ -3985,6 +4372,10 @@ sealed class CC {
     is ApiShowMyAddress -> "/_show_address $userId"
     is ApiAddMyAddressShortLink -> "/_short_link_address $userId"
     is ApiSetProfileAddress -> "/_profile_address $userId ${onOff(on)}"
+    is ApiSetUserDomain -> "/_set domain $userId" + (if (simplexDomain != null) " $simplexDomain" else "")
+    is ApiSetPublicGroupAccess -> "/_public group access #$groupId ${json.encodeToString(access)}"
+    is ApiVerifyContactDomain -> "/_verify domain @$contactId"
+    is ApiVerifyGroupDomain -> "/_verify domain #$groupId"
     is ApiSetAddressSettings -> "/_address_settings $userId ${json.encodeToString(addressSettings)}"
     is ApiAcceptContact -> "/_accept incognito=${onOff(incognito)} $contactReqId"
     is ApiRejectContact -> "/_reject $contactReqId"
@@ -4026,6 +4417,13 @@ sealed class CC {
     is ApiUploadStandaloneFile -> "/_upload $userId ${file.filePath}"
     is ApiDownloadStandaloneFile -> "/_download $userId $url ${file.filePath}"
     is ApiStandaloneFileInfo -> "/_download info $url"
+    is ApiRedeemBadgeCode -> "/_redeem_badge_code $userId $code"
+    is ApiPurchaseBadge -> "/_badge purchase $userId${echoedInvoiceId?.let { " invoice=$it" } ?: ""}${storeReceiptOriginParam(origin)} ${json.encodeToString(payment)}"
+    is ApiSetBadgeSubscriptionStatus -> "/_badge subscription ${status.text} ${json.encodeToString(payment)}"
+    is ApiCreateBadgeInvoice -> "/_badge invoice $userId"
+    is ApiGetBadgeState -> "/_badge state $userId"
+    is ApiGetBadgeLedger -> "/_badge ledger $userId $badgePurchaseId"
+    is ApiAckBadgeAlert -> "/_badge ack $userId $badgePurchaseId ${badgeAlertKindParam(alertKind)} ${onOff(snooze)} $episode"
     is ShowVersion -> "/version"
     is ResetAgentServersStats -> "/reset servers stats"
     is GetAgentSubsTotal -> "/get subs total $userId"
@@ -4042,6 +4440,7 @@ sealed class CC {
     is ApiSetUserContactReceipts -> "apiSetUserContactReceipts"
     is ApiSetUserGroupReceipts -> "apiSetUserGroupReceipts"
     is ApiSetUserAutoAcceptMemberContacts -> "apiSetUserAutoAcceptMemberContacts"
+    is ApiSetUserAutoAcceptGroupInvitations -> "apiSetUserAutoAcceptGroupInvitations"
     is ApiHideUser -> "apiHideUser"
     is ApiUnhideUser -> "apiUnhideUser"
     is ApiMuteUser -> "apiMuteUser"
@@ -4081,6 +4480,7 @@ sealed class CC {
     is ApiGetReactionMembers -> "apiGetReactionMembers"
     is ApiForwardChatItems -> "apiForwardChatItems"
     is ApiShareChatMsgContent -> "apiShareChatMsgContent"
+    is ApiShareMyAddress -> "apiShareMyAddress"
     is ApiPlanForwardChatItems -> "apiPlanForwardChatItems"
     is ApiNewGroup -> "apiNewGroup"
     is ApiNewPublicGroup -> "apiNewPublicGroup"
@@ -4166,6 +4566,10 @@ sealed class CC {
     is ApiShowMyAddress -> "apiShowMyAddress"
     is ApiAddMyAddressShortLink -> "apiAddMyAddressShortLink"
     is ApiSetProfileAddress -> "apiSetProfileAddress"
+    is ApiSetUserDomain -> "apiSetUserDomain"
+    is ApiSetPublicGroupAccess -> "apiSetPublicGroupAccess"
+    is ApiVerifyContactDomain -> "apiVerifyContactDomain"
+    is ApiVerifyGroupDomain -> "apiVerifyGroupDomain"
     is ApiSetAddressSettings -> "apiSetAddressSettings"
     is ApiAcceptContact -> "apiAcceptContact"
     is ApiRejectContact -> "apiRejectContact"
@@ -4200,6 +4604,13 @@ sealed class CC {
     is ApiUploadStandaloneFile -> "apiUploadStandaloneFile"
     is ApiDownloadStandaloneFile -> "apiDownloadStandaloneFile"
     is ApiStandaloneFileInfo -> "apiStandaloneFileInfo"
+    is ApiRedeemBadgeCode -> "apiRedeemBadgeCode"
+    is ApiPurchaseBadge -> "apiPurchaseBadge"
+    is ApiSetBadgeSubscriptionStatus -> "apiSetBadgeSubscriptionStatus"
+    is ApiCreateBadgeInvoice -> "apiCreateBadgeInvoice"
+    is ApiGetBadgeState -> "apiGetBadgeState"
+    is ApiGetBadgeLedger -> "apiGetBadgeLedger"
+    is ApiAckBadgeAlert -> "apiAckBadgeAlert"
     is ShowVersion -> "showVersion"
     is ResetAgentServersStats -> "resetAgentServersStats"
     is GetAgentSubsTotal -> "getAgentSubsTotal"
@@ -4221,6 +4632,14 @@ sealed class CC {
       is ApiUnhideUser -> ApiUnhideUser(userId, obfuscate(viewPwd))
       is ApiDeleteUser -> ApiDeleteUser(userId, delSMPQueues, obfuscateOrNull(viewPwd))
       is TestStorageEncryption -> TestStorageEncryption(obfuscate(key))
+      // a code or a store receipt is a bearer secret until it is redeemed, and the terminal shows and copies cmdString
+      is ApiRedeemBadgeCode -> ApiRedeemBadgeCode(userId, obfuscate(code))
+      is ApiPurchaseBadge -> ApiPurchaseBadge(userId, echoedInvoiceId, origin, when (payment) {
+        is ServicePayment.Google -> ServicePayment.Google(payment.productId, obfuscate(payment.token))
+      })
+      is ApiSetBadgeSubscriptionStatus -> ApiSetBadgeSubscriptionStatus(status, when (payment) {
+        is ServicePayment.Google -> ServicePayment.Google(payment.productId, obfuscate(payment.token))
+      })
       else -> this
     }
 
@@ -4254,7 +4673,39 @@ sealed class CC {
   }
 }
 
+// the field must stay typed as the sealed base, or kotlinx omits the "type" tag core parses by
+@Serializable
+sealed class ServicePayment {
+  @Serializable @SerialName("google") class Google(val productId: String, val token: String): ServicePayment()
+}
+
+enum class StoreReceiptOrigin {
+  Purchased,
+  // found in the store's list rather than bought or restored here, so core records it only into a record it has
+  Listed,
+  // Restore: core claims it for this profile, moving it from another device or profile it was credited to
+  Restored
+}
+
 fun onOff(b: Boolean): String = if (b) "on" else "off"
+
+// /_badge ack takes the kind in core's text encoding, not the JSON tag; an unknown kind has no banner to dismiss, so it is never acked
+private fun badgeAlertKindParam(kind: BadgeAlertKind): String = when (kind) {
+  is BadgeAlertKind.RenewalApproaching -> "renewal_approaching"
+  is BadgeAlertKind.PaymentIssue -> "payment_issue"
+  is BadgeAlertKind.SubscriptionCancelled -> "subscription_cancelled"
+  is BadgeAlertKind.SubscriptionEnded -> "subscription_ended"
+  is BadgeAlertKind.PrepaidEnding -> "prepaid_ending"
+  is BadgeAlertKind.SupportEnded -> "support_ended"
+  is BadgeAlertKind.IssueFailed -> "issue_failed"
+  is BadgeAlertKind.Unknown -> kind.kind
+}
+
+private fun storeReceiptOriginParam(origin: StoreReceiptOrigin): String = when (origin) {
+  StoreReceiptOrigin.Purchased -> ""
+  StoreReceiptOrigin.Listed -> " listed"
+  StoreReceiptOrigin.Restored -> " restored"
+}
 
 @Serializable
 data class NewUser(
@@ -4445,8 +4896,8 @@ data class ServerOperator(
       serverDomains = listOf("simplex.im"),
       conditionsAcceptance = ConditionsAcceptance.Accepted(acceptedAt = null, autoAccepted = false),
       enabled = true,
-      smpRoles = ServerRoles(storage = true, proxy = true),
-      xftpRoles = ServerRoles(storage = true, proxy = true)
+      smpRoles = ServerRoles(storage = true, proxy = true, names = true),
+      xftpRoles = ServerRoles(storage = true, proxy = true, names = false)
     )
   }
 
@@ -4506,7 +4957,20 @@ data class ServerOperator(
 @Serializable
 data class ServerRoles(
   val storage: Boolean,
-  val proxy: Boolean
+  val proxy: Boolean,
+  val names: Boolean
+) {
+  companion object {
+    // roles applied when a server matches no operator, mirrors core resolveServerRoles (Operators.hs)
+    val noOperatorDefault = ServerRoles(storage = true, proxy = true, names = false)
+  }
+}
+
+@Serializable
+data class ServerRolesOverride(
+  val storage: Boolean? = null,
+  val proxy: Boolean? = null,
+  val names: Boolean? = null
 )
 
 @Serializable
@@ -4528,8 +4992,8 @@ data class UserOperatorServers(
       serverDomains = emptyList(),
       conditionsAcceptance = ConditionsAcceptance.Accepted(null, autoAccepted = false),
       enabled = false,
-      smpRoles = ServerRoles(storage = true, proxy = true),
-      xftpRoles = ServerRoles(storage = true, proxy = true)
+      smpRoles = ServerRoles.noOperatorDefault,
+      xftpRoles = ServerRoles.noOperatorDefault
     )
 
   companion object {
@@ -4553,6 +5017,7 @@ sealed class UserServersError {
   @Serializable @SerialName("storageMissing") data class StorageMissing(val protocol: ServerProtocol, val user: UserRef?): UserServersError()
   @Serializable @SerialName("proxyMissing") data class ProxyMissing(val protocol: ServerProtocol, val user: UserRef?): UserServersError()
   @Serializable @SerialName("duplicateServer") data class DuplicateServer(val protocol: ServerProtocol, val duplicateServer: String, val duplicateHost: String): UserServersError()
+  @Serializable @SerialName("tooManyHosts") data class TooManyHosts(val protocol: ServerProtocol, val tooManyHostsServer: String): UserServersError()
   @Serializable @SerialName("duplicateChatRelayAddress") data class DuplicateChatRelayAddress(val duplicateChatRelay: String, val duplicateAddress: String): UserServersError()
 
   val globalError: String?
@@ -4568,6 +5033,7 @@ sealed class UserServersError {
       is StorageMissing -> this.protocol
       is ProxyMissing -> this.protocol
       is DuplicateServer -> this.protocol
+      is TooManyHosts -> this.protocol
       is DuplicateChatRelayAddress -> null
     }
 
@@ -4582,6 +5048,8 @@ sealed class UserServersError {
 
         is ProxyMissing -> this.user?.let { "${userStr(it)} ${generalGetString(MR.strings.no_message_servers_configured_for_private_routing)}" }
           ?: generalGetString(MR.strings.no_message_servers_configured_for_private_routing)
+
+        is TooManyHosts -> String.format(generalGetString(MR.strings.server_has_too_many_hosts), ServerAddress.parseServerAddress(this.tooManyHostsServer)?.hostnames?.firstOrNull() ?: this.tooManyHostsServer)
 
         else -> null
       }
@@ -4615,11 +5083,18 @@ sealed class UserServersError {
 @Serializable
 sealed class UserServersWarning {
   @Serializable @SerialName("noChatRelays") data class NoChatRelays(val user: UserRef? = null): UserServersWarning()
+  @Serializable @SerialName("noNamesServers") data class NoNamesServers(val user: UserRef? = null): UserServersWarning()
 
   val globalWarning: String?
     get() = when (this) {
       is NoChatRelays -> {
         val text = generalGetString(MR.strings.no_chat_relays_enabled)
+        if (user != null) {
+          String.format(generalGetString(MR.strings.for_chat_profile), user.localDisplayName) + " " + text
+        } else text
+      }
+      is NoNamesServers -> {
+        val text = generalGetString(MR.strings.no_names_servers_enabled)
         if (user != null) {
           String.format(generalGetString(MR.strings.for_chat_profile), user.localDisplayName) + " " + text
         } else text
@@ -4654,7 +5129,8 @@ data class UserServer(
   val preset: Boolean,
   val tested: Boolean? = null,
   val enabled: Boolean,
-  val deleted: Boolean
+  val deleted: Boolean,
+  val roles: ServerRolesOverride = ServerRolesOverride(),
 ) {
   @Transient
   private val createdAt: Date = Date()
@@ -5727,7 +6203,8 @@ enum class GroupFeature: Feature {
   @SerialName("simplexLinks") SimplexLinks,
   @SerialName("reports") Reports,
   @SerialName("history") History,
-  @SerialName("support") Support;
+  @SerialName("support") Support,
+  @SerialName("signMessages") SignMessages;
 
   override val hasParam: Boolean get() = when(this) {
     TimedMessages -> true
@@ -5746,6 +6223,7 @@ enum class GroupFeature: Feature {
       Reports -> false
       History -> false
       Support -> false
+      SignMessages -> false
     }
 
   override val text: String get() = text(isChannel = false)
@@ -5761,6 +6239,7 @@ enum class GroupFeature: Feature {
       Reports -> generalGetString(if (isChannel) MR.strings.group_reports_subscriber_reports else MR.strings.group_reports_member_reports)
       History -> generalGetString(MR.strings.recent_history)
       Support -> generalGetString(MR.strings.chat_with_admins)
+      SignMessages -> generalGetString(MR.strings.sign_messages)
     }
 
   val icon: Painter
@@ -5775,6 +6254,7 @@ enum class GroupFeature: Feature {
       Reports -> painterResource(MR.images.ic_flag)
       History -> painterResource(MR.images.ic_schedule)
       Support -> painterResource(MR.images.ic_help)
+      SignMessages -> painterResource(MR.images.ic_verified)
     }
 
   @Composable
@@ -5789,6 +6269,7 @@ enum class GroupFeature: Feature {
     Reports -> painterResource(MR.images.ic_flag_filled)
     History -> painterResource(MR.images.ic_schedule_filled)
     Support -> painterResource(MR.images.ic_help_filled)
+    SignMessages -> painterResource(MR.images.ic_verified_filled)
   }
 
   fun enableDescription(enabled: GroupFeatureEnabled, canEdit: Boolean, isChannel: Boolean = false): String =
@@ -5834,6 +6315,10 @@ enum class GroupFeature: Feature {
           GroupFeatureEnabled.ON -> generalGetString(if (isChannel) MR.strings.allow_chat_with_admins_channel else MR.strings.allow_chat_with_admins)
           GroupFeatureEnabled.OFF -> generalGetString(MR.strings.prohibit_chat_with_admins)
         }
+        SignMessages -> when(enabled) {
+          GroupFeatureEnabled.ON -> generalGetString(MR.strings.require_message_signatures)
+          GroupFeatureEnabled.OFF -> generalGetString(MR.strings.do_not_require_message_signatures)
+        }
       }
     } else {
       when(this) {
@@ -5876,6 +6361,10 @@ enum class GroupFeature: Feature {
         Support -> when(enabled) {
           GroupFeatureEnabled.ON -> generalGetString(if (isChannel) MR.strings.members_can_chat_with_admins_channel else MR.strings.members_can_chat_with_admins)
           GroupFeatureEnabled.OFF -> generalGetString(MR.strings.chat_with_admins_is_prohibited)
+        }
+        SignMessages -> when(enabled) {
+          GroupFeatureEnabled.ON -> generalGetString(MR.strings.message_signatures_are_required)
+          GroupFeatureEnabled.OFF -> generalGetString(MR.strings.message_signatures_are_not_required)
         }
       }
     }
@@ -6003,6 +6492,7 @@ data class FullGroupPreferences(
   val reports: GroupPreference,
   val history: GroupPreference,
   val support: GroupPreference,
+  val signMessages: GroupPreference,
   val commands: List<ChatBotCommand>,
 ) {
   fun toGroupPreferences(): GroupPreferences =
@@ -6017,6 +6507,7 @@ data class FullGroupPreferences(
       reports = reports,
       history = history,
       support = support,
+      signMessages = signMessages,
       commands = commands,
     )
 
@@ -6032,6 +6523,7 @@ data class FullGroupPreferences(
       reports = GroupPreference(GroupFeatureEnabled.ON),
       history = GroupPreference(GroupFeatureEnabled.ON),
       support = GroupPreference(GroupFeatureEnabled.ON),
+      signMessages = GroupPreference(GroupFeatureEnabled.OFF),
       commands = listOf()
     )
   }
@@ -6049,6 +6541,7 @@ data class GroupPreferences(
   val reports: GroupPreference? = null,
   val history: GroupPreference? = null,
   val support: GroupPreference? = null,
+  val signMessages: GroupPreference? = null,
   val commands: List<ChatBotCommand>? = null
 ) {
   companion object {
@@ -6069,7 +6562,8 @@ data class GroupPreferences(
 
 @Serializable
 data class GroupPreference(
-  val enable: GroupFeatureEnabled
+  val enable: GroupFeatureEnabled,
+  val role: GroupMemberRole? = null,
 ) {
   val on: Boolean get() = enable == GroupFeatureEnabled.ON
 
@@ -6385,7 +6879,7 @@ sealed class CR {
   @Serializable @SerialName("invitation") class Invitation(val user: UserRef, val connLinkInvitation: CreatedConnLink, val connection: PendingContactConnection): CR()
   @Serializable @SerialName("connectionIncognitoUpdated") class ConnectionIncognitoUpdated(val user: UserRef, val toConnection: PendingContactConnection): CR()
   @Serializable @SerialName("connectionUserChanged") class ConnectionUserChanged(val user: UserRef, val fromConnection: PendingContactConnection, val toConnection: PendingContactConnection, val newUser: UserRef): CR()
-  @Serializable @SerialName("connectionPlan") class CRConnectionPlan(val user: UserRef, val connLink: CreatedConnLink, val connectionPlan: ConnectionPlan): CR()
+  @Serializable @SerialName("connectionPlan") class CRConnectionPlan(val user: UserRef, val connLink: CreatedConnLink, val planSimplexName: SimplexNameInfo? = null, val otherSimplexName: SimplexNameInfo? = null, val connectionPlan: ConnectionPlan): CR()
   @Serializable @SerialName("newPreparedChat") class NewPreparedChat(val user: UserRef, val chat: Chat): CR()
   @Serializable @SerialName("contactUserChanged") class ContactUserChanged(val user: UserRef, val fromContact: Contact, val newUser: UserRef, val toContact: Contact): CR()
   @Serializable @SerialName("groupUserChanged") class GroupUserChanged(val user: UserRef, val fromGroup: GroupInfo, val newUser: UserRef, val toGroup: GroupInfo): CR()
@@ -6445,6 +6939,7 @@ sealed class CR {
   @Serializable @SerialName("leftMemberUser") class LeftMemberUser(val user: UserRef, val groupInfo: GroupInfo): CR()
   @Serializable @SerialName("groupMembers") class GroupMembers(val user: UserRef, val group: Group): CR()
   @Serializable @SerialName("receivedGroupInvitation") class ReceivedGroupInvitation(val user: UserRef, val groupInfo: GroupInfo, val contact: Contact, val memberRole: GroupMemberRole): CR()
+  @Serializable @SerialName("receivedGroupInvitationViaGroup") class ReceivedGroupInvitationViaGroup(val user: UserRef, val groupInfo: GroupInfo, val viaGroupInfo: GroupInfo, val viaMember: GroupMember, val memberRole: GroupMemberRole): CR()
   @Serializable @SerialName("groupDeletedUser") class GroupDeletedUser(val user: UserRef, val groupInfo: GroupInfo): CR()
   @Serializable @SerialName("joinedGroupMemberConnecting") class JoinedGroupMemberConnecting(val user: UserRef, val groupInfo: GroupInfo, val hostMember: GroupMember, val member: GroupMember): CR()
   @Serializable @SerialName("memberAccepted") class MemberAccepted(val user: UserRef, val groupInfo: GroupInfo, val member: GroupMember): CR()
@@ -6463,6 +6958,8 @@ sealed class CR {
   @Serializable @SerialName("joinedGroupMember") class JoinedGroupMember(val user: UserRef, val groupInfo: GroupInfo, val member: GroupMember): CR()
   @Serializable @SerialName("connectedToGroupMember") class ConnectedToGroupMember(val user: UserRef, val groupInfo: GroupInfo, val member: GroupMember, val memberContact: Contact? = null): CR()
   @Serializable @SerialName("groupUpdated") class GroupUpdated(val user: UserRef, val toGroup: GroupInfo): CR()
+  @Serializable @SerialName("contactDomainVerified") class ContactDomainVerified(val user: UserRef, val contact: Contact, val verificationFailure: String? = null): CR()
+  @Serializable @SerialName("groupDomainVerified") class GroupDomainVerified(val user: UserRef, val groupInfo: GroupInfo, val verificationFailure: String? = null): CR()
   @Serializable @SerialName("groupLinkDataUpdated") class GroupLinkDataUpdated(val user: UserRef, val groupInfo: GroupInfo, val groupLink: GroupLink, val groupRelays: List<GroupRelay>, val relaysChanged: Boolean): CR()
   @Serializable @SerialName("groupRelayUpdated") class GroupRelayUpdated(val user: UserRef, val groupInfo: GroupInfo, val member: GroupMember, val groupRelay: GroupRelay): CR()
   @Serializable @SerialName("groupLinkCreated") class GroupLinkCreated(val user: UserRef, val groupInfo: GroupInfo, val groupLink: GroupLink): CR()
@@ -6533,6 +7030,17 @@ sealed class CR {
   @Serializable @SerialName("appSettings") class AppSettingsR(val appSettings: AppSettings): CR()
   @Serializable @SerialName("agentSubsTotal") class AgentSubsTotal(val user: UserRef, val subsTotal: SMPServerSubs, val hasSession: Boolean): CR()
   @Serializable @SerialName("agentServersSummary") class AgentServersSummary(val user: UserRef, val serversSummary: PresentedServersSummary): CR()
+  // badges
+  // the full user, not UserRef: its profile carries the badge that setUserBadge just stored
+  @Serializable @SerialName("badgeRedeemed") class BadgeRedeemed(val user: User, val redeemedBadge: LocalBadge, val newBadge: Boolean, val badgeState: BadgeState?): CR()
+  @Serializable @SerialName("badgeInvoice") class BadgeInvoice(val user: UserRef, val invoiceId: String): CR()
+  @Serializable @SerialName("storeReceiptNotRecorded") class StoreReceiptNotRecorded(val user: UserRef): CR()
+  @Serializable @SerialName("badgeState") class BadgeStateR(val user: UserRef, val badgeState: BadgeState?, val storePurchases: List<OpenStorePurchase> = emptyList()): CR()
+  @Serializable @SerialName("badgeLedger") class BadgeLedger(val user: UserRef, val badgeLedger: List<StatementEntry>): CR()
+  @Serializable @SerialName("badgeChanged") class BadgeChanged(val user: User, val badgeState: BadgeState?): CR()
+  @Serializable @SerialName("badgeAlert") class BadgeAlertR(val user: UserRef, val badgeAlert: BadgeAlert): CR()
+  @Serializable @SerialName("storePurchaseCredited") class StorePurchaseCredited(val user: UserRef, val invoiceId: String): CR()
+  @Serializable @SerialName("storePurchaseRefused") class StorePurchaseRefused(val user: UserRef, val invoiceId: String, val refusal: BadgeIssueFailure): CR()
   // general
   @Serializable class Response(val type: String, val json: String): CR()
   @Serializable class Invalid(val str: String): CR()
@@ -6636,6 +7144,7 @@ sealed class CR {
     is LeftMemberUser -> "leftMemberUser"
     is GroupMembers -> "groupMembers"
     is ReceivedGroupInvitation -> "receivedGroupInvitation"
+    is ReceivedGroupInvitationViaGroup -> "receivedGroupInvitationViaGroup"
     is GroupDeletedUser -> "groupDeletedUser"
     is JoinedGroupMemberConnecting -> "joinedGroupMemberConnecting"
     is MemberAccepted -> "memberAccepted"
@@ -6654,6 +7163,8 @@ sealed class CR {
     is JoinedGroupMember -> "joinedGroupMember"
     is ConnectedToGroupMember -> "connectedToGroupMember"
     is GroupUpdated -> "groupUpdated"
+    is ContactDomainVerified -> "contactDomainVerified"
+    is GroupDomainVerified -> "groupDomainVerified"
     is GroupLinkDataUpdated -> "groupLinkDataUpdated"
     is GroupRelayUpdated -> "groupRelayUpdated"
     is GroupLinkCreated -> "groupLinkCreated"
@@ -6717,6 +7228,15 @@ sealed class CR {
     is ArchiveExported -> "archiveExported"
     is ArchiveImported -> "archiveImported"
     is AppSettingsR -> "appSettings"
+    is BadgeRedeemed -> "badgeRedeemed"
+    is BadgeInvoice -> "badgeInvoice"
+    is StoreReceiptNotRecorded -> "storeReceiptNotRecorded"
+    is BadgeStateR -> "badgeState"
+    is BadgeLedger -> "badgeLedger"
+    is BadgeChanged -> "badgeChanged"
+    is BadgeAlertR -> "badgeAlert"
+    is StorePurchaseCredited -> "storePurchaseCredited"
+    is StorePurchaseRefused -> "storePurchaseRefused"
     is Response -> "* $type"
     is Invalid -> "* invalid json"
   }
@@ -6761,7 +7281,7 @@ sealed class CR {
     is Invitation -> withUser(user, "connLinkInvitation: ${json.encodeToString(connLinkInvitation)}\nconnection: $connection")
     is ConnectionIncognitoUpdated -> withUser(user, json.encodeToString(toConnection))
     is ConnectionUserChanged -> withUser(user, "fromConnection: ${json.encodeToString(fromConnection)}\ntoConnection: ${json.encodeToString(toConnection)}\nnewUser: ${json.encodeToString(newUser)}" )
-    is CRConnectionPlan -> withUser(user, "connLink: ${json.encodeToString(connLink)}\nconnectionPlan: ${json.encodeToString(connectionPlan)}")
+    is CRConnectionPlan -> withUser(user, "connLink: ${json.encodeToString(connLink)}\nplanSimplexName: $planSimplexName\notherSimplexName: $otherSimplexName\nconnectionPlan: ${json.encodeToString(connectionPlan)}")
     is NewPreparedChat -> withUser(user, json.encodeToString(chat))
     is ContactUserChanged -> withUser(user, "fromContact: ${json.encodeToString(fromContact)}\nnewUserId: ${json.encodeToString(newUser.userId)}\ntoContact: ${json.encodeToString(toContact)}")
     is GroupUserChanged -> withUser(user, "fromGroup: ${json.encodeToString(fromGroup)}\nnewUserId: ${json.encodeToString(newUser.userId)}\ntoGroup: ${json.encodeToString(toGroup)}")
@@ -6820,6 +7340,7 @@ sealed class CR {
     is LeftMemberUser -> withUser(user, json.encodeToString(groupInfo))
     is GroupMembers -> withUser(user, json.encodeToString(group))
     is ReceivedGroupInvitation -> withUser(user, "groupInfo: $groupInfo\ncontact: $contact\nmemberRole: $memberRole")
+    is ReceivedGroupInvitationViaGroup -> withUser(user, "groupInfo: $groupInfo\nviaGroupInfo: $viaGroupInfo\nviaMember: $viaMember\nmemberRole: $memberRole")
     is GroupDeletedUser -> withUser(user, json.encodeToString(groupInfo))
     is JoinedGroupMemberConnecting -> withUser(user, "groupInfo: $groupInfo\nhostMember: $hostMember\nmember: $member")
     is MemberAccepted -> withUser(user, "groupInfo: $groupInfo\nmember: $member")
@@ -6838,6 +7359,8 @@ sealed class CR {
     is JoinedGroupMember -> withUser(user, "groupInfo: $groupInfo\nmember: $member")
     is ConnectedToGroupMember -> withUser(user, "groupInfo: $groupInfo\nmember: $member\nmemberContact: $memberContact")
     is GroupUpdated -> withUser(user, json.encodeToString(toGroup))
+    is ContactDomainVerified -> withUser(user, "contact: ${json.encodeToString(contact)}\nverificationFailure: $verificationFailure")
+    is GroupDomainVerified -> withUser(user, "groupInfo: ${json.encodeToString(groupInfo)}\nverificationFailure: $verificationFailure")
     is GroupLinkDataUpdated -> withUser(user, "groupInfo: $groupInfo\ngroupLink: $groupLink\ngroupRelays: $groupRelays\nrelaysChanged: $relaysChanged")
     is GroupRelayUpdated -> withUser(user, "groupInfo: $groupInfo\nmember: $member\ngroupRelay: $groupRelay")
     is GroupLinkCreated -> withUser(user, "groupInfo: $groupInfo\ngroupLink: $groupLink")
@@ -6870,9 +7393,9 @@ sealed class CR {
     is SndStandaloneFileComplete -> withUser(user, rcvURIs.size.toString())
     is SndFileError -> withUser(user, "errorMessage: ${json.encodeToString(errorMessage)}\nchatItem: ${json.encodeToString(chatItem_)}")
     is SndFileWarning -> withUser(user, "errorMessage: ${json.encodeToString(errorMessage)}\nchatItem: ${json.encodeToString(chatItem_)}")
-    is CallInvitations -> "callInvitations: ${json.encodeToString(callInvitations)}"
-    is CallInvitation -> "contact: ${callInvitation.contact.id}\ncallType: $callInvitation.callType\nsharedKey: ${callInvitation.sharedKey ?: ""}"
-    is CallOffer -> withUser(user, "contact: ${contact.id}\ncallType: $callType\nsharedKey: ${sharedKey ?: ""}\naskConfirmation: $askConfirmation\noffer: ${json.encodeToString(offer)}")
+    is CallInvitations -> "callInvitations: ${json.encodeToString(callInvitations.map { it.copy(sharedKey = null) })}"
+    is CallInvitation -> "contact: ${callInvitation.contact.id}\ncallType: ${callInvitation.callType}"
+    is CallOffer -> withUser(user, "contact: ${contact.id}\ncallType: $callType\naskConfirmation: $askConfirmation\noffer: ${json.encodeToString(offer)}")
     is CallAnswer -> withUser(user, "contact: ${contact.id}\nanswer: ${json.encodeToString(answer)}")
     is CallExtraInfo -> withUser(user, "contact: ${contact.id}\nextraInfo: ${json.encodeToString(extraInfo)}")
     is CallEnded -> withUser(user, "contact: ${contact.id}")
@@ -6918,6 +7441,15 @@ sealed class CR {
     is ArchiveExported -> "${archiveErrors.map { it.string } }"
     is ArchiveImported -> "${archiveErrors.map { it.string } }"
     is AppSettingsR -> json.encodeToString(appSettings)
+    is BadgeRedeemed -> withUser(user, "redeemedBadge: ${json.encodeToString(redeemedBadge)}\nnewBadge: $newBadge\nbadgeState: ${json.encodeToString(badgeState)}")
+    is BadgeInvoice -> withUser(user, invoiceId)
+    is StoreReceiptNotRecorded -> withUser(user, noDetails())
+    is BadgeStateR -> withUser(user, "${json.encodeToString(badgeState)}\nstorePurchases: ${json.encodeToString(storePurchases)}")
+    is BadgeLedger -> withUser(user, json.encodeToString(badgeLedger))
+    is BadgeChanged -> withUser(user, json.encodeToString(badgeState))
+    is BadgeAlertR -> withUser(user, json.encodeToString(badgeAlert))
+    is StorePurchaseCredited -> withUser(user, "invoiceId: $invoiceId")
+    is StorePurchaseRefused -> withUser(user, "invoiceId: $invoiceId\nrefusal: ${refusal.tag}")
     is Response -> json
     is Invalid -> str
   }
@@ -6949,6 +7481,8 @@ data class CreatedConnLink(val connFullLink: String, val connShortLink: String?)
   fun simplexChatUri(short: Boolean): String =
     if (short) connShortLink ?: simplexChatLink(connFullLink)
     else simplexChatLink(connFullLink)
+
+  val cmdString: String get() = connFullLink + (if (connShortLink == null) "" else " $connShortLink")
 }
 
 fun simplexChatLink(uri: String): String =
@@ -6959,6 +7493,152 @@ fun simplexChatLink(uri: String): String =
 sealed class OwnerVerification {
   @Serializable @SerialName("verified") object Verified : OwnerVerification()
   @Serializable @SerialName("failed") class Failed(val reason: String) : OwnerVerification()
+}
+
+@Serializable
+sealed class SimplexDomainError {
+  @Serializable @SerialName("noValidLink") object NoValidLink : SimplexDomainError()
+  @Serializable @SerialName("unknownDomain") object UnknownDomain : SimplexDomainError()
+}
+
+@Serializable
+sealed class BadgeRedeemError {
+  val string: String get() = when (this) {
+    is InvalidCode -> "invalidCode"
+    is InvalidReceipt -> "invalidReceipt"
+    is ServiceNotConfigured -> "serviceNotConfigured"
+    is BadgeActive -> "badgeActive"
+    is StorePurchaseOpen -> "storePurchaseOpen"
+    is ServiceError -> "serviceError ${serviceError.text}"
+    is InvalidResponse -> "invalidResponse $message"
+    is UnknownKeyIndex -> "unknownKeyIndex"
+    is CredentialNotVerified -> "credentialNotVerified"
+  }
+  @Serializable @SerialName("invalidCode") object InvalidCode : BadgeRedeemError()
+  @Serializable @SerialName("invalidReceipt") object InvalidReceipt : BadgeRedeemError()
+  @Serializable @SerialName("serviceNotConfigured") object ServiceNotConfigured : BadgeRedeemError()
+  @Serializable @SerialName("badgeActive") object BadgeActive : BadgeRedeemError()
+  @Serializable @SerialName("storePurchaseOpen") object StorePurchaseOpen : BadgeRedeemError()
+  @Serializable @SerialName("serviceError") class ServiceError(val serviceError: BadgeServiceErrorCode) : BadgeRedeemError()
+  @Serializable @SerialName("invalidResponse") class InvalidResponse(val message: String) : BadgeRedeemError()
+  @Serializable @SerialName("unknownKeyIndex") object UnknownKeyIndex : BadgeRedeemError()
+  @Serializable @SerialName("credentialNotVerified") object CredentialNotVerified : BadgeRedeemError()
+}
+
+// the service is deployed ahead of clients, so a code this version does not know keeps its tag
+@Serializable(with = BadgeServiceErrorCodeSerializer::class)
+sealed class BadgeServiceErrorCode {
+  object BadRequest: BadgeServiceErrorCode()
+  object UnsupportedVersion: BadgeServiceErrorCode()
+  object UnknownPurchaseKey: BadgeServiceErrorCode()
+  object UnknownOfferId: BadgeServiceErrorCode()
+  object OfferDisabled: BadgeServiceErrorCode()
+  object OfferMismatch: BadgeServiceErrorCode()
+  object ProductUnavailable: BadgeServiceErrorCode()
+  object PaymentNotEntitled: BadgeServiceErrorCode()
+  object PaymentPending: BadgeServiceErrorCode()
+  object ProviderUnavailable: BadgeServiceErrorCode()
+  object ProviderNotConfigured: BadgeServiceErrorCode()
+  object RateLimited: BadgeServiceErrorCode()
+  object CodeInvalid: BadgeServiceErrorCode()
+  object CodeUsed: BadgeServiceErrorCode()
+  object CodeExpired: BadgeServiceErrorCode()
+  object ReceiptInvalid: BadgeServiceErrorCode()
+  object ReceiptUsed: BadgeServiceErrorCode()
+  object TestPurchase: BadgeServiceErrorCode()
+  object TransferLimited: BadgeServiceErrorCode()
+  object Internal: BadgeServiceErrorCode()
+  data class Unknown(val code: String): BadgeServiceErrorCode()
+
+  val text: String
+    get() = when (this) {
+      is BadRequest -> "bad_request"
+      is UnsupportedVersion -> "unsupported_version"
+      is UnknownPurchaseKey -> "unknown_purchase_key"
+      is UnknownOfferId -> "unknown_offer_id"
+      is OfferDisabled -> "offer_disabled"
+      is OfferMismatch -> "offer_mismatch"
+      is ProductUnavailable -> "product_unavailable"
+      is PaymentNotEntitled -> "payment_not_entitled"
+      is PaymentPending -> "payment_pending"
+      is ProviderUnavailable -> "provider_unavailable"
+      is ProviderNotConfigured -> "provider_not_configured"
+      is RateLimited -> "rate_limited"
+      is CodeInvalid -> "code_invalid"
+      is CodeUsed -> "code_used"
+      is CodeExpired -> "code_expired"
+      is ReceiptInvalid -> "receipt_invalid"
+      is ReceiptUsed -> "receipt_used"
+      is TestPurchase -> "test_purchase"
+      is TransferLimited -> "transfer_limited"
+      is Internal -> "internal"
+      is Unknown -> code
+    }
+}
+
+fun badgeServiceErrorText(code: BadgeServiceErrorCode): String? = when (code) {
+  is BadgeServiceErrorCode.CodeInvalid -> generalGetString(MR.strings.badges_error_code_invalid)
+  is BadgeServiceErrorCode.CodeUsed -> generalGetString(MR.strings.badges_error_code_used)
+  is BadgeServiceErrorCode.CodeExpired -> generalGetString(MR.strings.badges_error_code_expired)
+  is BadgeServiceErrorCode.RateLimited -> generalGetString(MR.strings.badges_error_rate_limited)
+  is BadgeServiceErrorCode.UnsupportedVersion -> generalGetString(MR.strings.badges_error_unsupported_version)
+  is BadgeServiceErrorCode.UnknownPurchaseKey -> generalGetString(MR.strings.badges_error_unknown_purchase)
+  is BadgeServiceErrorCode.Internal -> generalGetString(MR.strings.badges_error_service_internal)
+  is BadgeServiceErrorCode.ReceiptInvalid -> generalGetString(MR.strings.badges_error_receipt_invalid)
+  is BadgeServiceErrorCode.TestPurchase -> generalGetString(MR.strings.badges_error_test_purchase)
+  is BadgeServiceErrorCode.ReceiptUsed -> generalGetString(MR.strings.badges_error_receipt_used)
+  is BadgeServiceErrorCode.TransferLimited -> generalGetString(MR.strings.badges_error_transfer_limited)
+  is BadgeServiceErrorCode.PaymentPending -> generalGetString(MR.strings.badges_error_payment_pending)
+  is BadgeServiceErrorCode.ProviderUnavailable -> generalGetString(MR.strings.badges_error_provider_unavailable)
+  is BadgeServiceErrorCode.ProviderNotConfigured -> generalGetString(MR.strings.badges_error_provider_not_configured)
+  is BadgeServiceErrorCode.ProductUnavailable -> generalGetString(MR.strings.badges_error_product_unavailable)
+  else -> null
+}
+
+object BadgeServiceErrorCodeSerializer : KSerializer<BadgeServiceErrorCode> {
+  override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("BadgeServiceErrorCode", PrimitiveKind.STRING)
+  override fun deserialize(decoder: Decoder): BadgeServiceErrorCode =
+    when (val v = decoder.decodeString()) {
+      "bad_request" -> BadgeServiceErrorCode.BadRequest
+      "unsupported_version" -> BadgeServiceErrorCode.UnsupportedVersion
+      "unknown_purchase_key" -> BadgeServiceErrorCode.UnknownPurchaseKey
+      "unknown_offer_id" -> BadgeServiceErrorCode.UnknownOfferId
+      "offer_disabled" -> BadgeServiceErrorCode.OfferDisabled
+      "offer_mismatch" -> BadgeServiceErrorCode.OfferMismatch
+      "product_unavailable" -> BadgeServiceErrorCode.ProductUnavailable
+      "payment_not_entitled" -> BadgeServiceErrorCode.PaymentNotEntitled
+      "payment_pending" -> BadgeServiceErrorCode.PaymentPending
+      "provider_unavailable" -> BadgeServiceErrorCode.ProviderUnavailable
+      "provider_not_configured" -> BadgeServiceErrorCode.ProviderNotConfigured
+      "rate_limited" -> BadgeServiceErrorCode.RateLimited
+      "code_invalid" -> BadgeServiceErrorCode.CodeInvalid
+      "code_used" -> BadgeServiceErrorCode.CodeUsed
+      "code_expired" -> BadgeServiceErrorCode.CodeExpired
+      "receipt_invalid" -> BadgeServiceErrorCode.ReceiptInvalid
+      "receipt_used" -> BadgeServiceErrorCode.ReceiptUsed
+      "test_purchase" -> BadgeServiceErrorCode.TestPurchase
+      "transfer_limited" -> BadgeServiceErrorCode.TransferLimited
+      "internal" -> BadgeServiceErrorCode.Internal
+      else -> BadgeServiceErrorCode.Unknown(v)
+    }
+  override fun serialize(encoder: Encoder, value: BadgeServiceErrorCode) = encoder.encodeString(value.text)
+}
+
+data class ConnectionPlanResult(
+  val connLink: CreatedConnLink,
+  val planSimplexName: SimplexNameInfo?,
+  val otherSimplexName: SimplexNameInfo?,
+  val connectionPlan: ConnectionPlan,
+)
+
+// APIConnectPlan resolution scope; PRMNever is local-store-only (no network), used for per-keystroke name search
+enum class PlanResolveMode {
+  PRMAllGroups, PRMUnknown, PRMNever;
+  val cmdString: String get() = when (this) {
+    PRMAllGroups -> "allGroups"
+    PRMUnknown -> "unknown"
+    PRMNever -> "never"
+  }
 }
 
 @Serializable
@@ -6995,6 +7675,7 @@ sealed class GroupLinkPlan {
   @Serializable @SerialName("connectingProhibit") class ConnectingProhibit(val groupInfo_: GroupInfo? = null): GroupLinkPlan()
   @Serializable @SerialName("known") class Known(val groupInfo: GroupInfo): GroupLinkPlan()
   @Serializable @SerialName("noRelays") class NoRelays(val groupSLinkData_: GroupShortLinkData? = null): GroupLinkPlan()
+  @Serializable @SerialName("updateRequired") class UpdateRequired(val groupSLinkData_: GroupShortLinkData? = null): GroupLinkPlan()
 }
 
 abstract class TerminalItem {
@@ -7059,7 +7740,8 @@ enum class RcvSwitchStatus {
   @SerialName("switch_started") SwitchStarted,
   @SerialName("sending_qadd") SendingQADD,
   @SerialName("sending_quse") SendingQUSE,
-  @SerialName("received_message") ReceivedMessage
+  @SerialName("received_message") ReceivedMessage,
+  @SerialName("received_qend") ReceivedQEND
 }
 
 @Serializable
@@ -7156,7 +7838,8 @@ data class UserContactLinkRec(
 data class AddressSettings(
   val businessAddress: Boolean,
   val autoAccept: AutoAccept?,
-  val autoReply: MsgContent?
+  val autoReply: MsgContent?,
+  val chatLayout: ChatLayoutMode? = null
 )
 
 @Serializable
@@ -7297,6 +7980,8 @@ sealed class ChatErrorType {
       is ChatStoreChanged -> "chatStoreChanged"
       is ConnectionPlanChatError -> "connectionPlan"
       is InvalidConnReq -> "invalidConnReq"
+      is SimplexDomainNotReady -> "simplexDomainNotReady"
+      is NotResolvedLocally -> "notResolvedLocally"
       is UnsupportedConnReq -> "unsupportedConnReq"
       is InvalidChatMessage -> "invalidChatMessage"
       is ConnReqMessageProhibited -> "connReqMessageProhibited"
@@ -7346,6 +8031,7 @@ sealed class ChatErrorType {
       is AgentVersion -> "agentVersion"
       is AgentNoSubResult -> "agentNoSubResult"
       is CommandError -> "commandError $message"
+      is CEBadgeRedeemError -> "badgeRedeemError ${badgeRedeemError.string}"
       is ServerProtocol -> "serverProtocol"
       is AgentCommandError -> "agentCommandError"
       is InvalidFileDescription -> "invalidFileDescription"
@@ -7379,6 +8065,8 @@ sealed class ChatErrorType {
   @Serializable @SerialName("chatStoreChanged") object ChatStoreChanged: ChatErrorType()
   @Serializable @SerialName("connectionPlan") class ConnectionPlanChatError(val connectionPlan: ConnectionPlan): ChatErrorType()
   @Serializable @SerialName("invalidConnReq") object InvalidConnReq: ChatErrorType()
+  @Serializable @SerialName("simplexDomainNotReady") class SimplexDomainNotReady(val simplexDomain: SimplexDomain, val simplexDomainError: SimplexDomainError): ChatErrorType()
+  @Serializable @SerialName("notResolvedLocally") object NotResolvedLocally: ChatErrorType()
   @Serializable @SerialName("unsupportedConnReq") object UnsupportedConnReq: ChatErrorType()
   @Serializable @SerialName("invalidChatMessage") class InvalidChatMessage(val connection: Connection, val message: String): ChatErrorType()
   @Serializable @SerialName("connReqMessageProhibited") object ConnReqMessageProhibited: ChatErrorType()
@@ -7428,6 +8116,7 @@ sealed class ChatErrorType {
   @Serializable @SerialName("agentVersion") object AgentVersion: ChatErrorType()
   @Serializable @SerialName("agentNoSubResult") class AgentNoSubResult(val agentConnId: String): ChatErrorType()
   @Serializable @SerialName("commandError") class CommandError(val message: String): ChatErrorType()
+  @Serializable @SerialName("badgeRedeemError") class CEBadgeRedeemError(val badgeRedeemError: BadgeRedeemError): ChatErrorType()
   @Serializable @SerialName("serverProtocol") object ServerProtocol: ChatErrorType()
   @Serializable @SerialName("agentCommandError") class AgentCommandError(val message: String): ChatErrorType()
   @Serializable @SerialName("invalidFileDescription") class InvalidFileDescription(val message: String): ChatErrorType()
@@ -7513,7 +8202,7 @@ sealed class StoreError {
       is UserChatRelayNotFound -> "userChatRelayNotFound $chatRelayId"
       is GroupRelayNotFound -> "groupRelayNotFound $groupRelayId"
       is GroupRelayNotFoundByMemberId -> "groupRelayNotFoundByMemberId $groupMemberId"
-      is DuplicateGroupMessage -> "duplicateGroupMessage $groupId $sharedMsgId $authorGroupMemberId $authorGroupMemberId"
+      is DuplicateGroupMessage -> "duplicateGroupMessage $groupId $sharedMsgId $authorGroupMemberId $forwardedByGroupMemberId"
       is RemoteHostNotFound -> "remoteHostNotFound $remoteHostId"
       is RemoteHostUnknown -> "remoteHostUnknown"
       is RemoteHostDuplicateCA -> "remoteHostDuplicateCA"
@@ -7647,6 +8336,7 @@ sealed class AgentErrorType {
     is INTERNAL -> "INTERNAL $internalErr"
     is CRITICAL -> "CRITICAL $offerRestart $criticalErr"
     is INACTIVE -> "INACTIVE"
+    is NO_NAME_SERVERS -> "NO_NAME_SERVERS"
   }
   @Serializable @SerialName("CMD") class CMD(val cmdErr: CommandErrorType, val errContext: String): AgentErrorType()
   @Serializable @SerialName("CONN") class CONN(val connErr: ConnectionErrorType, val errContext: String): AgentErrorType()
@@ -7661,6 +8351,19 @@ sealed class AgentErrorType {
   @Serializable @SerialName("INTERNAL") class INTERNAL(val internalErr: String): AgentErrorType()
   @Serializable @SerialName("CRITICAL") data class CRITICAL(val offerRestart: Boolean, val criticalErr: String): AgentErrorType()
   @Serializable @SerialName("INACTIVE") object INACTIVE: AgentErrorType()
+  @Serializable @SerialName("NO_NAME_SERVERS") object NO_NAME_SERVERS: AgentErrorType()
+}
+
+@Serializable
+sealed class NameErrorType {
+  val string: String get() = when (this) {
+    is NO_RESOLVER -> "NO_RESOLVER"
+    is NOT_FOUND -> "NOT_FOUND"
+    is RESOLVER -> "RESOLVER $resolverErr"
+  }
+  @Serializable @SerialName("NO_RESOLVER") object NO_RESOLVER: NameErrorType()
+  @Serializable @SerialName("NOT_FOUND") object NOT_FOUND: NameErrorType()
+  @Serializable @SerialName("RESOLVER") class RESOLVER(val resolverErr: String): NameErrorType()
 }
 
 @Serializable
@@ -7730,6 +8433,7 @@ sealed class SMPErrorType {
     is LARGE_MSG -> "LARGE_MSG"
     is EXPIRED -> "EXPIRED"
     is INTERNAL -> "INTERNAL"
+    is NAME -> "NAME ${nameErr.string}"
   }
   @Serializable @SerialName("BLOCK") class BLOCK: SMPErrorType()
   @Serializable @SerialName("SESSION") class SESSION: SMPErrorType()
@@ -7744,6 +8448,7 @@ sealed class SMPErrorType {
   @Serializable @SerialName("LARGE_MSG") class LARGE_MSG: SMPErrorType()
   @Serializable @SerialName("EXPIRED") class EXPIRED: SMPErrorType()
   @Serializable @SerialName("INTERNAL") class INTERNAL: SMPErrorType()
+  @Serializable @SerialName("NAME") class NAME(val nameErr: NameErrorType): SMPErrorType()
 }
 
 @Serializable
@@ -7842,16 +8547,36 @@ sealed class SMPAgentError {
     is A_MESSAGE -> "A_MESSAGE"
     is A_PROHIBITED -> "A_PROHIBITED"
     is A_VERSION -> "A_VERSION"
+    is A_LINK -> "A_LINK"
     is A_CRYPTO -> "A_CRYPTO"
     is A_DUPLICATE -> "A_DUPLICATE"
     is A_QUEUE -> "A_QUEUE"
+    is A_SERVICE -> "A_SERVICE ${serviceError.string}"
   }
   @Serializable @SerialName("A_MESSAGE") object A_MESSAGE: SMPAgentError()
-  @Serializable @SerialName("A_PROHIBITED") object A_PROHIBITED: SMPAgentError()
+  @Serializable @SerialName("A_PROHIBITED") class A_PROHIBITED(val prohibitedErr: String): SMPAgentError()
   @Serializable @SerialName("A_VERSION") object A_VERSION: SMPAgentError()
+  @Serializable @SerialName("A_LINK") class A_LINK(val linkErr: String): SMPAgentError()
   @Serializable @SerialName("A_CRYPTO") object A_CRYPTO: SMPAgentError()
   @Serializable @SerialName("A_DUPLICATE") object A_DUPLICATE: SMPAgentError()
   @Serializable @SerialName("A_QUEUE") class A_QUEUE(val queueErr: String): SMPAgentError()
+  @Serializable @SerialName("A_SERVICE") class A_SERVICE(val serviceError: AgentServiceError): SMPAgentError()
+}
+
+@Serializable
+sealed class AgentServiceError {
+  val string: String get() = when (this) {
+    is Rejected -> "rejected"
+    is Timeout -> "timeout"
+    is NoPendingRequest -> "noPendingRequest"
+    is NotDRAddress -> "notDRAddress"
+    is BadSignature -> "badSignature"
+  }
+  @Serializable @SerialName("rejected") object Rejected: AgentServiceError()
+  @Serializable @SerialName("timeout") object Timeout: AgentServiceError()
+  @Serializable @SerialName("noPendingRequest") object NoPendingRequest: AgentServiceError()
+  @Serializable @SerialName("notDRAddress") object NotDRAddress: AgentServiceError()
+  @Serializable @SerialName("badSignature") object BadSignature: AgentServiceError()
 }
 
 @Serializable
@@ -8072,6 +8797,7 @@ data class AppSettings(
   var oneHandUI: Boolean? = null,
   var chatBottomBar: Boolean? = null,
   var relativeTimestamps: Boolean? = null,
+  var uiChatLayout: ChatLayoutMode? = null
 ) {
   fun prepareForExport(): AppSettings {
     val empty = AppSettings()
@@ -8110,6 +8836,7 @@ data class AppSettings(
     if (oneHandUI != def.oneHandUI) { empty.oneHandUI = oneHandUI }
     if (chatBottomBar != def.chatBottomBar) { empty.chatBottomBar = chatBottomBar }
     if (relativeTimestamps != def.relativeTimestamps) { empty.relativeTimestamps = relativeTimestamps }
+    if (uiChatLayout != def.uiChatLayout) { empty.uiChatLayout = uiChatLayout }
     return empty
   }
 
@@ -8159,6 +8886,7 @@ data class AppSettings(
     oneHandUI?.let { def.oneHandUI.set(it) }
     chatBottomBar?.let { if (appPlatform.isAndroid) def.chatBottomBar.set(it) else def.chatBottomBar.set(true) }
     relativeTimestamps?.let { def.relativeTimestamps.set(it) }
+    uiChatLayout?.let { def.chatLayout.set(it) }
   }
 
   companion object {
@@ -8198,6 +8926,7 @@ data class AppSettings(
         oneHandUI = true,
         chatBottomBar = true,
         relativeTimestamps = false,
+        uiChatLayout = ChatLayoutMode.Classic,
       )
 
     val current: AppSettings
@@ -8238,6 +8967,7 @@ data class AppSettings(
           oneHandUI = def.oneHandUI.get(),
           chatBottomBar = def.chatBottomBar.get(),
           relativeTimestamps = def.relativeTimestamps.get(),
+          uiChatLayout = def.chatLayout.get()
         )
     }
   }

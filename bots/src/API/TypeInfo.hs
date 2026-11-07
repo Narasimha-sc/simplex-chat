@@ -170,11 +170,15 @@ toTypeInfo tr =
       "DBEntityId'" -> ST TInt64 []
       "Integer" -> ST TInt64 []
       "Version" -> ST TInt []
+      "VersionRoster" -> ST TInt64 []
       "BoolDef" -> ST TBool []
       "PQEncryption" -> ST TBool []
       "PQSupport" -> ST TBool []
+      "AChatInfo" -> ST "ChatInfo" []
       "ACreatedConnLink" -> ST "CreatedConnLink" []
       "UserChatRelay'" -> ST "UserChatRelay" []
+      "ServerOperator'" -> ST "ServerOperator" []
+      "UserServer'" -> ST "UserServer" []
       "CChatItem" -> ST "ChatItem" []
       "FormatColor" -> ST "Color" []
       "CustomData" -> ST "JSONObject" []
@@ -193,12 +197,18 @@ toTypeInfo tr =
     primitiveToLower st@(ST t ps) = let t' = fstToLower t in if t' `elem` primitiveTypes then ST t' ps else st
     stringTypes =
       [ "AConnectionLink",
+        "AConnectTarget",
         "AProtocolType",
         "AgentConnId",
         "AgentInvId",
         "AgentRcvFileId",
         "AgentSndFileId",
+        "AppVersion",
+        "BadgeMasterKey",
         "B64UrlByteString",
+        "BBSProof",
+        "BBSPresHeader",
+        "BBSSignature",
         "CbNonce",
         "ConnectionLink",
         "ConnShortLink",
@@ -210,11 +220,16 @@ toTypeInfo tr =
         "Text",
         "MREmojiChar",
         "PrivateKey",
+        "ProofPresHeader",
         "PublicKey",
+        "ProtoServerWithAuth",
         "ProtocolServer",
+        "RCSignedInvitation",
         "SbKey",
         "SharedMsgId",
         "Signature",
+        "SocksProxyWithAuth",
+        "StrJSON",
         "TransportHost",
         "UIColor",
         "UserPwd",
@@ -232,7 +247,8 @@ toTypeInfo tr =
       [ "FullDeleteGroupPreference",
         "ReactionsGroupPreference",
         "ReportsGroupPreference",
-        "HistoryGroupPreference"
+        "HistoryGroupPreference",
+        "SignMessagesGroupPreference"
       ]
     roleGroupPrefTypes =
       [ "DirectMessagesGroupPreference",

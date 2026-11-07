@@ -27,7 +27,7 @@ import qualified Data.Attoparsec.Text as A
 import Data.Char (isSpace)
 import Data.Either (fromRight)
 import Data.Functor (($>))
-import Data.Maybe (fromMaybe)
+import Data.Maybe (fromMaybe, isNothing)
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Text.Encoding (encodeUtf8)
@@ -38,6 +38,7 @@ import Simplex.Chat.Messages
 import Simplex.Chat.Messages.CIContent
 import Simplex.Chat.Protocol (LinkOwnerSig, MsgChatLink, MsgContent (..))
 import Simplex.Chat.Types
+import Simplex.Chat.Types.Preferences (GroupFeature)
 import Simplex.Chat.Types.Shared
 import Simplex.Messaging.Agent.Protocol (AgentErrorType (..))
 import Simplex.Messaging.Encoding.String
@@ -52,10 +53,11 @@ data DirectoryEvent
   | DEGroupLinkCheck GroupInfo
   | DEPendingMember GroupInfo GroupMember
   | DEPendingMemberMsg GroupInfo GroupMember ChatItemId Text
-  | DEContactRoleChanged GroupInfo ContactId GroupMemberRole -- contactId here is the contact whose role changed
+  | DEGroupItemProhibited GroupInfo GroupMember ChatItemId GroupFeature -- a member posted content prohibited by the group's settings
+  | DEContactRoleChanged GroupInfo ContactId GroupMemberId GroupMemberRole -- contactId/memberId here identify the member whose role changed
   | DEServiceRoleChanged GroupInfo GroupMemberRole
-  | DEContactRemovedFromGroup ContactId GroupInfo
-  | DEContactLeftGroup ContactId GroupInfo
+  | DEContactRemovedFromGroup ContactId GroupMemberId GroupInfo
+  | DEContactLeftGroup ContactId GroupMemberId GroupInfo
   | DEServiceRemovedFromGroup GroupInfo
   | DEGroupDeleted GroupInfo
   | DEChatLinkReceived {contact :: Contact, chatItemId :: ChatItemId, chatLink :: MsgChatLink, ownerSig :: Maybe LinkOwnerSig}
@@ -64,6 +66,7 @@ data DirectoryEvent
   | DEItemEditIgnored Contact
   | DEItemDeleteIgnored Contact
   | DEContactCommand Contact ChatItemId ADirectoryCmd
+  | DEVoiceUploadEnded FilePath
   | DELogChatResponse Text
   deriving (Show)
 
@@ -84,14 +87,16 @@ crDirectoryEvent_ = \case
   CEvtJoinedGroupMember {groupInfo, member = m}
     | pending m -> Just $ DEPendingMember groupInfo m
     | otherwise -> Nothing
-  CEvtNewChatItems {chatItems = AChatItem _ _ (GroupChat g _scopeInfo) ci : _} -> case ci of
+  CEvtNewChatItems {chatItems = AChatItem _ _ (GroupChat g scopeInfo) ci : _} -> case ci of
     ChatItem {chatDir = CIGroupRcv m, content = CIRcvMsgContent (MCText t)} | pending m -> Just $ DEPendingMemberMsg g m (chatItemId' ci) t
+    -- only moderate prohibited content in the main group, not in member-support/onboarding scope
+    ChatItem {chatDir = CIGroupRcv m, content = CIRcvGroupFeatureRejected gf} | isNothing scopeInfo -> Just $ DEGroupItemProhibited g m (chatItemId' ci) gf
     _ -> Nothing
   CEvtMemberRole {groupInfo, member, toRole}
     | groupMemberId' member == groupMemberId' (membership groupInfo) -> Just $ DEServiceRoleChanged groupInfo toRole
-    | otherwise -> (\ctId -> DEContactRoleChanged groupInfo ctId toRole) <$> memberContactId member
-  CEvtDeletedMember {groupInfo, deletedMember} -> (`DEContactRemovedFromGroup` groupInfo) <$> memberContactId deletedMember
-  CEvtLeftMember {groupInfo, member} -> (`DEContactLeftGroup` groupInfo) <$> memberContactId member
+    | otherwise -> (\ctId -> DEContactRoleChanged groupInfo ctId (groupMemberId' member) toRole) <$> memberContactId member
+  CEvtDeletedMember {groupInfo, deletedMember} -> (\ctId -> DEContactRemovedFromGroup ctId (groupMemberId' deletedMember) groupInfo) <$> memberContactId deletedMember
+  CEvtLeftMember {groupInfo, member} -> (\ctId -> DEContactLeftGroup ctId (groupMemberId' member) groupInfo) <$> memberContactId member
   CEvtDeletedMemberUser {groupInfo} -> Just $ DEServiceRemovedFromGroup groupInfo
   CEvtGroupDeleted {groupInfo} -> Just $ DEGroupDeleted groupInfo
   CEvtUnknownMemberAnnounced {groupInfo, unknownMember, announcedMember} -> Just $ DEMemberUpdated {groupInfo, fromMember = unknownMember, toMember = announcedMember}
@@ -106,11 +111,17 @@ crDirectoryEvent_ = \case
     where
       ciId = chatItemId' ci
       err = ADC SDRUser DCUnknownCommand
+  CEvtSndFileCompleteXFTP {chatItem, fileTransferMeta} -> voiceUploadEnded (Just chatItem) fileTransferMeta
+  CEvtSndFileError {chatItem_, fileTransferMeta} -> voiceUploadEnded chatItem_ fileTransferMeta
   CEvtMessageError {severity, errorMessage} -> Just $ DELogChatResponse $ "message error: " <> severity <> ", " <> errorMessage
   CEvtChatErrors {chatErrors} -> Just $ DELogChatResponse $ "chat errors: " <> T.intercalate ", " (map tshow chatErrors)
   _ -> Nothing
   where
     pending m = memberStatus m == GSMemPendingApproval
+    voiceUploadEnded :: Maybe AChatItem -> FileTransferMeta -> Maybe DirectoryEvent
+    voiceUploadEnded ci_ FileTransferMeta {filePath} = case ci_ of
+      Just (AChatItem _ SMDSnd _ ChatItem {content = CISndMsgContent MCVoice {}}) -> Just $ DEVoiceUploadEnded filePath
+      _ -> Nothing
 
 data DirectoryRole = DRUser | DRAdmin | DRSuperUser
 

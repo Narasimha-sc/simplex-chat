@@ -41,8 +41,12 @@ import Numeric (showFFloat)
 import Simplex.Chat.Call
 import Simplex.Chat.Controller
 import Simplex.Chat.Help
-import Simplex.Chat.Library.Commands (maxImageSize)
+import Simplex.Chat.Library.Commands (badgeServiceErrorText, maxImageSize)
 import Simplex.Chat.Markdown
+import Simplex.Chat.Badges (BadgeInfo (..), BadgeStatus (..), BadgeType (..), LocalBadge, localBadgeInfo, localBadgeStatus)
+import Simplex.Chat.Badges.Ledger (creditTypeTag, debitTypeTag)
+import Simplex.Chat.Badges.Service (StatementEntry (..), StatementEntryType (..))
+import Simplex.Chat.Badges.Types (BadgeAlert (..), BadgeIssueError (..), BadgeState (..), BadgeSubscription (..), OpenStorePurchase (..))
 import Simplex.Chat.Messages hiding (NewChatItem (..))
 import Simplex.Chat.Messages.CIContent
 import Simplex.Chat.Operators
@@ -51,6 +55,7 @@ import Simplex.Chat.Remote.AppVersion (AppVersion (..), pattern AppVersionRange)
 import Simplex.Chat.Remote.Types
 import Simplex.Chat.Store (AddressSettings (..), AutoAccept (..), StoreError (..), UserContactLink (..))
 import Simplex.Chat.Styled
+import Simplex.Chat.Names (SimplexDomainClaim (..), claimDomain)
 import Simplex.Chat.Types
 import Simplex.Chat.Types.Preferences
 import Simplex.Chat.Types.Shared
@@ -110,8 +115,8 @@ chatErrorToView :: Bool -> ChatConfig -> ChatError -> [StyledString]
 chatErrorToView isCmd ChatConfig {logLevel, testView} = viewChatError isCmd logLevel testView
 
 chatResponseToView :: (Maybe RemoteHostId, Maybe User) -> ChatConfig -> Bool -> CurrentTime -> TimeZone -> Maybe RemoteHostId -> ChatResponse -> [StyledString]
-chatResponseToView hu cfg@ChatConfig {logLevel, showReactions, testView} liveItems ts tz outputRH = \case
-  CRActiveUser User {profile, uiThemes} -> viewUserProfile (fromLocalProfile profile) <> viewUITheme uiThemes
+chatResponseToView hu cfg@ChatConfig {logLevel, showReactions, showFullLinks, testView} liveItems ts tz outputRH = \case
+  CRActiveUser User {profile = p@LocalProfile {localBadge}, uiThemes} -> viewUserProfile localBadge (fromLocalProfile p) <> viewUITheme uiThemes
   CRUsersList users -> viewUsersList users
   CRChatStarted -> ["chat started"]
   CRChatRunning -> ["chat is running"]
@@ -124,7 +129,11 @@ chatResponseToView hu cfg@ChatConfig {logLevel, showReactions, testView} liveIte
   CRApiChat u chat _ -> ttyUser u $ if testView then testViewChat chat else [viewJSON chat]
   CRChatContentTypes cts -> [plain $ "Chat content types: " <> T.intercalate ", " (map (safeDecodeUtf8 . strEncode) cts)]
   CRChatTags u tags -> ttyUser u [viewJSON tags]
-  CRServerTestResult u srv testFailure -> ttyUser u $ viewServerTestResult srv testFailure
+  CRServerTestResult u srv testFailure info -> ttyUser u $ viewServerTestResult srv testFailure <> maybe [] viewServerInfo info
+    where
+      viewServerInfo = \case
+        Left e -> [plain $ "Server Info Error: " <> T.pack e]
+        Right i -> [plain $ "Server Info: " <> tshow i]
   CRChatRelayTestResult u relayProfile_ relayTestFailure_ -> ttyUser u $ viewRelayTestResult relayProfile_ relayTestFailure_
   CRServerOperatorConditions (ServerOperatorConditions ops _ ca) -> viewServerOperators ops ca
   CRUserServers u uss -> ttyUser u $ concatMap viewUserServers uss <> (if testView then [] else serversUserHelp)
@@ -146,6 +155,8 @@ chatResponseToView hu cfg@ChatConfig {logLevel, showReactions, testView} liveIte
   CRContactRatchetSyncStarted {} -> ["connection synchronization started"]
   CRGroupMemberRatchetSyncStarted {} -> ["connection synchronization started"]
   CRConnectionVerified u verified code -> ttyUser u [plain $ if verified then "connection verified" else "connection not verified, current code is " <> code]
+  CRContactDomainVerified u (Contact {profile = LocalProfile {contactDomain}}) result -> ttyUser u $ viewDomainVerified NTContact (claimDomain <$> contactDomain) result
+  CRGroupDomainVerified u g result -> ttyUser u $ viewDomainVerified NTPublicGroup (groupSimplexDomain g) result
   CRContactCode u ct code -> ttyUser u $ viewContactCode ct code testView
   CRGroupMemberCode u g m code -> ttyUser u $ viewGroupMemberCode g m code testView
   CRNewChatItems u chatItems -> viewChatItems ttyUser unmuted u chatItems ts tz testView
@@ -175,9 +186,17 @@ chatResponseToView hu cfg@ChatConfig {logLevel, showReactions, testView} liveIte
     HSDatabase -> databaseHelpInfo
   CRWelcome user -> chatWelcome user
   CRContactsList u cs -> ttyUser u $ viewContactsList cs
-  CRUserContactLink u UserContactLink {connLinkContact, addressSettings} -> ttyUser u $ connReqContact_ "Your chat address:" connLinkContact <> viewAddressSettings addressSettings
+  CRUserContactLink u UserContactLink {connLinkContact, addressSettings} -> ttyUser u $ connReqContact_ showFullLinks "Your chat address:" connLinkContact <> viewAddressSettings addressSettings
   CRUserContactLinkUpdated u UserContactLink {addressSettings} -> ttyUser u $ viewAddressSettings addressSettings
   CRContactRequestRejected u UserContactRequest {localDisplayName = c} _ct_ -> ttyUser u [ttyContact c <> ": contact request rejected"]
+  CRServiceResponse u resp -> ttyUser u ["service response: " <> viewJSON resp]
+  CRServiceReplyAccepted u (AgentConnId cId) -> ttyUser u [plain $ "service reply accepted, connection id: " <> safeDecodeUtf8 (strEncode cId)]
+  -- the badge is only shown when it is the one now on the profile; a replayed code's badge may not be
+  CRBadgeRedeemed u badge newBadge _ -> ttyUser u $ if newBadge then "badge redeemed" : viewContactBadge (Just badge) else ["badge already redeemed"]
+  CRBadgeInvoice u invoiceId -> ttyUser u ["badge invoice: " <> plain invoiceId]
+  CRStoreReceiptNotRecorded u -> ttyUser u ["store purchase not recorded"]
+  CRBadgeState u st storePurchases -> ttyUser u $ viewUserBadgeState st <> map viewOpenStorePurchase storePurchases
+  CRBadgeLedger u entries -> ttyUser u $ viewBadgeLedger entries
   CRGroupCreated u g -> ttyUser u $ viewGroupCreated g testView
   CRPublicGroupCreated u g _groupLink _relays -> ttyUser u $ viewGroupCreated g testView
   CRPublicGroupCreationFailed u results -> ttyUser u $ viewPublicGroupCreationFailed results
@@ -191,16 +210,17 @@ chatResponseToView hu cfg@ChatConfig {logLevel, showReactions, testView} liveIte
   -- CRGroupConversationsDeleted u _g _conversations -> ttyUser u []
   CRGroupsList u gs -> ttyUser u $ viewGroupsList gs
   CRSentGroupInvitation u g c _ -> ttyUser u $ viewSentGroupInvitation g c
+  CRSentGroupInvitationViaGroup u g _ viaG viaM -> ttyUser u ["invitation to join the group " <> ttyGroup' g <> " sent to " <> ttyMember viaM <> " in " <> ttyGroup' viaG]
   CRFileTransferStatus u ftStatus -> ttyUser u $ viewFileTransferStatus ftStatus
   CRFileTransferStatusXFTP u ci -> ttyUser u $ viewFileTransferStatusXFTP ci
-  CRUserProfile u p -> ttyUser u $ viewUserProfile p
+  CRUserProfile u@User {profile = LocalProfile {localBadge}} p -> ttyUser u $ viewUserProfile localBadge p
   CRUserProfileNoChange u -> ttyUser u ["user profile did not change"]
   CRUserPrivacy u u' -> ttyUserPrefix hu outputRH u $ viewUserPrivacy u u'
   CRVersionInfo info _ _ -> viewVersionInfo logLevel info
-  CRInvitation u ccLink _ -> ttyUser u $ viewConnReqInvitation ccLink
+  CRInvitation u ccLink _ -> ttyUser u $ viewConnReqInvitation showFullLinks ccLink
   CRConnectionIncognitoUpdated u c customUserProfile -> ttyUser u $ viewConnectionIncognitoUpdated c customUserProfile testView
-  CRConnectionUserChanged u c c' nu -> ttyUser u $ viewConnectionUserChanged u c nu c'
-  CRConnectionPlan u connLink connectionPlan -> ttyUser u $ viewConnectionPlan cfg connLink connectionPlan
+  CRConnectionUserChanged u c c' nu -> ttyUser u $ viewConnectionUserChanged showFullLinks u c nu c'
+  CRConnectionPlan u connLink _ otherSimplexName connectionPlan -> ttyUser u $ viewConnectionPlan cfg connLink connectionPlan <> otherSimplexNameNote otherSimplexName
   CRNewPreparedChat u (AChat _ (Chat cInfo _ _)) -> ttyUser u $ case cInfo of
     DirectChat ct -> [ttyContact' ct <> ": contact is prepared"]
     GroupChat g _ -> [ttyGroup' g <> ": group is prepared"]
@@ -217,7 +237,7 @@ chatResponseToView hu cfg@ChatConfig {logLevel, showReactions, testView} liveIte
   CRChatCleared u chatInfo -> ttyUser u $ viewChatCleared chatInfo
   CRAcceptingContactRequest u c -> ttyUser u $ viewAcceptingContactRequest c
   CRContactAlreadyExists u c -> ttyUser u [ttyFullContact c <> ": contact already exists"]
-  CRUserContactLinkCreated u ccLink -> ttyUser u $ connReqContact_ "Your new chat address is created!" ccLink
+  CRUserContactLinkCreated u ccLink -> ttyUser u $ connReqContact_ showFullLinks "Your new chat address is created!" ccLink
   CRUserContactLinkDeleted u -> ttyUser u viewUserContactLinkDeleted
   CRUserAcceptedGroupSent u _g _ -> ttyUser u [] -- [ttyGroup' g <> ": joining the group..."]
   CRUserDeletedMembers u g members wm signed -> case members of
@@ -231,7 +251,7 @@ chatResponseToView hu cfg@ChatConfig {logLevel, showReactions, testView} liveIte
             "use " <> highlight ("/d #" <> viewGroupName g) <> " to delete the group (also clears the rejection)"
           ]
     | otherwise -> ttyUser u $ [ttyGroup' g <> ": you left the group"] <> groupPreserved g
-  CRGroupDeletedUser u g signed -> ttyUser u [ttyGroup' g <> ": you deleted the group" <> signedStr signed]
+  CRGroupDeletedUser u g signed local -> ttyUser u [ttyGroup' g <> (if local then ": you deleted your local copy of the group" else ": you deleted the group" <> signedStr signed)]
   CRForwardPlan u count itemIds fc -> ttyUser u $ viewForwardPlan count itemIds fc
   CRChatMsgContent u mc -> ttyUser u $ ttyMsgContent mc <> viewMsgTestInfo testView mc
   CRRcvFileAccepted u ci -> ttyUser u $ savingFile' ci
@@ -256,8 +276,8 @@ chatResponseToView hu cfg@ChatConfig {logLevel, showReactions, testView} liveIte
   CRGroupUpdated u g g' m signed -> ttyUser u $ viewGroupUpdated g g' m (if signed then Just MSSVerified else Nothing)
   CRGroupProfile u g -> ttyUser u $ viewGroupProfile g
   CRGroupDescription u g -> ttyUser u $ viewGroupDescription g
-  CRGroupLinkCreated u g gLink -> ttyUser u $ groupLink_ "Group link is created!" g gLink
-  CRGroupLink u g gLink -> ttyUser u $ groupLink_ "Group link:" g gLink
+  CRGroupLinkCreated u g gLink -> ttyUser u $ groupLink_ showFullLinks "Group link is created!" g gLink
+  CRGroupLink u g gLink -> ttyUser u $ groupLink_ showFullLinks "Group link:" g gLink
   CRGroupLinkDeleted u g -> ttyUser u $ viewGroupLinkDeleted g
   CRNewMemberContact u _ g m -> ttyUser u ["contact for member " <> ttyGroup' g <> " " <> ttyMember m <> " is created"]
   CRNewMemberContactSentInv u _ct g m -> ttyUser u ["sent invitation to connect directly to member " <> ttyGroup' g <> " " <> ttyMember m]
@@ -371,9 +391,9 @@ chatResponseToView hu cfg@ChatConfig {logLevel, showReactions, testView} liveIte
               Just CIFile {fileSource = Just (CryptoFile fp _)} -> Just fp
               _ -> Nothing
     testViewItem :: CChatItem c -> Maybe GroupMember -> Text
-    testViewItem (CChatItem _ ci@ChatItem {meta = CIMeta {itemText, msgSigned}}) membership_ =
+    testViewItem (CChatItem _ ci@ChatItem {meta = CIMeta {itemText, msgVerified}}) membership_ =
       let deleted_ = maybe "" (\t -> " [" <> t <> "]") (chatItemDeletedText ci membership_)
-       in itemText <> sigStatusStr msgSigned <> deleted_
+       in itemText <> msgVerifiedStr msgVerified <> deleted_
     unmuted :: User -> ChatInfo c -> ChatItem c d -> [StyledString] -> [StyledString]
     unmuted u chat ci@ChatItem {chatDir} = unmuted' u chat chatDir $ isUserMention ci
     unmutedReaction :: User -> ChatInfo c -> CIReaction c d -> [StyledString] -> [StyledString]
@@ -389,6 +409,12 @@ sigStatusStr :: IsString a => Maybe MsgSigStatus -> a
 sigStatusStr = \case
   Just MSSVerified -> " (signed)"
   Just MSSSignedNoKey -> " (signed, no key to verify)"
+  Nothing -> ""
+
+msgVerifiedStr :: IsString a => Maybe MsgVerified -> a
+msgVerifiedStr = \case
+  Just (MVSigned s) -> sigStatusStr (Just s)
+  Just MVSigMissing -> " (signature missing)"
   Nothing -> ""
 
 signedStr :: IsString a => Bool -> a
@@ -435,7 +461,6 @@ chatEventToView hu ChatConfig {logLevel, showReactions, showReceipts, testView} 
   CEvtGroupChatItemsDeleted u g ciIds byUser member_ -> ttyUser u $ viewGroupChatItemsDeleted g ciIds byUser member_
   CEvtChatItemDeletedNotFound u Contact {localDisplayName = c} _ -> ttyUser u [ttyFrom $ c <> "> [deleted - original message not found]"]
   CEvtUserAcceptedGroupSent u _g _ -> ttyUser u [] -- [ttyGroup' g <> ": joining the group..."]
-  CEvtSentGroupInvitation u g c _ -> ttyUser u $ viewSentGroupInvitation g c
   CEvtContactDeletedByContact u c -> ttyUser u [ttyFullContact c <> " deleted contact with you"]
   CEvtAcceptingContactRequest u c -> ttyUser u $ viewAcceptingContactRequest c
   CEvtAcceptingBusinessRequest u g -> ttyUser u $ viewAcceptingBusinessRequest g
@@ -446,13 +471,25 @@ chatEventToView hu ChatConfig {logLevel, showReactions, showReceipts, testView} 
   CEvtUnknownMemberCreated u g fwdM um -> ttyUser u [ttyGroup' g <> ": " <> ttyMember fwdM <> " forwarded a message from an unknown member, creating unknown member record " <> ttyMember um]
   CEvtUnknownMemberBlocked u g byM um -> ttyUser u [ttyGroup' g <> ": " <> ttyMember byM <> " blocked an unknown member, creating unknown member record " <> ttyMember um]
   CEvtUnknownMemberAnnounced u g _ um m -> ttyUser u [ttyGroup' g <> ": unknown member " <> ttyMember um <> " updated to " <> ttyMember m]
+  CEvtDuplicateGroupMessage {} -> []
   CEvtRcvFileDescrReady _ _ _ _ -> []
   CEvtRcvFileAccepted u ci -> ttyUser u $ savingFile' ci
   CEvtRcvFileAcceptedSndCancelled u ft -> ttyUser u $ viewRcvFileSndCancelled ft
   CEvtRcvFileProgressXFTP {} -> []
   CEvtContactUpdated {user = u, fromContact = c, toContact = c'} -> ttyUser u $ viewContactUpdated c c' <> viewContactPrefsUpdated u c c'
   CEvtGroupMemberUpdated {} -> []
-  CEvtReceivedContactRequest u UserContactRequest {localDisplayName = c, profile} _chat -> ttyUser u $ viewReceivedContactRequest c profile
+  CEvtReceivedContactRequest u UserContactRequest {localDisplayName = c, profile} _chat -> ttyUser u $ viewReceivedContactRequest c (fromLocalProfile profile)
+  CEvtServiceRequest u reqId sigKey_ req ->
+    ttyUser u $
+      [plain $ "service request " <> safeDecodeUtf8 (strEncode reqId)]
+        <> maybe [] (\k -> [plain $ "signed by " <> safeDecodeUtf8 (strEncode k)]) sigKey_
+        <> ["request: " <> viewJSON req]
+  CEvtServiceReplySent (AgentConnId cId) -> [plain $ "service reply sent, connection id: " <> safeDecodeUtf8 (strEncode cId)]
+  CEvtBadgeChanged u st -> ttyUser u $ viewUserBadgeState st
+  CEvtBadgeAlert u alert -> ttyUser u $ viewBadgeAlert alert
+  CEvtStorePurchaseCredited u invoiceId -> ttyUser u ["store purchase credited: invoice " <> plain invoiceId]
+  CEvtStorePurchaseRefused u invoiceId refusal -> ttyUser u ["store purchase refused: invoice " <> plain invoiceId <> ", " <> plain (safeDecodeUtf8 $ strEncode refusal)]
+  CEvtContactRequestRejected u Contact {localDisplayName = c} _reason -> ttyUser u [ttyContact c <> ": contact request rejected"]
   CEvtRcvFileStart u ci -> ttyUser u $ receivingFile_' hu testView "started" ci
   CEvtRcvFileComplete u ci -> ttyUser u $ receivingFile_' hu testView "completed" ci
   CEvtRcvStandaloneFileComplete u _ ft -> ttyUser u $ receivingFileStandalone "completed" ft
@@ -481,8 +518,10 @@ chatEventToView hu ChatConfig {logLevel, showReactions, showReceipts, testView} 
   CEvtSubscriptionEnd u acEntity ->
     let Connection {connId} = entityConnection acEntity
      in ttyUser u [sShow connId <> ": END"]
-  CEvtSubscriptionStatus srv status conns -> [plain $ subStatusStr status <> " " <> show (length conns) <> " connections on server " <> showSMPServer srv]
-  CEvtReceivedGroupInvitation {user = u, groupInfo = g, contact = c, memberRole = r} -> ttyUser u $ viewReceivedGroupInvitation g c r
+  CEvtSubscriptionStatus srv status conns -> [plain $ subStatusStr status <> " " <> tshow (length conns) <> " connections on server " <> showSMPServer srv]
+  CEvtServiceSubStatus srv event -> [plain $ serviceSubEventStr srv event]
+  CEvtReceivedGroupInvitation {user = u, groupInfo = g, contact = c, memberRole = r} -> ttyUser u $ viewReceivedGroupInvitation g (ttyContact' c) r
+  CEvtReceivedGroupInvitationViaGroup {user = u, groupInfo = g, viaGroupInfo = viaG, viaMember = m, memberRole = r} -> ttyUser u $ viewReceivedGroupInvitation g (ttyMember m <> " in " <> ttyGroup' viaG) r
   CEvtUserJoinedGroup u g m -> ttyUser u $ viewUserJoinedGroup g m
   CEvtGroupLinkDataUpdated u g groupLink relays relaysChanged
     | relaysChanged -> ttyUser u $ viewGroupLinkRelaysUpdated g groupLink relays
@@ -618,13 +657,14 @@ viewUsersList us =
    in if null ss then ["no users"] else ss
   where
     ldn (UserInfo User {localDisplayName = n} _) = T.toLower n
-    userInfo (UserInfo User {localDisplayName = n, profile = LocalProfile {fullName, shortDescr, peerType}, activeUser, showNtfs, viewPwdHash} count)
-      | activeUser || isNothing viewPwdHash = Just $ ttyFullName n fullName shortDescr <> infoStr <> bot
+    userInfo (UserInfo User {localDisplayName = n, profile = LocalProfile {fullName, shortDescr, peerType, localBadge}, activeUser, showNtfs, viewPwdHash, clientService} count)
+      | activeUser || isNothing viewPwdHash = Just $ ttyFullNameBadge n fullName shortDescr localBadge <> infoStr <> bot
       | otherwise = Nothing
       where
         infoStr = if null info then "" else " (" <> mconcat (intersperse ", " info) <> ")"
         info =
           [highlight' "active" | activeUser]
+            <> [highlight' "service" | isTrue clientService]
             <> [highlight' "hidden" | isJust viewPwdHash]
             <> ["muted" | not showNtfs]
             <> [plain ("unread: " <> show count) | count /= 0]
@@ -632,8 +672,8 @@ viewUsersList us =
           Just CPTBot -> " (bot)"
           _ -> ""
 
-showSMPServer :: SMPServer -> String
-showSMPServer ProtocolServer {host} = B.unpack $ strEncode host
+showSMPServer :: SMPServer -> Text
+showSMPServer ProtocolServer {host} = safeDecodeUtf8 $ strEncode host
 
 viewHostEvent :: AProtocolType -> TransportHost -> String
 viewHostEvent p h = map toUpper (B.unpack $ strEncode p) <> " host " <> B.unpack (strEncode h)
@@ -671,7 +711,7 @@ viewChatItems ttyUser unmuted u chatItems ts tz testView
   | otherwise = ttyUser u [sShow (length chatItems) <> " new messages created"]
 
 viewChatItem :: forall c d. MsgDirectionI d => ChatInfo c -> ChatItem c d -> Bool -> CurrentTime -> TimeZone -> [StyledString]
-viewChatItem chat ci@ChatItem {chatDir, meta = meta@CIMeta {itemForwarded, forwardedByMember, userMention, msgSigned}, content, quotedItem, file} doShow ts tz =
+viewChatItem chat ci@ChatItem {chatDir, meta = meta@CIMeta {itemForwarded, forwardedByMember, userMention, msgVerified}, content, quotedItem, file} doShow ts tz =
   withGroupMsgForwarded . withItemDeleted <$> viewCI
   where
     viewCI = case chat of
@@ -699,7 +739,6 @@ viewChatItem chat ci@ChatItem {chatDir, meta = meta@CIMeta {itemForwarded, forwa
       GroupChat g scopeInfo -> case chatDir of
         CIGroupSnd -> case content of
           CISndMsgContent mc -> hideLive meta $ withSndFile to $ sndMsg to context mc
-          CISndGroupInvitation {} -> showSndItemProhibited to
           _ -> showSndItem to
           where
             to = ttyToGroup g scopeInfo
@@ -710,7 +749,6 @@ viewChatItem chat ci@ChatItem {chatDir, meta = meta@CIMeta {itemForwarded, forwa
             CIRcvMsgContent mc -> withRcvFile from $ rcvMsg from context mc
             CIRcvIntegrityError err -> viewRcvIntegrityError from err ts tz meta
             CIRcvMsgError err -> viewRcvMsgError from err ts tz meta
-            CIRcvGroupInvitation {} | isJust m_ -> showRcvItemProhibited from
             CIRcvModerated {} -> receivedWithTime_ ts tz (ttyFromGroup g scopeInfo m_) context meta [plainContent content] False
             CIRcvBlocked {} -> receivedWithTime_ ts tz (ttyFromGroup g scopeInfo m_) context meta [plainContent content] False
             _ -> showRcvItem from
@@ -757,8 +795,8 @@ viewChatItem chat ci@ChatItem {chatDir, meta = meta@CIMeta {itemForwarded, forwa
       ("", Just _, []) -> []
       ("", Just CIFile {fileName}, _) -> view dir context (MCText $ T.pack fileName) ts tz meta
       _ -> view dir context mc ts tz meta
-    showSndItem to = showItem $ sentWithTime_ ts tz [to <> plainContent content <> sigStatusStr msgSigned] meta
-    showRcvItem from = showItem $ receivedWithTime_ ts tz from [] meta [plainContent content <> sigStatusStr msgSigned] False
+    showSndItem to = showItem $ sentWithTime_ ts tz [to <> plainContent content <> msgVerifiedStr msgVerified] meta
+    showRcvItem from = showItem $ receivedWithTime_ ts tz from [] meta [plainContent content <> msgVerifiedStr msgVerified] False
     showSndItemProhibited to = showItem $ sentWithTime_ ts tz [to <> plainContent content <> " " <> prohibited] meta
     showRcvItemProhibited from = showItem $ receivedWithTime_ ts tz from [] meta [plainContent content <> " " <> prohibited] False
     showItem ss = if doShow then ss else []
@@ -766,7 +804,7 @@ viewChatItem chat ci@ChatItem {chatDir, meta = meta@CIMeta {itemForwarded, forwa
     prohibited = styled (colored Red) ("[unexpected chat item created, please report to developers]" :: String)
 
 viewChatItemInfo :: AChatItem -> ChatItemInfo -> TimeZone -> [StyledString]
-viewChatItemInfo (AChatItem _ msgDir _ ChatItem {meta = CIMeta {itemTs, itemTimed, createdAt}}) ChatItemInfo {itemVersions, forwardedFromChatItem} tz =
+viewChatItemInfo (AChatItem _ msgDir _ ChatItem {meta = CIMeta {itemTs, itemTimed, createdAt, itemForwarded}}) ChatItemInfo {itemVersions, forwardedFromChatItem} tz =
   ["sent at: " <> ts itemTs]
     <> receivedAt
     <> toBeDeletedAt
@@ -798,7 +836,10 @@ viewChatItemInfo (AChatItem _ msgDir _ ChatItem {meta = CIMeta {itemTs, itemTime
               (SMDRcv, GroupChat gInfo _scopeInfo) -> Just $ "#" <> viewGroupName gInfo
               _ -> Nothing
             fwdItemId = "chat item id: " <> (T.pack . show $ aChatItemId fwdACI)
-        _ -> []
+        _ -> case itemForwarded of
+          Just (CIFFGroup g _ _ _ _ _ _) -> ["forwarded from: #" <> (plain . viewName) g]
+          Just (CIFFGroupLink g _ _ _ _ _ _) -> ["forwarded from: #" <> (plain . viewName) g]
+          _ -> []
 
 localTs :: TimeZone -> UTCTime -> String
 localTs tz ts = do
@@ -986,8 +1027,9 @@ forwardedFrom = \case
   CIFFUnknown -> ["-> forwarded"]
   CIFFContact c MDSnd _ _ -> ["<- you @" <> (plain . viewName) c]
   CIFFContact c MDRcv _ _ -> ["<- @" <> (plain . viewName) c]
-  CIFFGroup g MDSnd _ _ -> ["<- you #" <> (plain . viewName) g]
-  CIFFGroup g MDRcv _ _ -> ["<- #" <> (plain . viewName) g]
+  CIFFGroup g MDSnd _ _ _ _ _ -> ["<- you #" <> (plain . viewName) g]
+  CIFFGroup g MDRcv _ _ _ _ _ -> ["<- #" <> (plain . viewName) g]
+  CIFFGroupLink g _ _ _ _ _ _ -> ["<- #" <> (plain . viewName) g]
 
 sentByMember :: GroupInfo -> CIQDirection 'CTGroup -> Maybe GroupMember
 sentByMember GroupInfo {membership} = \case
@@ -1027,8 +1069,8 @@ viewInvalidConnReq =
     plain updateStr
   ]
 
-viewConnReqInvitation :: CreatedLinkInvitation -> [StyledString]
-viewConnReqInvitation (CCLink cReq shortLink) =
+viewConnReqInvitation :: Bool -> CreatedLinkInvitation -> [StyledString]
+viewConnReqInvitation showFullLinks (CCLink cReq shortLink) =
   [ "pass this invitation link to your contact (via another channel): ",
     "",
     plain $ maybe cReqStr strEncode shortLink,
@@ -1036,7 +1078,7 @@ viewConnReqInvitation (CCLink cReq shortLink) =
     "and ask them to connect: " <> highlight' "/c <invitation_link_above>"
   ]
     <>
-      if isJust shortLink
+      if showFullLinks && isJust shortLink
         then
           [ "The invitation link for old clients:",
             plain cReqStr
@@ -1099,8 +1141,8 @@ viewForwardPlan count itemIds = maybe [forwardCount] $ \fc -> [confirmation fc, 
       | otherwise = plain $ show len <> " message(s) out of " <> show count <> " can be forwarded"
     len = length itemIds
 
-connReqContact_ :: StyledString -> CreatedLinkContact -> [StyledString]
-connReqContact_ intro (CCLink cReq shortLink) =
+connReqContact_ :: Bool -> StyledString -> CreatedLinkContact -> [StyledString]
+connReqContact_ showFullLinks intro (CCLink cReq shortLink) =
   [ intro,
     "",
     plain $ maybe cReqStr strEncode shortLink,
@@ -1110,42 +1152,70 @@ connReqContact_ intro (CCLink cReq shortLink) =
     "to share with your contacts: " <> highlight' "/profile_address on",
     "to delete it: " <> highlight' "/da" <> " (accepted contacts will remain connected)"
   ]
-    <> ["The contact link for old clients: " <> plain cReqStr | isJust shortLink]
+    <> ["The contact link for old clients: " <> plain cReqStr | showFullLinks, isJust shortLink]
   where
     cReqStr = strEncode $ simplexChatContact cReq
 
 simplexChatContact :: ConnReqContact -> ConnReqContact
-simplexChatContact (CRContactUri crData) = CRContactUri crData {crScheme = simplexChat}
+simplexChatContact (CRContactUri crData e2e) = CRContactUri crData {crScheme = simplexChat} e2e
 
 simplexChatContact' :: ConnLinkContact -> ConnLinkContact
 simplexChatContact' = \case
-  CLFull (CRContactUri crData) -> CLFull $ CRContactUri crData {crScheme = simplexChat}
+  CLFull (CRContactUri crData e2e) -> CLFull $ CRContactUri crData {crScheme = simplexChat} e2e
   l@(CLShort _) -> l
+
+groupSimplexDomain :: GroupInfo -> Maybe SimplexDomain
+groupSimplexDomain GroupInfo {groupProfile = GroupProfile {publicGroup}} =
+  claimDomain <$> (publicGroup >>= publicGroupAccess >>= groupDomainClaim)
+
+viewDomainVerified :: SimplexNameType -> Maybe SimplexDomain -> Maybe Text -> [StyledString]
+viewDomainVerified nameType domain_ result =
+  let nameStr = maybe "name" (\d -> "SimpleX name " <> shortNameInfoStr (SimplexNameInfo nameType d)) domain_
+   in case result of
+        Nothing -> [plain nameStr <> " verified"]
+        Just reason -> [plain nameStr <> " not verified: " <> plain reason]
+
+-- §4.7: show a peer's claimed name only with its verification context — "verified" / "verification
+-- failed" when a status is recorded, "unverified" when there is a proof but no status yet, and nothing
+-- at all when there is neither (an unproven, unverifiable claim is not shown).
+simplexDomainLine :: SimplexNameType -> Maybe SimplexDomainClaim -> Maybe Bool -> [StyledString]
+simplexDomainLine _ Nothing _ = []
+simplexDomainLine nameType (Just SimplexDomainClaim {domain, proof}) status = case status of
+  Just True -> [line "verified"]
+  Just False -> [line "verification failed"]
+  Nothing
+    | isJust proof -> [line "unverified"]
+    | otherwise -> []
+  where
+    line s = plain $ "SimpleX name: " <> shortNameInfoStr (SimplexNameInfo nameType (unStrJSON domain)) <> " (" <> s <> ")"
 
 -- TODO [short links] show all settings
 viewAddressSettings :: AddressSettings -> [StyledString]
-viewAddressSettings AddressSettings {businessAddress, autoAccept, autoReply} = case autoAccept of
+viewAddressSettings AddressSettings {businessAddress, autoAccept, chatLayout, autoReply} = case autoAccept of
   Just AutoAccept {acceptIncognito} ->
     ("auto_accept on" <> aaInfo)
-      : maybe [] ((["auto reply:"] <>) . ttyMsgContent) autoReply
+      : viewChatLayout chatLayout
+      <> maybe [] ((["auto reply:"] <>) . ttyMsgContent) autoReply
     where
       aaInfo
         | businessAddress = ", business"
         | acceptIncognito = ", incognito"
         | otherwise = ""
-  _ -> ["auto_accept off"]
+  _ -> "auto_accept off" : viewChatLayout chatLayout
 
-groupLink_ :: StyledString -> GroupInfo -> GroupLink -> [StyledString]
-groupLink_ intro g GroupLink {connLinkContact = CCLink cReq shortLink, acceptMemberRole} =
+groupLink_ :: Bool -> StyledString -> GroupInfo -> GroupLink -> [StyledString]
+groupLink_ showFullLinks intro g GroupLink {connLinkContact = CCLink cReq shortLink, acceptMemberRole} =
   [ intro,
     "",
-    plain $ maybe cReqStr strEncode shortLink,
-    "",
-    "Anybody can connect to you and join group as " <> showRole acceptMemberRole <> " with: " <> highlight' "/c <group_link_above>",
-    "to show it again: " <> highlight ("/show link #" <> viewGroupName g),
-    "to delete it: " <> highlight ("/delete link #" <> viewGroupName g) <> " (joined members will remain connected to you)"
+    plain $ maybe cReqStr strEncode shortLink
   ]
-    <> ["The group link for old clients: " <> plain cReqStr | isJust shortLink]
+    <> [plain ("SimpleX name: " <>  shortNameInfoStr (SimplexNameInfo NTPublicGroup d)) | Just d <- [groupSimplexDomain g]]
+    <> [ "",
+         "Anybody can connect to you and join group as " <> showRole acceptMemberRole <> " with: " <> highlight' "/c <group_link_above>",
+         "to show it again: " <> highlight ("/show link #" <> viewGroupName g),
+         "to delete it: " <> highlight ("/delete link #" <> viewGroupName g) <> " (joined members will remain connected to you)"
+       ]
+    <> ["The group link for old clients: " <> plain cReqStr | showFullLinks, isJust shortLink]
   where
     cReqStr = strEncode $ simplexChatContact cReq
 
@@ -1204,8 +1274,8 @@ viewReceivedContactRequest c Profile {fullName, shortDescr} =
   ]
 
 showRelay :: GroupRelay -> StyledString
-showRelay GroupRelay {groupRelayId, relayStatus} =
-  "  - relay id " <> sShow groupRelayId <> ": " <> plain (relayStatusText relayStatus)
+showRelay GroupRelay {groupRelayId, relayStatus, relayCap = RelayCapabilities {webDomain}} =
+  "  - relay id " <> sShow groupRelayId <> ": " <> plain (relayStatusText relayStatus) <> maybe "" (\d -> ", web: " <> plain d) webDomain
 
 viewGroupRelays :: GroupInfo -> [GroupRelay] -> [StyledString]
 viewGroupRelays g relays =
@@ -1220,6 +1290,7 @@ viewGroupLinkRelaysUpdated g groupLink relays =
       [ "group link:",
         plain $ maybe cReqStr strEncode shortLink
       ]
+    <> [plain ("SimpleX name: " <>  shortNameInfoStr (SimplexNameInfo NTPublicGroup d)) | Just d <- [groupSimplexDomain g]]
   where
     GroupLink {connLinkContact = CCLink cReq shortLink} = groupLink
     cReqStr = strEncode $ simplexChatContact cReq
@@ -1337,9 +1408,9 @@ viewConnectedToGroupMember g@GroupInfo {groupId} m@GroupMember {groupMemberId, m
     ]
   _ -> [ttyGroup' g <> ": " <> connectedMember m <> " is connected"]
 
-viewReceivedGroupInvitation :: GroupInfo -> Contact -> GroupMemberRole -> [StyledString]
-viewReceivedGroupInvitation g c role =
-  ttyFullGroup g <> ": " <> ttyContact' c <> " invites you to join the group as " <> showRole role
+viewReceivedGroupInvitation :: GroupInfo -> StyledString -> GroupMemberRole -> [StyledString]
+viewReceivedGroupInvitation g inviter role =
+  ttyFullGroup g <> ": " <> inviter <> " invites you to join the group as " <> showRole role
     : case incognitoMembershipProfile g of
       Just mp -> ["use " <> highlight ("/j " <> viewGroupName g) <> " to join incognito as " <> incognitoProfile' (fromLocalProfile mp)]
       Nothing -> ["use " <> highlight ("/j " <> viewGroupName g) <> " to accept"]
@@ -1493,7 +1564,7 @@ groupInvitation' g@GroupInfo {localDisplayName = ldn, groupProfile = GroupProfil
 
 viewNewMemberContactReceivedInv :: User -> Contact -> GroupInfo -> GroupMember -> [StyledString]
 viewNewMemberContactReceivedInv user ct@Contact {localDisplayName = c} g m
-  | isTrue (autoAcceptMemberContacts user) =
+  | autoAcceptMemberContacts user =
       [ttyGroup' g <> " " <> ttyMember m <> " is creating direct contact " <> ttyContact' ct <> " with you"]
   | otherwise =
       [ ttyGroup' g <> " " <> ttyMember m <> " requests to create direct contact with you",
@@ -1507,9 +1578,9 @@ viewContactAndMemberAssociated ct g m ct' =
     "use " <> ttyToContact' ct' <> highlight' "<message>" <> " to send messages"
   ]
 
-viewUserProfile :: Profile -> [StyledString]
-viewUserProfile Profile {displayName, fullName, shortDescr, peerType, preferences} =
-  [ "user profile: " <> ttyFullName displayName fullName shortDescr <> bot,
+viewUserProfile :: Maybe LocalBadge -> Profile -> [StyledString]
+viewUserProfile localBadge Profile {displayName, fullName, shortDescr, peerType, preferences} =
+  [ "user profile: " <> ttyFullNameBadge displayName fullName shortDescr localBadge <> bot,
     "use " <> highlight' "/p <name> [<bio>]" <> " to change it"
   ]
     ++ viewCommands
@@ -1579,12 +1650,22 @@ viewConnDiffIds userDiff connDiff
       where
         showIds = plain . T.intercalate ", " . map (tshow . unwrapId)
 
-subStatusStr :: SubscriptionStatus -> String
+subStatusStr :: SubscriptionStatus -> Text
 subStatusStr = \case
   SSActive -> "subscribed"
   SSPending -> "disconnected"
-  SSRemoved e -> "removed: " <> e
+  SSRemoved e -> "removed: " <> T.pack e
   SSNoSub -> "no subscription"
+
+serviceSubEventStr :: SMPServer -> ServiceSubEvent -> Text
+serviceSubEventStr srv = \case
+  ServiceSubUp e_ n -> "subscribed service " <> conns n <> srvStr <> ": " <> fromMaybe "ok" e_
+  ServiceSubDown n -> "disconnected service " <> conns n <> srvStr
+  ServiceSubAll -> "received messages from service" <> srvStr -- "(" <> n <> "connections)"
+  ServiceSubEnd n -> "service subscription ended " <> conns n <> srvStr
+  where
+    conns n = "(" <> tshow n <> " connections)"
+    srvStr = " on server " <> showSMPServer srv
 
 viewUserServers :: UserOperatorServers -> [StyledString]
 viewUserServers (UserOperatorServers _ [] [] []) = []
@@ -1609,12 +1690,12 @@ viewUserServers UserOperatorServers {operator, smpServers, xftpServers, chatRela
             testedInfo = maybe [] (\t -> ["test: " <> if t then "passed" else "failed"]) tested
         viewRoles op@ServerOperator {enabled}
           | not enabled = "disabled"
-          | storage rs && proxy rs = "enabled"
-          | storage rs = "enabled storage"
-          | proxy rs = "enabled proxy"
+          | rStorage && rProxy = "enabled"
+          | rStorage = "enabled storage"
+          | rProxy = "enabled proxy"
           | otherwise = "disabled (servers known)"
           where
-            rs = operatorRoles p op
+            ServerRoles {storage = rStorage, proxy = rProxy} = operatorRoles p op
     viewChatRelays :: [UserChatRelay] -> [StyledString]
     viewChatRelays [] = []
     viewChatRelays cRelays
@@ -1702,12 +1783,12 @@ viewOpEnabled ServerOperator {enabled, smpRoles, xftpRoles}
   | both smpRoles && both xftpRoles = "enabled"
   | otherwise = "SMP " <> viewRoles smpRoles <> ", XFTP " <> viewRoles xftpRoles
   where
-    no rs = not $ storage rs || proxy rs
-    both rs = storage rs && proxy rs
-    viewRoles rs
+    no ServerRoles {storage, proxy} = not $ storage || proxy
+    both ServerRoles {storage, proxy} = storage && proxy
+    viewRoles rs@ServerRoles {storage, proxy}
       | both rs = "enabled"
-      | storage rs = "enabled storage"
-      | proxy rs = "enabled proxy"
+      | storage = "enabled storage"
+      | proxy = "enabled proxy"
       | otherwise = "disabled (servers known)"
 
 viewConditionsAction :: UsageConditionsAction -> [StyledString]
@@ -1752,11 +1833,77 @@ smpProxyModeStr :: SMPProxyMode -> SMPProxyFallback -> String
 smpProxyModeStr SPMNever _ = "private message routing disabled."
 smpProxyModeStr mode fallback = T.unpack $ safeDecodeUtf8 $ "private message routing mode: " <> strEncode mode <> ", fallback: " <> strEncode fallback
 
+viewContactBadge :: Maybe LocalBadge -> [StyledString]
+viewContactBadge = maybe [] $ \lb ->
+  let BadgeInfo {badgeType, badgeExpiry} = localBadgeInfo lb
+      st = case localBadgeStatus lb of
+        BSActive -> "active"
+        BSExpired -> "expired"
+        BSExpiredOld -> "expired (old)"
+        BSFailed -> "verification failed"
+        BSUnknownKey -> "unknown key"
+      expiry = "expires " <> day badgeExpiry
+   in [plain (textEncode badgeType <> " badge - " <> st), plain expiry]
+
+viewUserBadgeState :: Maybe BadgeState -> [StyledString]
+viewUserBadgeState = maybe [] viewBadge
+  where
+    viewBadge BadgeState {badgePurchaseId, badgeType, monthsLeft, paidThrough, alert, issueError, nextWakeAt, subscription} =
+      plain
+        ( tshow badgePurchaseId
+            <> ": "
+            <> textEncode badgeType
+            <> ", "
+            <> tshow monthsLeft
+            <> " months left, paid through "
+            <> day paidThrough
+            <> maybe "" viewSubscription subscription
+            <> maybe "" ((", next check " <>) . dayTime) nextWakeAt
+        )
+        : maybe [] viewBadgeIssueError issueError
+          <> maybe [] viewBadgeAlert alert
+    viewSubscription BadgeSubscription {status} = ", subscription" <> maybe "" ((" " <>) . textEncode) status
+
+viewBadgeIssueError :: BadgeIssueError -> [StyledString]
+viewBadgeIssueError BadgeIssueError {failedSince, lastAttemptAt, reason} =
+  [plain $ "renewal failing since " <> day failedSince <> ", last " <> dayTime lastAttemptAt <> ": " <> safeDecodeUtf8 (strEncode reason)]
+
+viewBadgeAlert :: BadgeAlert -> [StyledString]
+viewBadgeAlert BadgeAlert {kind, date} = [plain $ "badge alert: " <> textEncode kind <> " " <> day date]
+
+viewOpenStorePurchase :: OpenStorePurchase -> StyledString
+viewOpenStorePurchase OpenStorePurchase {invoiceId, transactionRef, creditError} =
+  plain $
+    "store purchase open: invoice "
+      <> fromMaybe "none" invoiceId
+      <> maybe "" (", transaction " <>) transactionRef
+      <> maybe "" ((", not credited: " <>) . safeDecodeUtf8 . strEncode) creditError
+
+viewBadgeLedger :: [StatementEntry] -> [StyledString]
+viewBadgeLedger [] = ["no ledger entries"]
+viewBadgeLedger entries = map viewEntry entries
+  where
+    viewEntry StatementEntry {createdAt, entryType, changeMonths, balanceMonths, balanceStartTs} =
+      plain $ day createdAt <> " " <> entryKind entryType <> " " <> withSign changeMonths <> " -> " <> tshow balanceMonths <> ", from " <> day balanceStartTs
+    entryKind = \case
+      SECredit c -> creditTypeTag c
+      SEDebit d -> debitTypeTag d
+    withSign n = (if n >= 0 then "+" else "") <> tshow n
+
+day :: UTCTime -> Text
+day = T.pack . formatTime defaultTimeLocale "%Y-%m-%d"
+
+dayTime :: UTCTime -> Text
+dayTime = T.pack . formatTime defaultTimeLocale "%Y-%m-%d %H:%M"
+
 viewContactInfo :: Contact -> Maybe ConnectionStats -> Maybe Profile -> [StyledString]
-viewContactInfo ct@Contact {contactId, profile = LocalProfile {localAlias, contactLink}, activeConn, uiThemes, customData} stats incognitoProfile =
+viewContactInfo ct@Contact {contactId, profile = LocalProfile {localAlias, contactLink, localBadge, contactDomain, contactDomainVerified, description}, activeConn, uiThemes, chatLayout, customData} stats incognitoProfile =
   ["contact ID: " <> sShow contactId]
+    <> viewContactBadge localBadge
+    <> maybe [] ((bold' "description:" :) . map plain . T.lines) description
     <> maybe [] viewConnectionStats stats
-    <> maybe [] (\l -> ["contact address: " <> (plain . strEncode) (simplexChatContact' l)]) contactLink
+    <> maybe [] (\l -> ["contact address: " <> plain (strEncode (simplexChatContact' l))]) contactLink
+    <> simplexDomainLine NTContact contactDomain contactDomainVerified
     <> maybe
       ["you've shared main profile with this contact"]
       (\p -> ["you've shared incognito profile with this contact: " <> incognitoProfile' p])
@@ -1766,16 +1913,22 @@ viewContactInfo ct@Contact {contactId, profile = LocalProfile {localAlias, conta
     <> ["quantum resistant end-to-end encryption" | contactPQEnabled ct == CR.PQEncOn]
     <> maybe [] (\ac -> [viewPeerChatVRange (peerChatVRange ac)]) activeConn
     <> viewUITheme uiThemes
+    <> viewChatLayout chatLayout
     <> viewCustomData customData
 
 viewGroupInfo :: GroupInfo -> [StyledString]
-viewGroupInfo gInfo@GroupInfo {groupId, uiThemes, customData, groupSummary = GroupSummary {currentMembers, publicMemberCount}} =
+viewGroupInfo gInfo@GroupInfo {groupId, businessChat, groupDomainVerified, groupProfile = GroupProfile {publicGroup}, uiThemes, customData, groupSummary = GroupSummary {currentMembers, publicMemberCount}} =
   [ "group ID: " <> sShow groupId,
     memberCountLine
   ]
+    <> domainLine
     <> viewUITheme uiThemes
     <> viewCustomData customData
   where
+    -- a business presents as a contact (@-name); a public group/channel shows its #-name
+    domainLine = case businessChat of
+      Just bc -> simplexDomainLine NTContact (businessDomain bc) groupDomainVerified
+      Nothing -> simplexDomainLine NTPublicGroup (publicGroup >>= publicGroupAccess >>= groupDomainClaim) groupDomainVerified
     memberCountLine
       | useRelays' gInfo, Just count <- publicMemberCount = "subscribers: " <> sShow count
       | otherwise = "current members: " <> sShow currentMembers
@@ -1783,19 +1936,26 @@ viewGroupInfo gInfo@GroupInfo {groupId, uiThemes, customData, groupSummary = Gro
 viewUITheme :: Maybe UIThemeEntityOverrides -> [StyledString]
 viewUITheme = maybe [] (\uiThemes -> ["UI themes: " <> viewJSON uiThemes])
 
+viewChatLayout :: Maybe ChatLayout -> [StyledString]
+viewChatLayout = maybe [] (\chatLayout -> ["chat layout: " <> plain (textEncode chatLayout)])
+
 viewCustomData :: Maybe CustomData -> [StyledString]
 viewCustomData = maybe [] (\(CustomData v) -> ["custom data: " <> viewJSON (J.Object v)])
 
 viewGroupMemberInfo :: GroupInfo -> GroupMember -> Maybe ConnectionStats -> [StyledString]
-viewGroupMemberInfo GroupInfo {groupId} m@GroupMember {groupMemberId, memberProfile = LocalProfile {localAlias, contactLink}, activeConn} stats =
+viewGroupMemberInfo GroupInfo {groupId} m@GroupMember {groupMemberId, memberProfile = LocalProfile {localAlias, contactLink, localBadge, description}, activeConn} stats =
   [ "group ID: " <> sShow groupId,
     "member ID: " <> sShow groupMemberId
   ]
+    <> viewContactBadge localBadge
+    <> maybe [] ((bold' "description:" :) . map plain . T.lines) description
     <> maybe ["member not connected"] viewConnectionStats stats
     <> maybe [] (\l -> ["contact address: " <> (plain . strEncode) (simplexChatContact' l)]) contactLink
     <> ["alias: " <> plain localAlias | localAlias /= ""]
-    <> [viewConnectionVerified (memberSecurityCode m) | isJust stats]
+    <> [viewConnectionVerified mSecurityCode | isJust stats || isJust mSecurityCode]
     <> maybe [] (\ac -> [viewPeerChatVRange (peerChatVRange ac)]) activeConn
+  where
+    mSecurityCode = memberSecurityCode m
 
 viewConnectionVerified :: Maybe SecurityCode -> StyledString
 viewConnectionVerified (Just _) = "connection verified" -- TODO show verification time?
@@ -1810,7 +1970,7 @@ viewConnectionStats ConnectionStats {rcvQueuesInfo, sndQueuesInfo} =
     <> ["sending messages via: " <> viewSndQueuesInfo sndQueuesInfo | not $ null sndQueuesInfo]
 
 viewRcvQueuesInfo :: [RcvQueueInfo] -> StyledString
-viewRcvQueuesInfo = plain . intercalate ", " . map showQueueInfo
+viewRcvQueuesInfo = plain . T.intercalate ", " . map showQueueInfo
   where
     showQueueInfo RcvQueueInfo {rcvServer, rcvSwitchStatus, canAbortSwitch} =
       let switchCanBeAborted = if canAbortSwitch then ", can be aborted" else ""
@@ -1821,9 +1981,10 @@ viewRcvQueuesInfo = plain . intercalate ", " . map showQueueInfo
       RSSendingQADD -> "switch started"
       RSSendingQUSE -> "switch confirmed"
       RSReceivedMessage -> "switch secured"
+      RSReceivedQEND -> "switch completed"
 
 viewSndQueuesInfo :: [SndQueueInfo] -> StyledString
-viewSndQueuesInfo = plain . intercalate ", " . map showQueueInfo
+viewSndQueuesInfo = plain . T.intercalate ", " . map showQueueInfo
   where
     showQueueInfo SndQueueInfo {sndServer, sndSwitchStatus} =
       showSMPServer sndServer
@@ -1831,6 +1992,8 @@ viewSndQueuesInfo = plain . intercalate ", " . map showQueueInfo
     showSwitchStatus = \case
       SSSendingQKEY -> "switch started"
       SSSendingQTEST -> "switch secured"
+      SSSecuringQueue -> "switch confirmed"
+      SSSendingQEND -> "switch secured"
 
 viewContactSwitch :: Contact -> SwitchProgress -> [StyledString]
 viewContactSwitch _ (SwitchProgress _ SPConfirmed _) = []
@@ -1887,14 +2050,15 @@ viewSwitchPhase = \case
   SPCompleted -> "changed address"
 
 viewUserProfileUpdated :: Profile -> Profile -> UserProfileUpdateSummary -> [StyledString]
-viewUserProfileUpdated Profile {displayName = n, fullName, shortDescr, image, contactLink, preferences} Profile {displayName = n', fullName = fullName', shortDescr = shortDescr', image = image', contactLink = contactLink', preferences = prefs'} summary =
+viewUserProfileUpdated Profile {displayName = n, fullName, shortDescr, description, image, contactLink, preferences} Profile {displayName = n', fullName = fullName', shortDescr = shortDescr', description = description', image = image', contactLink = contactLink', preferences = prefs'} summary =
   profileUpdated <> viewPrefsUpdated preferences prefs'
   where
     UserProfileUpdateSummary {updateSuccesses = s, updateFailures = f} = summary
     profileUpdated
-      | n == n' && fullName == fullName' && shortDescr == shortDescr' && image == image' && contactLink == contactLink' = []
-      | n == n' && fullName == fullName' && shortDescr == shortDescr' && image == image' = [if isNothing contactLink' then "contact address removed" else "new contact address set"]
-      | n == n' && fullName == fullName' && shortDescr == shortDescr' = [if isNothing image' then "profile image removed" else "profile image updated"]
+      | n == n' && fullName == fullName' && shortDescr == shortDescr' && description == description' && image == image' && contactLink == contactLink' = []
+      | n == n' && fullName == fullName' && shortDescr == shortDescr' && description == description' && image == image' = [if isNothing contactLink' then "contact address removed" else "new contact address set"]
+      | n == n' && fullName == fullName' && shortDescr == shortDescr' && description == description' = [if isNothing image' then "profile image removed" else "profile image updated"]
+      | n == n' && fullName == fullName' && shortDescr == shortDescr' = ["user description " <> (if maybe True T.null description' then "removed" else "changed to " <> maybe "" plain description') <> notified]
       | n == n' && fullName == fullName' = ["user bio " <> (if maybe True T.null shortDescr' then "removed" else "changed to " <> maybe "" plain shortDescr') <> notified]
       | n == n' = ["user full name " <> (if T.null fullName' || fullName' == n' then "removed" else "changed to " <> plain fullName') <> notified]
       | otherwise = ["user profile is changed to " <> ttyFullName n' fullName' shortDescr' <> notified]
@@ -1955,10 +2119,10 @@ countactUserPrefText cup = case cup of
 
 viewGroupUpdated :: GroupInfo -> GroupInfo -> Maybe GroupMember -> Maybe MsgSigStatus -> [StyledString]
 viewGroupUpdated
-  GroupInfo {localDisplayName = n, groupProfile = GroupProfile {fullName, shortDescr, description, image, groupPreferences = gps, memberAdmission = ma}}
-  g'@GroupInfo {localDisplayName = n', groupProfile = GroupProfile {fullName = fullName', shortDescr = shortDescr', description = description', image = image', groupPreferences = gps', memberAdmission = ma'}}
+  GroupInfo {localDisplayName = n, groupProfile = GroupProfile {fullName, shortDescr, description, image, groupPreferences = gps, memberAdmission = ma, chatLayout = layout, publicGroup = pg}}
+  g'@GroupInfo {localDisplayName = n', groupProfile = GroupProfile {fullName = fullName', shortDescr = shortDescr', description = description', image = image', groupPreferences = gps', memberAdmission = ma', chatLayout = layout', publicGroup = pg'}}
   m signed = do
-    let update = groupProfileUpdated <> groupPrefsUpdated <> memberAdmissionUpdated
+    let update = groupProfileUpdated <> groupPrefsUpdated <> memberAdmissionUpdated <> chatLayoutUpdated <> publicGroupAccessUpdated
     if null update
       then []
       else memberUpdated <> update
@@ -1974,7 +2138,7 @@ viewGroupUpdated
         | null prefs = []
         | otherwise = bold' "updated group preferences:" : prefs
         where
-          prefs = mapMaybe viewPref allGroupFeatures
+          prefs = mapMaybe viewPref (if useRelays' g' then channelGroupFeatures else regularGroupFeatures)
           viewPref (AGF f)
             | pref gps == pref gps' = Nothing
             | otherwise = Just . plain $ groupPreferenceText (pref gps')
@@ -1983,14 +2147,30 @@ viewGroupUpdated
       memberAdmissionUpdated
         | ma == ma' = []
         | otherwise = ["changed member admission rules"]
+      chatLayoutUpdated
+        | layout == layout' = []
+        | otherwise = ["chat layout " <> maybe "removed" (("changed to: " <>) . plain . textEncode) layout']
+      publicGroupAccessUpdated
+        | access == access' = []
+        | otherwise = ["updated public group access:" <> viewAccess access']
+        where
+          access = pg >>= publicGroupAccess
+          access' = pg' >>= publicGroupAccess
+          viewAccess Nothing = " removed"
+          viewAccess (Just PublicGroupAccess {groupWebPage, groupDomainClaim, domainWebPage, allowEmbedding}) =
+            maybe "" (\u -> " web=" <> plain u) groupWebPage
+              <> maybe "" (\ni -> " domain=" <> plain (strEncode ni)) (claimDomain <$> groupDomainClaim)
+              <> (if domainWebPage then " domain_page=on" else "")
+              <> (if allowEmbedding then " embed=on" else "")
 
 viewGroupProfile :: GroupInfo -> [StyledString]
-viewGroupProfile g@GroupInfo {groupProfile = GroupProfile {shortDescr, description, image, groupPreferences = gps}} =
+viewGroupProfile g@GroupInfo {groupProfile = GroupProfile {shortDescr, description, image, groupPreferences = gps, chatLayout}} =
   [ttyFullGroup g]
     <> maybe [] (\sd -> ["description: " <> plain sd]) shortDescr
     <> maybe [] (const ["has profile image"]) image
     <> maybe [] ((bold' "welcome message:" :) . map plain . T.lines) description
-    <> (bold' "group preferences:" : map viewPref allGroupFeatures)
+    <> viewChatLayout chatLayout
+    <> (bold' "group preferences:" : map viewPref (if useRelays' g then channelGroupFeatures else regularGroupFeatures))
   where
     viewPref (AGF f) = plain $ groupPreferenceText (pref gps)
       where
@@ -2001,7 +2181,7 @@ viewGroupDescription GroupInfo {groupProfile = GroupProfile {description}} =
   maybe ["No welcome message!"] ((bold' "Welcome message:" :) . map plain . T.lines) description
 
 bold' :: String -> StyledString
-bold' = styled Bold
+bold' = styled (Bold $ BoolDef False)
 
 viewContactAliasUpdated :: Contact -> [StyledString]
 viewContactAliasUpdated ct@Contact {profile = LocalProfile {localAlias}}
@@ -2029,8 +2209,8 @@ viewConnectionIncognitoUpdated PendingContactConnection {pccConnId, customUserPr
         Nothing -> ["unexpected response when changing connection, please report to developers"]
   | otherwise = ["connection " <> sShow pccConnId <> " changed to non incognito"]
 
-viewConnectionUserChanged :: User -> PendingContactConnection -> User -> PendingContactConnection -> [StyledString]
-viewConnectionUserChanged User {localDisplayName = n} PendingContactConnection {pccConnId} User {localDisplayName = n'} PendingContactConnection {connLinkInv = connLinkInv'} =
+viewConnectionUserChanged :: Bool -> User -> PendingContactConnection -> User -> PendingContactConnection -> [StyledString]
+viewConnectionUserChanged showFullLinks User {localDisplayName = n} PendingContactConnection {pccConnId} User {localDisplayName = n'} PendingContactConnection {connLinkInv = connLinkInv'} =
   case connLinkInv' of
     Just ccLink' -> [userChangedStr <> ", new link:"] <> newLink ccLink'
     _ -> [userChangedStr]
@@ -2042,7 +2222,7 @@ viewConnectionUserChanged User {localDisplayName = n} PendingContactConnection {
         ""
       ]
         <>
-          if isJust shortLink
+          if showFullLinks && isJust shortLink
             then
               [ "The invitation link for old clients:",
                 plain cReqStr
@@ -2073,6 +2253,12 @@ viewGroupUserChanged
   where
     userChangedStr = "group " <> ttyGroup' g <> " changed from user " <> plain un <> " to user " <> plain un'
 
+otherSimplexNameNote :: Maybe SimplexNameInfo -> [StyledString]
+otherSimplexNameNote = \case
+  Just ni@(SimplexNameInfo NTPublicGroup _) -> [plain $ "You can also join channel " <> shortNameInfoStr ni]
+  Just ni@(SimplexNameInfo NTContact _) -> [plain $ "You can also connect to " <> shortNameInfoStr ni <> " in direct chat"]
+  Nothing -> []
+
 viewConnectionPlan :: ChatConfig -> ACreatedConnLink -> ConnectionPlan -> [StyledString]
 viewConnectionPlan ChatConfig {logLevel, testView} _connLink = \case
   CPInvitationLink ilp -> case ilp of
@@ -2081,12 +2267,12 @@ viewConnectionPlan ChatConfig {logLevel, testView} _connLink = \case
     ILPConnecting Nothing -> [invLink "connecting"]
     ILPConnecting (Just ct) -> [invLink ("connecting to contact " <> ttyContact' ct)]
     ILPKnown ct
-      | nextConnectPrepared ct -> [invLink ("known prepared contact " <> ttyContact' ct)]
-      | contactDeleted ct -> [invLink ("known deleted contact " <> ttyContact' ct)]
+      | nextConnectPrepared ct -> [invLink ("known prepared contact " <> ttyContact' ct)] <> contactDomainLine ct
+      | contactDeleted ct -> [invLink ("known deleted contact " <> ttyContact' ct)] <> contactDomainLine ct
       | otherwise ->
-          [ invLink ("known contact " <> ttyContact' ct),
-            "use " <> ttyToContact' ct <> highlight' "<message>" <> " to send messages"
-          ]
+          [invLink ("known contact " <> ttyContact' ct)]
+            <> contactDomainLine ct
+            <> ["use " <> ttyToContact' ct <> highlight' "<message>" <> " to send messages"]
     where
       invLink = ("invitation link: " <>)
       invOrBiz = \case
@@ -2099,12 +2285,12 @@ viewConnectionPlan ChatConfig {logLevel, testView} _connLink = \case
     CAPConnectingConfirmReconnect -> [ctAddr "connecting, allowed to reconnect"]
     CAPConnectingProhibit ct -> [ctAddr ("connecting to contact " <> ttyContact' ct)]
     CAPKnown ct
-      | nextConnectPrepared ct -> [ctAddr ("known prepared contact " <> ttyContact' ct)]
+      | nextConnectPrepared ct -> [ctAddr ("known prepared contact " <> ttyContact' ct)] <> contactDomainLine ct
       | otherwise ->
-          [ ctAddr ("known contact " <> ttyContact' ct),
-            "use " <> ttyToContact' ct <> highlight' "<message>" <> " to send messages"
-          ]
-    CAPContactViaAddress ct -> [ctAddr ("known contact without connection " <> ttyContact' ct)]
+          [ctAddr ("known contact " <> ttyContact' ct)]
+            <> contactDomainLine ct
+            <> ["use " <> ttyToContact' ct <> highlight' "<message>" <> " to send messages"]
+    CAPContactViaAddress ct -> [ctAddr ("known contact without connection " <> ttyContact' ct)] <> contactDomainLine ct
     where
       ctAddr = ("contact address: " <>)
       addrOrBiz = \case
@@ -2125,19 +2311,20 @@ viewConnectionPlan ChatConfig {logLevel, testView} _connLink = \case
       Just PreparedGroup {connLinkStartedConnection} -> case memberStatus m of
         GSMemUnknown
           | connLinkStartedConnection -> connecting g
-          | otherwise -> [knownGroup "prepared "]
+          | otherwise -> [knownGroup "prepared "] <> groupDomainLine g
         GSMemAccepted -> connecting g
         _
-          | memberRemoved m -> [knownGroup "deleted "] -- it should not get here, as this plan is returned as GLPOk
+          | memberRemoved m -> [knownGroup "deleted "] <> groupDomainLine g -- it should not get here, as this plan is returned as GLPOk
           | otherwise -> knownActive
       _ -> knownActive
       where
         knownActive =
-          [ knownGroup "",
-            "use " <> ttyToGroup g Nothing <> highlight' "<message>" <> " to send messages"
-          ]
+          [knownGroup ""]
+            <> groupDomainLine g
+            <> ["use " <> ttyToGroup g Nothing <> highlight' "<message>" <> " to send messages"]
         knownGroup prepared = grpOrBizLink g <> ": known " <> prepared <> grpOrBiz g <> " " <> ttyGroup' g
     GLPNoRelays _ -> [grpLink "channel has no active relays, please try to join later"]
+    GLPUpdateRequired _ -> [grpLink "this group requires a newer version of the app, please upgrade"]
     where
       connecting g = [grpOrBizLink g <> ": connecting to " <> grpOrBiz g <> " " <> ttyGroup' g]
       grpLink = ("group link: " <>)
@@ -2152,6 +2339,13 @@ viewConnectionPlan ChatConfig {logLevel, testView} _connLink = \case
     nextConnectPrepared Contact {preparedContact, activeConn} = case preparedContact of
       Just _ -> maybe True (\c -> connStatus c == ConnPrepared) activeConn
       _ -> False
+    contactDomainLine :: Contact -> [StyledString]
+    contactDomainLine Contact {profile = LocalProfile {contactDomain, contactDomainVerified}} =
+      simplexDomainLine NTContact contactDomain contactDomainVerified
+    groupDomainLine :: GroupInfo -> [StyledString]
+    groupDomainLine GroupInfo {groupDomainVerified, groupProfile = GroupProfile {publicGroup}} = do
+      let domain = publicGroup >>= publicGroupAccess >>= groupDomainClaim
+       in simplexDomainLine NTPublicGroup domain groupDomainVerified
     viewSigVerification = \case
       Just OVVerified -> ["owner signature: verified"]
       Just (OVFailed r) -> ["owner signature: FAILED (" <> plain r <> ")"]
@@ -2159,13 +2353,17 @@ viewConnectionPlan ChatConfig {logLevel, testView} _connLink = \case
 
 viewContactUpdated :: Contact -> Contact -> [StyledString]
 viewContactUpdated
-  Contact {localDisplayName = n, profile = LocalProfile {fullName, shortDescr, contactLink}}
-  Contact {localDisplayName = n', profile = LocalProfile {fullName = fullName', shortDescr = shortDescr', contactLink = contactLink'}}
-    | n == n' && fullName == fullName' && shortDescr == shortDescr' && contactLink == contactLink' = []
-    | n == n' && fullName == fullName' && shortDescr == shortDescr' =
+  Contact {localDisplayName = n, profile = LocalProfile {fullName, shortDescr, description, contactLink}}
+  Contact {localDisplayName = n', profile = LocalProfile {fullName = fullName', shortDescr = shortDescr', description = description', contactLink = contactLink'}}
+    | n == n' && fullName == fullName' && shortDescr == shortDescr' && description == description' && contactLink == contactLink' = []
+    | n == n' && fullName == fullName' && shortDescr == shortDescr' && description == description' =
         if isNothing contactLink'
           then [ttyContact n <> " removed contact address"]
           else [ttyContact n <> " set new contact address, use " <> highlight ("/info " <> n) <> " to view"]
+    | n == n' && fullName == fullName' && shortDescr == shortDescr' =
+        if maybe True T.null description'
+          then ["contact " <> ttyContact n <> " removed description"]
+          else ["contact " <> ttyContact n <> " updated description: " <> maybe "" plain description']
     | n == n' && fullName == fullName' =
         if maybe True T.null shortDescr'
           then ["contact " <> ttyContact n <> " removed bio"]
@@ -2185,7 +2383,7 @@ viewReceivedUpdatedMessage :: StyledString -> [StyledString] -> MsgContent -> Cu
 viewReceivedUpdatedMessage = viewReceivedMessage_ True
 
 viewReceivedMessage_ :: Bool -> StyledString -> [StyledString] -> MsgContent -> CurrentTime -> TimeZone -> CIMeta c d -> [StyledString]
-viewReceivedMessage_ updated from context mc ts tz meta = receivedWithTime_ ts tz from context meta (ttyMsgContent mc) updated
+viewReceivedMessage_ updated from context mc ts tz meta@CIMeta {msgVerified} = receivedWithTime_ ts tz from context meta (appendLast (msgVerifiedStr msgVerified) $ ttyMsgContent mc) updated
 
 viewReceivedReaction :: StyledString -> [StyledString] -> StyledString -> CurrentTime -> TimeZone -> UTCTime -> [StyledString]
 viewReceivedReaction from styledMsg reactionText ts tz reactionTs =
@@ -2223,7 +2421,7 @@ recent now tz time = do
     || (localNow < currentDay12 && localTime >= previousDay18 && localTimeDay < localNowDay)
 
 viewSentMessage :: StyledString -> [StyledString] -> MsgContent -> CurrentTime -> TimeZone -> CIMeta c d -> [StyledString]
-viewSentMessage to context mc ts tz meta@CIMeta {itemEdited, itemDeleted, itemLive} = sentWithTime_ ts tz (prependFirst to $ context <> prependFirst (indent <> live) (ttyMsgContent mc)) meta
+viewSentMessage to context mc ts tz meta@CIMeta {itemEdited, itemDeleted, itemLive, msgVerified} = sentWithTime_ ts tz (prependFirst to $ context <> prependFirst (indent <> live) (appendLast (msgVerifiedStr msgVerified) $ ttyMsgContent mc)) meta
   where
     indent = if null context then "" else "      "
     live
@@ -2280,6 +2478,10 @@ prependFirst :: StyledString -> [StyledString] -> [StyledString]
 prependFirst s [] = [s]
 prependFirst s (s' : ss) = (s <> s') : ss
 
+appendLast :: StyledString -> [StyledString] -> [StyledString]
+appendLast _ [] = []
+appendLast s ss = init ss <> [last ss <> s]
+
 msgPlain :: Text -> [StyledString]
 msgPlain = map (styleMarkdownList . parseMarkdownList) . T.lines
 
@@ -2326,11 +2528,25 @@ viewReceivedFileInvitation :: StyledString -> CIFile d -> CurrentTime -> TimeZon
 viewReceivedFileInvitation from file ts tz meta = receivedWithTime_ ts tz from [] meta (receivedFileInvitation_ file) False
 
 receivedFileInvitation_ :: CIFile d -> [StyledString]
-receivedFileInvitation_ CIFile {fileId, fileName, fileSize, fileStatus} =
+receivedFileInvitation_ CIFile {fileId, fileName, fileSize, fileStatus, fileProhibited} =
   ["sends file " <> ttyFilePath fileName <> " (" <> humanReadableSize fileSize <> " / " <> sShow fileSize <> " bytes)"]
-    <> case fileStatus of
-      CIFSRcvAccepted -> []
-      _ -> ["use " <> highlight ("/fr " <> show fileId <> " [<dir>/ | <path>]") <> " to receive it"]
+    <> case fileProhibited of
+      Just fp -> [prohibitedFileReason fp]
+      Nothing -> case fileStatus of
+        CIFSRcvAccepted -> []
+        _ -> ["use " <> highlight ("/fr " <> show fileId <> " [<dir>/ | <path>]") <> " to receive it"]
+
+prohibitedFileReason :: FileProhibited -> StyledString
+prohibitedFileReason FileProhibited {maxSize, badgeStatus} =
+  "file is above the limit of " <> sShow maxSize <> " bytes: " <> reason
+  where
+    reason = case badgeStatus of
+      Nothing -> "sender has no badge"
+      Just BSActive -> "above the limit of the sender badge"
+      Just BSExpired -> "sender badge expired"
+      Just BSExpiredOld -> "sender badge expired"
+      Just BSFailed -> "sender badge did not verify"
+      Just BSUnknownKey -> "sender badge key is not known"
 
 humanReadableSize :: Integer -> StyledString
 humanReadableSize size
@@ -2584,7 +2800,6 @@ viewChatError isCmd logLevel testView = \case
     CENoConnectionUser agentConnId -> ["error: message user not found, conn id: " <> sShow agentConnId | logLevel <= CLLError]
     CENoSndFileUser aFileId -> ["error: snd file user not found, file id: " <> sShow aFileId | logLevel <= CLLError]
     CENoRcvFileUser aFileId -> ["error: rcv file user not found, file id: " <> sShow aFileId | logLevel <= CLLError]
-    CEActiveUserExists -> ["error: active user already exists"]
     CEUserExists name -> ["user with the name " <> ttyContact name <> " already exists"]
     CEChatRelayExists -> ["chat realy user already exists"]
     CEUserUnknown -> ["user does not exist or incorrect password"]
@@ -2604,6 +2819,12 @@ viewChatError isCmd logLevel testView = \case
     CEChatNotStopped -> ["error: chat not stopped"]
     CEChatStoreChanged -> ["error: chat store changed, please restart chat"]
     CEInvalidConnReq -> viewInvalidConnReq
+    CESimplexDomainNotReady domain domainErr ->
+      let reason = case domainErr of
+            SDENoValidLink -> "has no valid connection link"
+            SDEUnknownDomain -> "is not included in the connection link's profile"
+       in [plain $ "SimpleX name " <> strEncode domain <> " " <> reason]
+    CENotResolvedLocally -> ["no matching chat found, name resolution is disabled"]
     CEUnsupportedConnReq -> [ "", "Connection link is not supported by the your app version, please ugrade it.", plain updateStr]
     CEInvalidChatMessage Connection {connId} msgMeta_ msg e ->
       [ plain $
@@ -2668,6 +2889,18 @@ viewChatError isCmd logLevel testView = \case
     CEAgentNoSubResult connId -> ["no subscription result for connection: " <> sShow connId]
     CEServerProtocol p -> [plain $ "Servers for protocol " <> strEncode p <> " cannot be configured by the users"]
     CECommandError e -> ["bad chat command: " <> plain e]
+    CEBadgeRedeemError e ->
+      let reason = case e of
+            BREInvalidCode -> "invalid code"
+            BREInvalidReceipt -> "invalid store receipt"
+            BREServiceNotConfigured -> "badge service not configured"
+            BREBadgeActive -> "badge already active"
+            BREStorePurchaseOpen -> "store purchase open"
+            BREServiceError code -> "badge service error: " <> T.unpack (badgeServiceErrorText code)
+            BREInvalidResponse m -> "invalid service response: " <> m
+            BREUnknownKeyIndex -> "credential names an unknown badge key index"
+            BRECredentialNotVerified -> "credential does not verify against configured key"
+       in ["cannot get badge: " <> plain reason]
     CEAgentCommandError e -> ["agent command error: " <> plain e]
     CEInvalidFileDescription e -> ["invalid file description: " <> plain e]
     CEConnectionIncognitoChangeProhibited -> ["incognito mode change prohibited"]
@@ -2784,9 +3017,47 @@ ttyContact = styled (colored Green) . viewName
 ttyContact' :: Contact -> StyledString
 ttyContact' Contact {localDisplayName = c} = ttyContact c
 
+-- Supporter badge: a colored star marks an active badge (only the star is colored).
+-- supporter cyan, legend blue, investor yellow, unknown cyan; business has no star.
+badgeStarColor :: BadgeType -> Maybe Color
+badgeStarColor = \case
+  BTSupporter -> Just Cyan
+  BTLegend -> Just Blue
+  BTInvestor -> Just Yellow
+  BTUnknown _ -> Just Cyan
+
+-- (star color, type word) for an active, colorable badge
+activeBadge :: Maybe LocalBadge -> Maybe (Color, Text)
+activeBadge lb_ = do
+  lb <- lb_
+  case localBadgeStatus lb of
+    BSActive -> let BadgeInfo {badgeType} = localBadgeInfo lb in (\col -> (col, textEncode badgeType)) <$> badgeStarColor badgeType
+    _ -> Nothing
+
+badgeStar :: Color -> StyledString
+badgeStar col = styled (colored col) ("*" :: Text)
+
+-- " *" (space + colored star) for sender prefixes, "" if no active badge
+badgeStarSep :: Maybe LocalBadge -> StyledString
+badgeStarSep lb_ = maybe "" (\(c, _) -> " " <> badgeStar c) (activeBadge lb_)
+
+-- name + badge for full-name contexts: "alice (Alice, * supporter)" / "alice (* supporter)" / "alice (Alice)" / "alice"
+ttyFullNameBadge :: ContactName -> Text -> Maybe Text -> Maybe LocalBadge -> StyledString
+ttyFullNameBadge c fullName shortDescr lb_ = ttyContact c <> optFullNameBadge c fullName shortDescr lb_
+
+optFullNameBadge :: ContactName -> Text -> Maybe Text -> Maybe LocalBadge -> StyledString
+optFullNameBadge c fullName shortDescr lb_ = case activeBadge lb_ of
+  Nothing -> optFullName c fullName shortDescr
+  Just (color, typeWord) -> " (" <> nameInner <> badgeStar color <> plain (" " <> typeWord) <> ")"
+  where
+    nameInner = maybe "" (\t -> plain (t <> ", ")) innerName
+    innerName
+      | T.null fullName || c == fullName = shortDescr
+      | otherwise = Just fullName
+
 ttyFullContact :: Contact -> StyledString
-ttyFullContact Contact {localDisplayName, profile = LocalProfile {fullName, shortDescr}} =
-  ttyFullName localDisplayName fullName shortDescr
+ttyFullContact Contact {localDisplayName, profile = LocalProfile {fullName, shortDescr, localBadge}} =
+  ttyFullNameBadge localDisplayName fullName shortDescr localBadge
 
 ttyMember :: GroupMember -> StyledString
 ttyMember GroupMember {localDisplayName} = ttyContact localDisplayName
@@ -2815,7 +3086,8 @@ ttyQuotedMember (Just GroupMember {localDisplayName = c}) = "> " <> ttyFrom (vie
 ttyQuotedMember Nothing = ">"
 
 ttyFromContact :: Contact -> StyledString
-ttyFromContact ct@Contact {localDisplayName = c} = ctIncognito ct <> ttyFrom (viewName c <> "> ")
+ttyFromContact ct@Contact {localDisplayName = c, profile = LocalProfile {localBadge}} =
+  ctIncognito ct <> ttyFrom (viewName c) <> badgeStarSep localBadge <> ttyFrom "> "
 
 ttyFromContactEdited :: Contact -> StyledString
 ttyFromContactEdited ct@Contact {localDisplayName = c} = ctIncognito ct <> ttyFrom (viewName c <> "> [edited] ")

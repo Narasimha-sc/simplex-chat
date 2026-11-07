@@ -33,6 +33,7 @@ import qualified Data.Aeson as J
 import Data.ByteString.Char8 (ByteString)
 import Data.Int (Int64)
 import qualified Data.List.NonEmpty as L
+import Data.Maybe (isNothing)
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Time.Clock (UTCTime, getCurrentTime)
@@ -155,7 +156,7 @@ getMsgDeliveryTask_ db taskId =
     toTask ((Only taskId') :. jobScopeRow :. (senderGMId, senderMemberId, senderMemberName, brokerTs, Binary msgBody, chatBinding_, sigs_, BI showGroupAsSender)) =
       case (toJobScope_ jobScopeRow, J.eitherDecodeStrict' msgBody) of
         (Just jobScope, Right chatMsg) ->
-          let fwdSender = if showGroupAsSender then FwdChannel else FwdMember senderMemberId senderMemberName
+          let fwdSender = if showGroupAsSender && isNothing chatBinding_ then FwdChannel else FwdMember senderMemberId (fwdMemberName senderMemberName)
               -- Re-parsed from msg_body: validates stored content against current code.
               -- Signed: original bytes preserved (re-encoding would invalidate signature).
               -- Unsigned: re-encoded from parsed ChatMessage on forward (sanitizes content).
@@ -247,8 +248,8 @@ deleteDoneDeliveryTasks db createdAtCutoff = do
     |]
     (createdAtCutoff, DTSProcessed, DTSError)
 
-createMsgDeliveryJob :: DB.Connection -> GroupInfo -> DeliveryJobScope -> [GroupMemberId] -> ByteString -> IO ()
-createMsgDeliveryJob db gInfo jobScope senderGMIds body = do
+createMsgDeliveryJob :: DB.Connection -> GroupInfo -> DeliveryJobScope -> [GroupMemberId] -> Bool -> ByteString -> IO ()
+createMsgDeliveryJob db gInfo jobScope senderGMIds notification body = do
   currentTs <- getCurrentTime
   DB.execute
     db
@@ -256,10 +257,10 @@ createMsgDeliveryJob db gInfo jobScope senderGMIds body = do
       INSERT INTO delivery_jobs (
         group_id,
         worker_scope, job_scope_spec_tag, job_scope_include_pending, job_scope_support_gm_id,
-        sender_group_member_ids, body, job_status, created_at, updated_at
-      ) VALUES (?,?,?,?,?,?,?,?,?,?)
+        sender_group_member_ids, body, notification, job_status, created_at, updated_at
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?)
     |]
-    ((Only groupId) :. jobScopeRow_ jobScope :. (senderColumn, Binary body, DJSPending, currentTs, currentTs))
+    ((Only groupId) :. jobScopeRow_ jobScope :. (senderColumn, Binary body, BI notification, DJSPending, currentTs, currentTs))
   where
     GroupInfo {groupId} = gInfo
     -- NULL ↔ []; non-empty list ↔ comma-separated decimal Int64s.
@@ -279,7 +280,7 @@ getPendingDeliveryJobScopes db =
     |]
     (Only DJSPending)
 
-type MessageDeliveryJobRow = (Only Int64) :. DeliveryJobScopeRow :. (Maybe Text, Binary ByteString, Maybe GroupMemberId)
+type MessageDeliveryJobRow = (Only Int64) :. DeliveryJobScopeRow :. (Maybe Text, Binary ByteString, BoolInt, Maybe GroupMemberId)
 
 getNextDeliveryJob :: DB.Connection -> DeliveryWorkerKey -> IO (Either StoreError (Maybe MessageDeliveryJob))
 getNextDeliveryJob db deliveryKey = do
@@ -309,14 +310,14 @@ getNextDeliveryJob db deliveryKey = do
             SELECT
               delivery_job_id,
               worker_scope, job_scope_spec_tag, job_scope_include_pending, job_scope_support_gm_id,
-              sender_group_member_ids, body, cursor_group_member_id
+              sender_group_member_ids, body, notification, cursor_group_member_id
             FROM delivery_jobs
             WHERE delivery_job_id = ?
           |]
           (Only jobId)
       where
         toDeliveryJob :: MessageDeliveryJobRow -> Either StoreError MessageDeliveryJob
-        toDeliveryJob ((Only jobId') :. jobScopeRow :. (senderGMIdsText_, Binary body, cursorGMId_)) = do
+        toDeliveryJob ((Only jobId') :. jobScopeRow :. (senderGMIdsText_, Binary body, BI notification, cursorGMId_)) = do
           jobScope <- maybe (Left $ SEInvalidDeliveryJob jobId') Right $ toJobScope_ jobScopeRow
           -- NULL or empty string means []; otherwise the value must parse
           -- as a comma-separated decimal Int64 list. An unparseable
@@ -324,7 +325,7 @@ getNextDeliveryJob db deliveryKey = do
           senderGMIds <- case senderGMIdsText_ of
             Nothing -> Right []
             Just t -> maybe (Left $ SEInvalidDeliveryJob jobId') Right $ parseSenderGMIds t
-          Right $ MessageDeliveryJob {jobId = jobId', jobScope, senderGMIds, body, cursorGMId_}
+          Right $ MessageDeliveryJob {jobId = jobId', jobScope, senderGMIds, body, notification, cursorGMId_}
         parseSenderGMIds :: Text -> Maybe [GroupMemberId]
         parseSenderGMIds t
           | T.null t = Just []
@@ -348,8 +349,8 @@ updateDeliveryJobStatus_ db jobId status errReason_ = do
     (status, errReason_, currentTs, jobId)
 
 -- TODO [relays] possible improvement is to prioritize owners and "active" members
-getGroupMembersByCursor :: DB.Connection -> VersionRangeChat -> User -> GroupInfo -> Maybe GroupMemberId -> Maybe GroupMemberId -> Int -> IO [GroupMember]
-getGroupMembersByCursor db vr user@User {userContactId} GroupInfo {groupId} cursorGMId_ singleSenderGMId_ count = do
+getGroupMembersByCursor :: DB.Connection -> StoreCxt -> User -> GroupInfo -> Maybe GroupMemberId -> Maybe GroupMemberId -> Int -> IO [GroupMember]
+getGroupMembersByCursor db cxt user@User {userContactId} GroupInfo {groupId} cursorGMId_ singleSenderGMId_ count = do
   gmIds :: [Int64] <-
     map fromOnly <$> case cursorGMId_ of
       Nothing ->
@@ -367,13 +368,14 @@ getGroupMembersByCursor db vr user@User {userContactId} GroupInfo {groupId} curs
               :. (cursorGMId, count)
           )
 #if defined(dbPostgres)
-  map (toContactMember vr user) <$>
+  currentTs <- getCurrentTime
+  map (toContactMember currentTs cxt user) <$>
     DB.query
       db
-      (groupMemberQuery <> " WHERE m.group_member_id IN ?")
+      (groupMemberQuery <> " WHERE m.group_member_id IN ? ORDER BY m.group_member_id ASC")
       (Only (In gmIds))
 #else
-  rights <$> mapM (runExceptT . getGroupMemberById db vr user) gmIds
+  rights <$> mapM (runExceptT . getGroupMemberById db cxt user) gmIds
 #endif
   where
     query =

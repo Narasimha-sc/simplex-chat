@@ -19,7 +19,7 @@ import chat.simplex.common.model.PendingContactConnection
 import chat.simplex.common.model.chatTimestampText
 import chat.simplex.common.model.timestampTick
 import chat.simplex.common.views.helpers.*
-import chat.simplex.res.MR
+import chat.simplex.res.*
 
 @Composable
 fun ContactConnectionView(contactConnection: PendingContactConnection) {

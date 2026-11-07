@@ -36,19 +36,22 @@ import chat.simplex.common.model.*
 import chat.simplex.common.model.ChatController.appPrefs
 import chat.simplex.common.model.ChatController.stopRemoteHostAndReloadHosts
 import chat.simplex.common.ui.theme.*
+import SectionItemView
 import chat.simplex.common.views.helpers.*
 import chat.simplex.common.platform.*
 import chat.simplex.common.views.call.Call
 import chat.simplex.common.views.chat.item.*
 import chat.simplex.common.views.chat.topPaddingToContent
+import chat.simplex.common.views.badges.*
 import chat.simplex.common.views.newchat.*
 import chat.simplex.common.views.onboarding.*
 import chat.simplex.common.views.usersettings.*
-import chat.simplex.res.MR
+import chat.simplex.res.*
 import dev.icerock.moko.resources.ImageResource
 import dev.icerock.moko.resources.StringResource
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.serialization.json.Json
 import kotlin.time.Duration.Companion.seconds
@@ -59,6 +62,63 @@ sealed class ActiveFilter {
   data class PresetTag(val tag: PresetTagKind) : ActiveFilter()
   data class UserTag(val tag: ChatTag) : ActiveFilter()
   data object Unread: ActiveFilter()
+}
+
+private fun renewalPrice(): String? {
+  val badgeState = BadgeModel.badgeState.value ?: return null
+  val subscription = badgeState.subscription ?: return null
+  return BadgeStore.subscriptionPrice(badgeState.badgeType, subscription.planMonths)
+}
+
+private fun renewalFailure(): String {
+  val issueError = BadgeModel.badgeState.value?.issueError ?: return generalGetString(MR.strings.badges_renewal_failed_unknown)
+  return issueError.reason.text
+}
+
+@Composable
+private fun BadgeAlertBanner(title: String, subtitle: String, warning: Boolean = false) {
+  SupportSimpleXBanner(
+    title = title,
+    subtitle = subtitle,
+    warning = warning,
+    onTap = { ModalManager.start.showCustomModal(id = ModalViewId.BADGES) { close -> BadgesView(ModalManager.start, close) } },
+    onDismiss = { showBadgeAlertDismissAlert(title) }
+  )
+}
+
+private fun showBadgeAlertDismissAlert(title: String) {
+  AlertManager.shared.showAlertDialogButtonsColumn(
+    title = title,
+    buttons = {
+      Column {
+        SectionItemView({
+          AlertManager.shared.hideAlert()
+          withBGApi { chatModel.controller.ackBadgeAlert(snooze = true) }
+        }) {
+          Text(stringResource(MR.strings.badges_remind_me_later), Modifier.fillMaxWidth(), textAlign = TextAlign.Center, color = MaterialTheme.colors.primary)
+        }
+        SectionItemView({
+          AlertManager.shared.hideAlert()
+          withBGApi { chatModel.controller.ackBadgeAlert(snooze = false) }
+        }) {
+          Text(stringResource(MR.strings.badges_dismiss), Modifier.fillMaxWidth(), textAlign = TextAlign.Center, color = MaterialTheme.colors.primary)
+        }
+        SectionItemView({
+          AlertManager.shared.hideAlert()
+        }) {
+          Text(stringResource(MR.strings.cancel_verb), Modifier.fillMaxWidth(), textAlign = TextAlign.Center, color = MaterialTheme.colors.primary)
+        }
+      }
+    }
+  )
+}
+
+private fun showSupportSimpleXDismissAlert() {
+  AlertManager.shared.showAlertMsg(
+    title = generalGetString(MR.strings.badges_banner_title),
+    text = generalGetString(MR.strings.badges_banner_dismiss_message),
+    onConfirm = { appPrefs.supporterBannerShown.set(true) }
+  )
 }
 
 private fun showNewChatSheet(oneHandUI: State<Boolean>) {
@@ -182,6 +242,8 @@ fun ChatListView(chatModel: ChatModel, userPickerState: MutableStateFlow<Animate
     val showWhatsNew = shouldShowWhatsNew(chatModel)
     val showUpdatedConditions = chatModel.conditions.value.conditionsAction?.shouldShowNotice ?: false
     if (showWhatsNew || showUpdatedConditions) {
+      // Requested here, so that the country is known by the time the modal opens
+      platform.androidLoadPlayStoreCountry()
       delay(1000L)
       ModalManager.center.showCustomModal { close -> WhatsNewView(close = close, updatedConditions = showUpdatedConditions) }
     }
@@ -736,16 +798,45 @@ fun connectIfOpenedViaUri(rhId: Long?, uri: String, chatModel: ChatModel) {
   Log.d(TAG, "connectIfOpenedViaUri: opened via link")
   if (chatModel.currentUser.value == null) {
     chatModel.appOpenUrl.value = rhId to uri
+  } else if (isAppLink(uri)) {
+    // branched on the scheme before the connection dispatch, which an app link must never reach
+    // an app link must not tear down a redemption in flight
+    if (!isBadgeLinkIssuing()) openAppLink(rhId, uri)
   } else {
     withBGApi {
       chatModel.appOpenUrlConnecting.value = true
-      planAndConnect(rhId, uri, close = null, cleanup = { chatModel.appOpenUrlConnecting.value = false })
+      planAndConnect(rhId, uri, close = { ModalManager.closeAllModalsEverywhere() }, cleanup = { chatModel.appOpenUrlConnecting.value = false })
     }
   }
 }
 
+// the app's own scheme, for every link that is not a connection link, which stays on simplex:
+internal const val appLinkScheme = "simplexchat"
+internal const val connectionLinkScheme = "simplex"
+private const val badgeLinkPath = "/badge/code/"
+
+// the prefix of the raw text, not a parsed URI: a link that does not parse is still an app link
+fun isAppLink(uri: String): Boolean =
+  uri.startsWith("$appLinkScheme:", ignoreCase = true)
+
+fun isConnectionLink(uri: String): Boolean =
+  uri.startsWith("$connectionLinkScheme:", ignoreCase = true)
+
+// a link type added in a later version reaches this build too, so an unknown path asks for an update
+private fun openAppLink(rhId: Long?, uri: String) {
+  // a link that does not parse is dropped, as iOS never receives one; one that parses without
+  // a path, such as simplexchat:badge/code/X, is an unknown link on both platforms
+  val parsed = uriCreateOrNull(uri) ?: return
+  val path = parsed.path ?: ""
+  if (path.startsWith(badgeLinkPath)) {
+    openBadgeLink(rhId, path.removePrefix(badgeLinkPath))
+  } else {
+    AlertManager.shared.showAlertMsg(title = generalGetString(MR.strings.app_link_not_supported))
+  }
+}
+
 @Composable
-private fun ChatListSearchBar(listState: LazyListState, searchText: MutableState<TextFieldValue>, searchShowingSimplexLink: MutableState<Boolean>, searchChatFilteredBySimplexLink: MutableState<String?>) {
+private fun ChatListSearchBar(listState: LazyListState, searchText: MutableState<TextFieldValue>, searchShowingSimplexLink: MutableState<Boolean>, searchChatFilteredBySimplexLink: MutableState<Set<String>>, connectNameCandidate: MutableState<String?>) {
   Box {
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
       val focusRequester = remember { FocusRequester() }
@@ -763,6 +854,8 @@ private fun ChatListSearchBar(listState: LazyListState, searchText: MutableState
         searchText = searchText,
         enabled = !remember { searchShowingSimplexLink }.value,
         trailingContent = null,
+        // the clear button must line up with the filter icon it replaces, so no reduction here
+        reducedCloseButtonPadding = 0.dp,
       ) {
         searchText.value = searchText.value.copy(it)
       }
@@ -791,32 +884,48 @@ private fun ChatListSearchBar(listState: LazyListState, searchText: MutableState
       LaunchedEffect(Unit) {
         snapshotFlow { searchText.value.text }
           .distinctUntilChanged()
-          .collect {
-            val link = strHasSingleSimplexLink(it.trim())
-            if (link != null) {
-              // if SimpleX link is pasted, show connection dialogue
+          .collectLatest {
+            val target = strConnectTarget(it.trim())
+            if (target is ConnectTarget.Link) {
               hideKeyboard(view)
-              if (link.format is Format.SimplexLink) {
-                val linkText = link.format.simplexLinkText
-                searchText.value = searchText.value.copy(linkText, selection = TextRange.Zero)
-              }
+              searchText.value = searchText.value.copy(target.linkText, selection = TextRange.Zero)
               searchShowingSimplexLink.value = true
-              searchChatFilteredBySimplexLink.value = null
-              connect(link.text, searchChatFilteredBySimplexLink) { searchText.value = TextFieldValue() }
-            } else if (!searchShowingSimplexLink.value || it.isEmpty()) {
-              if (it.isNotEmpty()) {
-                // if some other text is pasted, enter search mode
-                focusRequester.requestFocus()
-              } else {
-                if (!chatModel.appOpenUrlConnecting.value) {
-                  connectProgressManager.cancelConnectProgress()
+              searchChatFilteredBySimplexLink.value = emptySet()
+              connectNameCandidate.value = null
+              connect(target.text, searchChatFilteredBySimplexLink) { searchText.value = TextFieldValue() }
+            } else {
+              val candidate = nameSearchCandidate(it.trim())
+              connectNameCandidate.value = candidate
+              if (candidate != null) {
+                // clear the previous match immediately so the list falls back to text search during the debounce,
+                // instead of showing a stale filtered chat while the new search runs
+                searchChatFilteredBySimplexLink.value = emptySet()
+                // resolve the name locally on each keystroke, debounced; collectLatest cancels the in-flight
+                // search when the next keystroke arrives. A bare name can be a contact or a channel, so search
+                // both and filter every known chat found; drop the row only when both types are already known.
+                delay(NAME_SEARCH_DEBOUNCE_MS)
+                val rhId = chatModel.remoteHostId()
+                val inProgress = mutableStateOf(false) // background search: no spinner, no error alerts
+                val targets = if (candidate.startsWith("@") || candidate.startsWith("#")) listOf(candidate) else listOf("@$candidate", "#$candidate")
+                val ids = targets.mapNotNull { name ->
+                  knownChatId(rhId, chatModel.controller.apiConnectPlan(rhId, name, PlanResolveMode.PRMNever, inProgress = inProgress))
                 }
-                if (listState.layoutInfo.totalItemsCount > 0) {
-                  listState.scrollToItem(0)
+                searchChatFilteredBySimplexLink.value = ids.toSet()
+                if (ids.size == targets.size) connectNameCandidate.value = null
+              } else if (!searchShowingSimplexLink.value || it.isEmpty()) {
+                if (it.isNotEmpty()) {
+                  focusRequester.requestFocus()
+                } else {
+                  if (!chatModel.appOpenUrlConnecting.value) {
+                    connectProgressManager.cancelConnectProgress()
+                  }
+                  if (listState.layoutInfo.totalItemsCount > 0) {
+                    listState.scrollToItem(0)
+                  }
                 }
+                searchShowingSimplexLink.value = false
+                searchChatFilteredBySimplexLink.value = emptySet()
               }
-              searchShowingSimplexLink.value = false
-              searchChatFilteredBySimplexLink.value = null
             }
           }
       }
@@ -826,13 +935,13 @@ private fun ChatListSearchBar(listState: LazyListState, searchText: MutableState
   }
 }
 
-private fun connect(link: String, searchChatFilteredBySimplexLink: MutableState<String?>, cleanup: (() -> Unit)?) {
+private fun connect(link: String, searchChatFilteredBySimplexLink: MutableState<Set<String>>, cleanup: (() -> Unit)?) {
   withBGApi {
     planAndConnect(
       chatModel.remoteHostId(),
       link,
-      filterKnownContact = { searchChatFilteredBySimplexLink.value = it.id },
-      filterKnownGroup = { searchChatFilteredBySimplexLink.value = it.id },
+      filterKnownContact = { searchChatFilteredBySimplexLink.value = setOf(it.id) },
+      filterKnownGroup = { searchChatFilteredBySimplexLink.value = setOf(it.id) },
       close = null,
       cleanup = cleanup,
     )
@@ -891,6 +1000,12 @@ private fun BoxScope.ChatList(searchText: MutableState<TextFieldValue>, listStat
   val oneHandUI = remember { appPrefs.oneHandUI.state }
   val oneHandUICardShown = remember { appPrefs.oneHandUICardShown.state }
   val addressCreationCardShown = remember { appPrefs.addressCreationCardShown.state }
+  val supporterBannerShown = remember { appPrefs.supporterBannerShown.state }
+  val supporterBannerTapped = remember { appPrefs.supporterBannerTapped.state }
+  val getStakeBannerTapped = remember { appPrefs.getStakeBannerTapped.state }
+  val getStakeBannerDismissed = remember { appPrefs.getStakeBannerDismissed.state }
+  // read here rather than in the LazyColumn: it launches an effect, so it needs a composable scope
+  val crowdfunding = crowdfundingAvailable()
   val activeFilter = remember { chatModel.activeChatTagFilter }
 
   LaunchedEffect(listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset) {
@@ -919,7 +1034,8 @@ private fun BoxScope.ChatList(searchText: MutableState<TextFieldValue>, listStat
   // which is related to [derivedStateOf]. Using safe alternative instead
   // val chats by remember(search, showUnreadAndFavorites) { derivedStateOf { filteredChats(showUnreadAndFavorites, search, allChats.toList()) } }
   val searchShowingSimplexLink = remember { mutableStateOf(false) }
-  val searchChatFilteredBySimplexLink = remember { mutableStateOf<String?>(null) }
+  val searchChatFilteredBySimplexLink = remember { mutableStateOf<Set<String>>(emptySet()) }
+  val connectNameCandidate = remember { mutableStateOf<String?>(null) }
   val chats = filteredChats(searchShowingSimplexLink, searchChatFilteredBySimplexLink, searchText.value.text, allChats.value.toList(), activeFilter.value)
   val topPaddingToContent = topPaddingToContent(false)
   val blankSpaceSize = if (oneHandUI.value) WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + AppBarHeight * fontSizeSqrtMultiplier else topPaddingToContent
@@ -952,13 +1068,23 @@ private fun BoxScope.ChatList(searchText: MutableState<TextFieldValue>, listStat
         if (oneHandUI.value) {
           Column(Modifier.consumeWindowInsets(WindowInsets.navigationBars).consumeWindowInsets(PaddingValues(bottom = AppBarHeight))) {
             Divider()
-            TagsView(searchText)
-            ChatListSearchBar(listState, searchText, searchShowingSimplexLink, searchChatFilteredBySimplexLink)
+            // bottom toolbar: search bar below, so on desktop the connect row goes below the tags
+            TagsOrConnectByName(searchText, connectNameCandidate) { candidate ->
+              TagsView(searchText)
+              Divider()
+              ConnectByNameRow(candidate, searchText, connectNameCandidate, close = null)
+            }
+            ChatListSearchBar(listState, searchText, searchShowingSimplexLink, searchChatFilteredBySimplexLink, connectNameCandidate)
             Spacer(Modifier.windowInsetsBottomHeight(WindowInsets.ime))
           }
         } else {
-          ChatListSearchBar(listState, searchText, searchShowingSimplexLink, searchChatFilteredBySimplexLink)
-          TagsView(searchText)
+          ChatListSearchBar(listState, searchText, searchShowingSimplexLink, searchChatFilteredBySimplexLink, connectNameCandidate)
+          // top toolbar: search bar above, so on desktop the connect row goes above the tags
+          TagsOrConnectByName(searchText, connectNameCandidate) { candidate ->
+            ConnectByNameRow(candidate, searchText, connectNameCandidate, close = null)
+            Divider()
+            TagsView(searchText)
+          }
           Divider()
         }
       }
@@ -966,6 +1092,61 @@ private fun BoxScope.ChatList(searchText: MutableState<TextFieldValue>, listStat
     if (!oneHandUICardShown.value) {
       item {
         ToggleChatListCard()
+      }
+    }
+    // one slot: an alert about a badge the user paid for outranks the pitch to get one
+    val alert = bannerBadgeAlert()
+    if (alert != null) {
+      item {
+        SideEffect { chatModel.chatListBanner = ChatListBanner.BadgeAlert }
+        Box(Modifier.zIndex(1f).padding(16.dp)) {
+          when (alert.kind) {
+            is BadgeAlertKind.SupportEnded ->
+              BadgeAlertBanner(stringResource(MR.strings.badges_support_ended), String.format(stringResource(MR.strings.badges_support_ended_on), alert.dateText))
+            is BadgeAlertKind.IssueFailed ->
+              BadgeAlertBanner(stringResource(MR.strings.badges_renewal_failed), renewalFailure(), warning = true)
+            is BadgeAlertKind.SubscriptionEnded ->
+              BadgeAlertBanner(stringResource(MR.strings.badges_subscription_ended_title), String.format(stringResource(MR.strings.badges_subscription_ended_on), alert.dateText))
+            is BadgeAlertKind.PaymentIssue ->
+              BadgeAlertBanner(stringResource(MR.strings.badges_payment_problem_title), stringResource(MR.strings.badges_payment_problem_subtitle), warning = true)
+            is BadgeAlertKind.SubscriptionCancelled ->
+              BadgeAlertBanner(stringResource(MR.strings.badges_subscription_cancelled_title), String.format(stringResource(MR.strings.badges_stays_until), alert.dateText))
+            is BadgeAlertKind.RenewalApproaching -> {
+              val price = renewalPrice()
+              if (price != null) {
+                BadgeAlertBanner(stringResource(MR.strings.badges_renews_soon), String.format(stringResource(MR.strings.badges_renews_on_for), alert.dateText, price))
+              } else {
+                BadgeAlertBanner(stringResource(MR.strings.badges_renews_soon), String.format(stringResource(MR.strings.badges_renews_on), alert.dateText))
+              }
+            }
+            is BadgeAlertKind.PrepaidEnding, is BadgeAlertKind.Unknown -> {}
+          }
+        }
+      }
+    } else if (chatModel.bannerSlotFree(ChatListBanner.BadgePitch) && !supporterBannerShown.value && noShownBadge() && chatModel.chats.value.size > 3) {
+      item {
+        SideEffect { chatModel.chatListBanner = ChatListBanner.BadgePitch }
+        Box(Modifier.zIndex(1f).padding(16.dp)) {
+          SupportSimpleXBanner(
+            showDismiss = supporterBannerTapped.value,
+            onTap = {
+              appPrefs.supporterBannerTapped.set(true)
+              ModalManager.start.showCustomModal(id = ModalViewId.BADGES) { close -> BadgesView(ModalManager.start, close) }
+            },
+            onDismiss = ::showSupportSimpleXDismissAlert
+          )
+        }
+      }
+    } else if (chatModel.bannerSlotFree(ChatListBanner.GetStake) && crowdfunding && !getStakeBannerDismissed.value) {
+      item {
+        SideEffect { chatModel.chatListBanner = ChatListBanner.GetStake }
+        Box(Modifier.zIndex(1f).padding(16.dp)) {
+          GetStakeBanner(
+            showDismiss = getStakeBannerTapped.value && chatModel.chats.value.isNotEmpty(),
+            onTap = { openGetStake(ModalManager.start) },
+            onDismiss = { appPrefs.getStakeBannerDismissed.set(true) }
+          )
+        }
       }
     }
     itemsIndexed(chats, key = { _, chat -> chat.remoteHostId to chat.id }) { index, chat ->
@@ -1003,6 +1184,105 @@ private fun BoxScope.ChatList(searchText: MutableState<TextFieldValue>, listStat
 
   LaunchedEffect(activeFilter.value) {
     searchText.value = TextFieldValue("")
+  }
+}
+
+// Default top-level part used to complete a bare name typed in the search field (search field only;
+// the message parser and the wire format are unchanged).
+private const val DEFAULT_NAME_TLD = "testing"
+// Shortest name that offers the button, so it is discoverable but does not flash on short prefixes.
+private const val MIN_NAME_LENGTH = 5
+// Wait this long after the last keystroke before the local name search runs.
+internal const val NAME_SEARCH_DEBOUNCE_MS = 300L
+
+private val nameLabelRegex = Regex("[a-zA-Z0-9]+(-[a-zA-Z0-9]+)*")
+private fun isNameLabel(s: String): Boolean = s.length in 1..63 && nameLabelRegex.matches(s)
+
+// On-device candidate for connecting by SimpleX name: the string sent to the core to resolve it.
+// Mirrors the domain grammar (nameLabelP/mkDomain in SimplexName.hs): an optional @/# prefix, then
+// dot-separated ASCII labels; a dotless word is completed with the default top-level part. Returns
+// the string to send (keeping @/# so the type is preserved), or null when the text is not a name.
+internal fun nameSearchCandidate(str: String): String? {
+  val text = str.trim()
+  val prefix = text.firstOrNull()?.takeIf { it == '@' || it == '#' }
+  val core = if (prefix != null) text.substring(1) else text
+  val labels = core.split(".")
+  if (core.isEmpty() || labels.any { !isNameLabel(it) }) return null
+  return when {
+    labels.size > 1 -> text                                            // already has a top-level part
+    core.length >= MIN_NAME_LENGTH -> "${prefix ?: ""}$core.$DEFAULT_NAME_TLD"
+    else -> null
+  }
+}
+
+// The chat id a local (PRMNever) search resolved to — a contact, a business, or a channel — or null on a miss.
+// The core returns the correct type for @ vs # (getContactToConnect / type-filtered getGroupToConnect), so no
+// client-side type check is needed.
+internal suspend fun knownChatId(rhId: Long?, result: ConnectionPlanResult?): String? = when (val plan = result?.connectionPlan) {
+  is ConnectionPlan.ContactAddress -> (plan.contactAddressPlan as? ContactAddressPlan.Known)?.contact?.let { contact ->
+    // a name-resolved chat may be prepared in the store but not yet listed, so add it (as the tap path does)
+    if (chatModel.getContactChat(contact.contactId) == null) {
+      chatModel.chatsContext.addChat(Chat(remoteHostId = rhId, chatInfo = ChatInfo.Direct(contact), chatItems = emptyList()))
+    }
+    contact.id
+  }
+  is ConnectionPlan.GroupLink -> (when (val g = plan.groupLinkPlan) {
+    is GroupLinkPlan.Known -> g.groupInfo
+    is GroupLinkPlan.OwnLink -> g.groupInfo
+    else -> null
+  })?.let { gInfo ->
+    if (chatModel.getGroupChat(gInfo.groupId) == null) {
+      chatModel.chatsContext.addChat(Chat(remoteHostId = rhId, chatInfo = ChatInfo.Group(gInfo, groupChatScope = null), chatItems = emptyList()))
+    }
+    gInfo.id
+  }
+  else -> null
+}
+
+// The list tags and the connect-by-name row share one slot. When there is no name, the tags show; on
+// mobile the row replaces the tags while shown. On desktop both show, arranged by the caller (which
+// knows whether the search bar is above or below), passed as desktopView.
+@Composable
+private fun TagsOrConnectByName(
+  searchText: MutableState<TextFieldValue>,
+  connectNameCandidate: MutableState<String?>,
+  desktopView: @Composable (candidate: String) -> Unit,
+) {
+  val candidate = connectNameCandidate.value
+  when {
+    candidate == null -> TagsView(searchText)
+    !appPlatform.isDesktop -> ConnectByNameRow(candidate, searchText, connectNameCandidate, close = null)
+    else -> desktopView(candidate)
+  }
+}
+
+@Composable
+internal fun ConnectByNameRow(name: String, searchText: MutableState<TextFieldValue>, connectNameCandidate: MutableState<String?>, close: (() -> Unit)?) {
+  val view = LocalMultiplatformView()
+  Row(
+    Modifier
+      .fillMaxWidth()
+      .clickable {
+        hideKeyboard(view)
+        withBGApi {
+          planAndConnect(
+            chatModel.remoteHostId(),
+            name,
+            close = close,
+            cleanup = {
+              searchText.value = TextFieldValue()
+              connectNameCandidate.value = null
+            },
+          )
+        }
+      }
+      .padding(vertical = DEFAULT_PADDING_HALF),
+    verticalAlignment = Alignment.CenterVertically
+  ) {
+    // icon and text aligned with the search bar's icon and text (same paddings and icon size)
+    val icon = if (name.startsWith("@")) MR.images.ic_at else MR.images.ic_tag
+    Icon(painterResource(icon), null, Modifier.padding(start = DEFAULT_PADDING, end = DEFAULT_PADDING_HALF).size(22.dp * fontSizeSqrtMultiplier), tint = MaterialTheme.colors.primary)
+    Text(String.format(generalGetString(MR.strings.connect_plan_connect_to_name), name), color = MaterialTheme.colors.primary)
   }
 }
 
@@ -1313,14 +1593,14 @@ fun ItemPresetFilterAction(
 
 fun filteredChats(
   searchShowingSimplexLink: State<Boolean>,
-  searchChatFilteredBySimplexLink: State<String?>,
+  searchChatFilteredBySimplexLink: State<Set<String>>,
   searchText: String,
   chats: List<Chat>,
   activeFilter: ActiveFilter? = null,
 ): List<Chat> {
-  val linkChatId = searchChatFilteredBySimplexLink.value
-  return if (linkChatId != null) {
-    chats.filter { it.id == linkChatId }
+  val linkChatIds = searchChatFilteredBySimplexLink.value
+  return if (linkChatIds.isNotEmpty()) {
+    chats.filter { it.id in linkChatIds }
   } else {
     val s = if (searchShowingSimplexLink.value) "" else searchText.trim().lowercase()
     if (s.isEmpty())

@@ -46,10 +46,10 @@ import Data.Time (addUTCTime)
 import Data.Time.Clock (UTCTime, nominalDay)
 import Language.Haskell.TH.Syntax (lift)
 import Simplex.Chat.Operators.Conditions
-import Simplex.Chat.Protocol (RelayProfile (..))
+import Simplex.Chat.Protocol (RelayCapabilities (..), RelayProfile (..))
 import Simplex.Chat.Types (ShortLinkContact, User)
 import Simplex.Chat.Types.Shared (RelayStatus)
-import Simplex.Messaging.Agent.Env.SQLite (ServerCfg (..), ServerRoles (..), allRoles)
+import Simplex.Messaging.Agent.Env.SQLite (ServerCfg (..), ServerRoles (..))
 import Simplex.Messaging.Agent.Protocol (sameShortLinkContact)
 import Simplex.Messaging.Agent.Store.DB (FromField (..), ToField (..), fromTextField_)
 import Simplex.Messaging.Agent.Store.Entity
@@ -60,10 +60,10 @@ import Simplex.Messaging.Transport.Client (TransportHost (..))
 import Simplex.Messaging.Util (atomicModifyIORef'_, safeDecodeUtf8)
 
 usageConditionsCommit :: Text
-usageConditionsCommit = "05f99634c470f8bddac20046947a0606938b22ad"
+usageConditionsCommit = "5cb85b913989aa4dc618a0a47ffb9a758e44f375"
 
 previousConditionsCommit :: Text
-previousConditionsCommit = "7471fd2af5838dc0467aebc570b5ea75e5df3209"
+previousConditionsCommit = "05f99634c470f8bddac20046947a0606938b22ad"
 
 usageConditionsText :: Text
 usageConditionsText =
@@ -176,6 +176,22 @@ operatorRoles p op = case p of
   SPSMP -> smpRoles op
   SPXFTP -> xftpRoles op
 
+data ServerRolesOverride = ServerRolesOverride
+  { storage :: Maybe Bool,
+    proxy :: Maybe Bool,
+    names :: Maybe Bool
+  }
+  deriving (Eq, Show)
+
+emptyServerRolesOverride :: ServerRolesOverride
+emptyServerRolesOverride = ServerRolesOverride {storage = Nothing, proxy = Nothing, names = Nothing}
+
+-- each role: override if set, else the operator's role (if any), else default (receive on, proxy on, names off)
+resolveServerRoles :: UserProtocol p => SProtocolType p -> Maybe ServerOperator -> ServerRolesOverride -> ServerRoles
+resolveServerRoles p op ServerRolesOverride {storage, proxy, names} =
+  ServerRoles {storage = fromMaybe s storage, proxy = fromMaybe pr proxy, names = fromMaybe n names}
+  where ServerRoles {storage = s, proxy = pr, names = n} = maybe (ServerRoles True True False) (operatorRoles p) op
+
 conditionsAccepted :: ServerOperator -> Bool
 conditionsAccepted ServerOperator {conditionsAcceptance} = case conditionsAcceptance of
   CAAccepted {} -> True
@@ -245,6 +261,7 @@ data UserServer' s (p :: ProtocolType) = UserServer
     preset :: Bool,
     tested :: Maybe Bool,
     enabled :: Bool,
+    roles :: ServerRolesOverride,
     deleted :: Bool
   }
   deriving (Show)
@@ -280,7 +297,8 @@ data GroupRelay = GroupRelay
     groupMemberId :: Int64,
     userChatRelay :: UserChatRelay,
     relayStatus :: RelayStatus,
-    relayLink :: Maybe ShortLinkContact
+    relayLink :: Maybe ShortLinkContact,
+    relayCap :: RelayCapabilities
   }
   deriving (Eq, Show)
 
@@ -329,7 +347,7 @@ newUserServer = newUserServer_ False True
 
 newUserServer_ :: Bool -> Bool -> ProtoServerWithAuth p -> NewUserServer p
 newUserServer_ preset enabled server =
-  UserServer {serverId = DBNewEntity, server, preset, tested = Nothing, enabled, deleted = False}
+  UserServer {serverId = DBNewEntity, server, preset, tested = Nothing, enabled, roles = emptyServerRolesOverride, deleted = False}
 
 presetChatRelay :: Bool -> RelayProfile -> [Text] -> ShortLinkContact -> NewUserChatRelay
 presetChatRelay = newChatRelay_ True
@@ -438,13 +456,13 @@ agentServerCfgs :: UserProtocol p => SProtocolType p -> [(Text, ServerOperator)]
 agentServerCfgs p opDomains = mapMaybe agentServer
   where
     agentServer :: UserServer' s p -> Maybe (ServerCfg p)
-    agentServer srv@UserServer {server, enabled} =
+    agentServer srv@UserServer {server, enabled, roles = srvRoles} =
       case find (\(d, _) -> any (matchingHost d) (srvHost srv)) opDomains of
         Just (_, op@ServerOperator {operatorId = DBEntityId opId, enabled = opEnabled})
-          | opEnabled -> Just ServerCfg {server, enabled, operator = Just opId, roles = operatorRoles p op}
+          | opEnabled -> Just ServerCfg {server, enabled, operator = Just opId, roles = resolveServerRoles p (Just op) srvRoles}
           | otherwise -> Nothing
         Nothing ->
-          Just ServerCfg {server, enabled, operator = Nothing, roles = allRoles}
+          Just ServerCfg {server, enabled, operator = Nothing, roles = resolveServerRoles p Nothing srvRoles}
 
 matchingHost :: Text -> TransportHost -> Bool
 matchingHost d = \case
@@ -507,10 +525,13 @@ data UserServersError
   | USEStorageMissing {protocol :: AProtocolType, user :: Maybe User}
   | USEProxyMissing {protocol :: AProtocolType, user :: Maybe User}
   | USEDuplicateServer {protocol :: AProtocolType, duplicateServer :: Text, duplicateHost :: TransportHost}
+  | USETooManyHosts {protocol :: AProtocolType, tooManyHostsServer :: Text}
   | USEDuplicateChatRelayAddress {duplicateChatRelay :: Text, duplicateAddress :: ShortLinkContact}
   deriving (Show)
 
-data UserServersWarning = USWNoChatRelays {user :: Maybe User}
+data UserServersWarning
+  = USWNoChatRelays {user :: Maybe User}
+  | USWNoNamesServers {user :: Maybe User}
   deriving (Show)
 
 validateUserServers :: UserServersClass u' => [u'] -> [(User, [UserOperatorServers])] -> ([UserServersError], [UserServersWarning])
@@ -521,24 +542,30 @@ validateUserServers curr others = (currUserErrs <> concatMap otherUserErrs other
     noServersErrs :: (UserServersClass u, ProtocolTypeI p, UserProtocol p) => SProtocolType p -> Maybe User -> [u] -> [UserServersError]
     noServersErrs p user uss
       | noServers opEnabled = [USENoServers p' user]
-      | otherwise = [USEStorageMissing p' user | noServers (hasRole storage)] <> [USEProxyMissing p' user | noServers (hasRole proxy)]
+      | otherwise = [USEStorageMissing p' user | not (any (hasRole p (\ServerRoles {storage} -> storage)) uss)] <> [USEProxyMissing p' user | not (any (hasRole p (\ServerRoles {proxy} -> proxy)) uss)]
       where
         p' = AProtocolType p
         noServers cond = not $ any srvEnabled $ userServers p $ filter cond uss
-        hasRole roleSel = maybe True (\op@ServerOperator {enabled} -> enabled && roleSel (operatorRoles p op)) . operator'
         srvEnabled (AUS _ UserServer {deleted, enabled}) = enabled && not deleted
     serverErrs :: (UserServersClass u, ProtocolTypeI p, UserProtocol p) => SProtocolType p -> [u] -> [UserServersError]
-    serverErrs p uss = mapMaybe duplicateErr_ srvs
+    serverErrs p uss = mapMaybe duplicateErr_ srvs <> hostsErrs
       where
         p' = AProtocolType p
         srvs = filter (\(AUS _ UserServer {deleted}) -> not deleted) $ userServers p uss
         duplicateErr_ (AUS _ srv@UserServer {server}) =
           USEDuplicateServer p' (safeDecodeUtf8 $ strEncode server)
             <$> find (`S.member` duplicateHosts) (srvHost srv)
+        hostsErrs = case p of
+          SPSMP -> [USETooManyHosts p' (safeDecodeUtf8 $ strEncode server) | AUS _ srv@UserServer {server} <- srvs, L.length (srvHost srv) > 2]
+          _ -> []
         duplicateHosts = snd $ foldl' addDuplicate (S.empty, S.empty) allHosts
         allHosts = concatMap (\(AUS _ srv) -> L.toList $ srvHost srv) srvs
     userServers :: (UserServersClass u, UserProtocol p) => SProtocolType p -> [u] -> [AUserServer p]
     userServers p = map aUserServer' . concatMap (servers' p)
+    -- a group covers a role if its operator is enabled and some enabled server resolves it on
+    hasRole :: (UserServersClass u, UserProtocol p) => SProtocolType p -> (ServerRoles -> Bool) -> u -> Bool
+    hasRole p roleSel u =
+      opEnabled u && any (\(AUS _ UserServer {enabled, deleted, roles}) -> enabled && not deleted && roleSel (resolveServerRoles p (operator' u) roles)) (map aUserServer' (servers' p u))
     chatRelayErrs :: UserServersClass u => [u] -> [UserServersError]
     chatRelayErrs uss = concatMap duplicateErrs_ cRelays
       where
@@ -551,15 +578,15 @@ validateUserServers curr others = (currUserErrs <> concatMap otherUserErrs other
         addAddress (xs, dups) x
           | any (sameShortLinkContact x) xs = (xs, x : dups)
           | otherwise = (x : xs, dups)
-    currUserWarns = noChatRelaysWarns Nothing curr
-    otherUserWarns (user, uss) = noChatRelaysWarns (Just user) uss
+    currUserWarns = noChatRelaysWarns Nothing curr <> noNamesServersWarns Nothing curr
+    otherUserWarns (user, uss) = noChatRelaysWarns (Just user) uss <> noNamesServersWarns (Just user) uss
     noChatRelaysWarns :: UserServersClass u => Maybe User -> [u] -> [UserServersWarning]
-    noChatRelaysWarns user uss
-      | noChatRelays opEnabled = [USWNoChatRelays user]
-      | otherwise = []
+    noChatRelaysWarns user uss = [USWNoChatRelays user | noChatRelays opEnabled]
       where
         noChatRelays cond = not $ any relayEnabled $ userChatRelays $ filter cond uss
         relayEnabled (AUCR _ UserChatRelay {deleted, enabled}) = enabled && not deleted
+    noNamesServersWarns :: UserServersClass u => Maybe User -> [u] -> [UserServersWarning]
+    noNamesServersWarns user uss = [USWNoNamesServers user | not (any (hasRole SPSMP (\ServerRoles {names} -> names)) uss)]
     userChatRelays :: UserServersClass u => [u] -> [AUserChatRelay]
     userChatRelays = map aUserChatRelay' . concatMap chatRelays'
     opEnabled :: UserServersClass u => u -> Bool
@@ -583,6 +610,8 @@ instance DBStoredI s => FromJSON (ServerOperator' s) where
 $(JQ.deriveJSON (sumTypeJSON $ dropPrefix "UCA") ''UsageConditionsAction)
 
 $(JQ.deriveJSON defaultJSON ''ServerOperatorConditions)
+
+$(JQ.deriveJSON defaultJSON ''ServerRolesOverride)
 
 instance ProtocolTypeI p => ToJSON (UserServer' s p) where
   toEncoding = $(JQ.mkToEncoding defaultJSON ''UserServer')

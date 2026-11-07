@@ -30,7 +30,7 @@ import chat.simplex.common.views.helpers.*
 import chat.simplex.common.views.newchat.LinkTextView
 import chat.simplex.common.views.newchat.SimpleXLinkQRCode
 import chat.simplex.common.views.usersettings.*
-import chat.simplex.res.MR
+import chat.simplex.res.*
 import dev.icerock.moko.resources.compose.painterResource
 import dev.icerock.moko.resources.compose.stringResource
 import kotlinx.coroutines.*
@@ -196,7 +196,6 @@ private fun MutableState<MigrationFromState>.ChatStopInProgressView() {
 private fun MutableState<MigrationFromState>.ChatStopFailedView(reason: String) {
   SectionView(stringResource(MR.strings.error_stopping_chat)) {
     Text(reason)
-    SectionDividerSpaced()
     SettingsActionItemWithContent(
       icon = painterResource(MR.images.ic_report_filled),
       text = stringResource(MR.strings.auth_stop_chat),
@@ -413,12 +412,12 @@ private fun MutableState<MigrationFromState>.FinishedView(chatDeletion: Boolean)
         }
       ) {}
     }
-    SectionTextFooter(annotatedStringResource(MR.strings.migrate_from_device_you_must_not_start_database_on_two_device))
-    SectionTextFooter(annotatedStringResource(MR.strings.migrate_from_device_using_on_two_device_breaks_encryption))
     if (chatDeletion) {
       ProgressView()
     }
   }
+  SectionTextFooter(annotatedStringResource(MR.strings.migrate_from_device_you_must_not_start_database_on_two_device))
+  SectionTextFooter(annotatedStringResource(MR.strings.migrate_from_device_using_on_two_device_breaks_encryption))
 }
 
 @Composable

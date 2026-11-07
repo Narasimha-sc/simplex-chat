@@ -18,7 +18,7 @@ import chat.simplex.common.model.ChatInfo
 import chat.simplex.common.model.chatTimestampText
 import chat.simplex.common.model.timestampTick
 import chat.simplex.common.views.helpers.*
-import chat.simplex.res.MR
+import chat.simplex.res.*
 
 @Composable
 fun ContactRequestView(contactRequest: ChatInfo.ContactRequest) {
@@ -29,8 +29,9 @@ fun ContactRequestView(contactRequest: ChatInfo.ContactRequest) {
         .padding(start = 8.dp, end = 8.sp.toDp())
         .weight(1F)
     ) {
-      Text(
+      NameWithBadge(
         contactRequest.chatViewName,
+        contactRequest.nameBadge,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
         style = MaterialTheme.typography.h3,

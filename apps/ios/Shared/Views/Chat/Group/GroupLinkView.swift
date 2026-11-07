@@ -84,7 +84,7 @@ struct GroupLinkView: View {
                     if !isChannel {
                         Picker("Initial role", selection: $groupLinkMemberRole) {
                             ForEach([GroupMemberRole.member, GroupMemberRole.observer]) { role in
-                                Text(role.text)
+                                Text(role.text(isChannel: isChannel))
                             }
                         }
                         .frame(height: 36)
@@ -155,8 +155,9 @@ struct GroupLinkView: View {
                     do {
                         groupLink = try await apiGroupLinkMemberRole(groupId, memberRole: groupLinkMemberRole)
                     } catch let error {
-                        let a = getErrorAlert(error, "Error updating group link")
-                        alert = .error(title: a.title, error: a.message)
+                        await MainActor.run {
+                            showErrorAlert(error, NSLocalizedString("Error updating group link", comment: ""))
+                        }
                     }
                 }
             }
@@ -188,8 +189,7 @@ struct GroupLinkView: View {
                 logger.error("GroupLinkView apiCreateGroupLink: \(responseError(error))")
                 await MainActor.run {
                     creatingLink = false
-                    let a = getErrorAlert(error, "Error creating group link")
-                    alert = .error(title: a.title, error: a.message)
+                    showErrorAlert(error, NSLocalizedString("Error creating group link", comment: ""))
                 }
             }
         }
@@ -230,8 +230,7 @@ struct GroupLinkView: View {
                 logger.error("apiAddGroupShortLink: \(responseError(error))")
                 await MainActor.run {
                     creatingLink = false
-                    let a = getErrorAlert(error, "Error adding short link")
-                    alert = .error(title: a.title, error: a.message)
+                    showErrorAlert(error, NSLocalizedString("Error adding short link", comment: ""))
                 }
             }
         }
@@ -242,9 +241,9 @@ struct GroupLinkView_Previews: PreviewProvider {
     static var previews: some View {
         @State var groupLink: GroupLink? = GroupLink(
             userContactLinkId: 1,
-            connLinkContact: CreatedConnLink(connFullLink: "https://simplex.chat/contact#/?v=1&smp=smp%3A%2F%2FPQUV2eL0t7OStZOoAsPEV2QYWt4-xilbakvGUGOItUo%3D%40smp6.simplex.im%2FK1rslx-m5bpXVIdMZg9NLUZ_8JBm8xTt%23MCowBQYDK2VuAyEALDeVe-sG8mRY22LsXlPgiwTNs9dbiLrNuA7f3ZMAJ2w%3D", connShortLink: nil),
-            shortLinkDataSet: false,
-            shortLinkLargeDataSet: false,
+            connLinkContact: CreatedConnLink(connFullLink: "https://simplex.chat/contact#/?v=1&smp=smp%3A%2F%2FPQUV2eL0t7OStZOoAsPEV2QYWt4-xilbakvGUGOItUo%3D%40smp6.simplex.im%2FK1rslx-m5bpXVIdMZg9NLUZ_8JBm8xTt%23MCowBQYDK2VuAyEALDeVe-sG8mRY22LsXlPgiwTNs9dbiLrNuA7f3ZMAJ2w%3D", connShortLink: "https://smp6.simplex.im/g#cL3iklYlt_Tws1B_1aGylbT_3HowPMQhuCFoBiCjZ1M"),
+            shortLinkDataSet: true,
+            shortLinkLargeDataSet: true,
             groupLinkId: "abc",
             acceptMemberRole: .member
         )

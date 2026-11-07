@@ -125,7 +125,7 @@ struct GroupChatInfoView: View {
                                     Label("Share via chat", systemImage: "arrowshape.turn.up.forward")
                                 }
                             }
-                            if groupInfo.isOwner || members.contains(where: { $0.wrapped.memberRole >= .owner }) {
+                            if groupInfo.canModerate || members.contains(where: { $0.wrapped.memberRole >= .owner }) {
                                 channelMembersButton()
                             }
                             if groupInfo.membership.memberRole >= .moderator {
@@ -154,8 +154,16 @@ struct GroupChatInfoView: View {
                             if showUserSupportChat {
                                 UserSupportChatNavLink(chat: chat, groupInfo: groupInfo, scrollToItemId: $scrollToItemId)
                             }
+                        }
+                    }
+
+                    if groupInfo.useRelays && groupInfo.isOwner && groupLink != nil {
+                        Section {
+                            channelSimplexNameButton()
                         } header: {
-                            Text("")
+                            if groupInfo.groupProfile.publicGroup?.publicGroupAccess?.groupDomainClaim?.shortName != nil {
+                                Text("Channel SimpleX name").foregroundColor(theme.colors.secondary)
+                            }
                         }
                     }
 
@@ -244,6 +252,12 @@ struct GroupChatInfoView: View {
                         }
                     }
 
+                    if groupInfo.useRelays && groupInfo.isOwner {
+                        Section(header: Text("Advanced options").foregroundColor(theme.colors.secondary)) {
+                            channelWebAccessButton()
+                        }
+                    }
+
                     if developerTools {
                         Section(header: Text("For console").foregroundColor(theme.colors.secondary)) {
                             infoRow("Local name", chat.chatInfo.localDisplayName)
@@ -298,14 +312,14 @@ struct GroupChatInfoView: View {
     }
 
     private func groupInfoHeader() -> some View {
-        VStack {
+        VStack(spacing: 8) {
             let cInfo = chat.chatInfo
             // show actual display name, alias can be edited in this view
             let displayName = (cInfo.groupInfo?.groupProfile.displayName ?? cInfo.displayName).trimmingCharacters(in: .whitespacesAndNewlines)
             let fullName = cInfo.fullName.trimmingCharacters(in: .whitespacesAndNewlines)
             ChatInfoImage(chat: chat, size: 192, color: Color(uiColor: .tertiarySystemFill))
-                .padding(.top, 12)
-                .padding()
+                .padding(.top, 20)
+                .padding(.bottom, 12)
             Text(displayName)
                 .font(.largeTitle)
                 .multilineTextAlignment(.center)
@@ -324,6 +338,16 @@ struct GroupChatInfoView: View {
                     .multilineTextAlignment(.center)
                     .lineLimit(4)
                     .fixedSize(horizontal: false, vertical: true)
+            }
+            groupSimplexNameView(groupInfo) { groupInfo = $0 }
+            if let webPage = groupInfo.groupProfile.publicGroup?.publicGroupAccess?.groupWebPage,
+               let url = URL(string: webPage) {
+                Link(destination: url) {
+                    Text(webPage)
+                        .font(.subheadline)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
             }
             if groupInfo.useRelays,
                let count = groupInfo.groupSummary.publicMemberCount,
@@ -493,7 +517,7 @@ struct GroupChatInfoView: View {
                 // TODO server connection status
                 VStack(alignment: .leading) {
                     let t = Text(member.chatViewName).foregroundColor(member.memberIncognito ? .indigo : theme.colors.onBackground)
-                    (member.verified ? memberVerifiedShield + t : t)
+                    NameWithBadge((member.verified ? memberVerifiedShield + t : t), member.nameBadge)
                         .lineLimit(1)
                     (user ? Text ("you: ") + Text(member.memberStatus.shortText) : Text(memberConnStatus(member)))
                         .lineLimit(1)
@@ -566,7 +590,7 @@ struct GroupChatInfoView: View {
             } else {
                 let role = member.memberRole
                 if [.owner, .admin, .moderator, .observer].contains(role) {
-                    Text(member.memberRole.text)
+                    Text(member.memberRole.text(isChannel: groupInfo.isChannel))
                         .foregroundColor(theme.colors.secondary)
                 }
             }
@@ -648,6 +672,49 @@ struct GroupChatInfoView: View {
         }
     }
 
+    private func channelWebAccessButton() -> some View {
+        let title: LocalizedStringKey = groupInfo.isChannel ? "Channel webpage" : "Group webpage"
+        return NavigationLink {
+            ChannelWebAccessView(groupInfo: $groupInfo)
+                .navigationBarTitle(title)
+                .navigationBarTitleDisplayMode(.large)
+        } label: {
+            Label(title, systemImage: "globe")
+        }
+    }
+
+    private func channelSimplexNameButton() -> some View {
+        NavigationLink {
+            let domain = if let d = groupInfo.groupProfile.publicGroup?.publicGroupAccess?.groupDomainClaim?.shortName { "#\(d)" } else { "" }
+            SetSimplexDomainView(
+                title: "SimpleX name",
+                footer: "Let people join via name registered with this channel link.",
+                prompt: "#channelname.testing",
+                simplexName: domain,
+                save: { domain in
+                    do {
+                        var access = groupInfo.groupProfile.publicGroup?.publicGroupAccess ?? PublicGroupAccess()
+                        access.groupDomainClaim = domain.map { SimplexDomainClaim(domain: $0) }
+                        let gInfo = try await apiSetPublicGroupAccess(groupInfo.groupId, access: access)
+                        await MainActor.run {
+                            chatModel.updateGroup(gInfo)
+                            groupInfo = gInfo
+                        }
+                        return true
+                    } catch {
+                        return false
+                    }
+                }
+            )
+        } label: {
+            if let d = groupInfo.groupProfile.publicGroup?.publicGroupAccess?.groupDomainClaim?.shortName {
+                Label("\(d)", systemImage: "number")
+            } else {
+                Label("Get SimpleX name (BETA)", systemImage: "number")
+            }
+        }
+    }
+
     private func groupLinkDestinationView() -> some View {
         GroupLinkView(
             groupId: groupInfo.groupId,
@@ -665,7 +732,7 @@ struct GroupChatInfoView: View {
     }
 
     private func channelMembersButton() -> some View {
-        let label: LocalizedStringKey = groupInfo.isOwner ? "Subscribers" : "Owners"
+        let label: LocalizedStringKey = groupInfo.canModerate ? "Subscribers" : "Owners & contributors"
         return NavigationLink {
             ChannelMembersView(chat: chat, groupInfo: groupInfo)
                 .navigationTitle(label)
@@ -836,7 +903,7 @@ struct GroupChatInfoView: View {
         let label: LocalizedStringKey = groupInfo.useRelays ? "Delete channel?" : groupInfo.businessChat == nil ? "Delete group?" : "Delete chat?"
         return Alert(
             title: Text(label),
-            message: deleteGroupAlertMessage(groupInfo),
+            message: Text(chat.chatInfo.displayName + "\n\n") + deleteGroupAlertMessage(groupInfo),
             primaryButton: .destructive(Text("Delete")) {
                 Task {
                     do {
@@ -858,7 +925,7 @@ struct GroupChatInfoView: View {
     private func clearChatAlert() -> Alert {
         Alert(
             title: Text("Clear conversation?"),
-            message: Text("All messages will be deleted - this cannot be undone! The messages will be deleted ONLY for you."),
+            message: Text(chat.chatInfo.displayName + "\n\n") + Text("All messages will be deleted - this cannot be undone! The messages will be deleted ONLY for you."),
             primaryButton: .destructive(Text("Clear")) {
                 Task {
                     await clearChat(chat)
@@ -880,7 +947,7 @@ struct GroupChatInfoView: View {
         )
         return Alert(
             title: Text(titleLabel),
-            message: Text(messageLabel),
+            message: Text(chat.chatInfo.displayName + "\n\n") + Text(messageLabel),
             primaryButton: .destructive(Text("Leave")) {
                 Task {
                     await leaveGroup(chat.chatInfo.apiId)

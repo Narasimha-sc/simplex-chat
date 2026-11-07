@@ -19,6 +19,7 @@ struct SendMessageView: View {
     @EnvironmentObject var theme: AppTheme
     @Environment(\.isEnabled) var isEnabled
     var sendMessage: (Int?) -> Void
+    var sendSignedMessage: () -> Void = {}
     var sendLiveMessage: (() async -> Void)? = nil
     var updateLiveMessage: (() async -> Void)? = nil
     var cancelLiveMessage: (() -> Void)? = nil
@@ -32,6 +33,7 @@ struct SendMessageView: View {
     var finishVoiceMessageRecording: (() -> Void)? = nil
     var allowVoiceMessagesToContact: (() -> Void)? = nil
     var timedMessageAllowed: Bool = false
+    var showSign: Bool = false
     var onMediaAdded: ([UploadContent]) -> Void
     @State private var holdingVMR = false
     @Namespace var namespace
@@ -46,6 +48,7 @@ struct SendMessageView: View {
     @State private var showCustomTimePicker = false
     @State private var selectedDisappearingMessageTime: Int? = customDisappearingMessageTimeDefault.get()
     @UserDefault(DEFAULT_LIVE_MESSAGE_ALERT_SHOWN) private var liveMessageAlertShown = false
+    @UserDefault(DEFAULT_SIGN_MESSAGE_ALERT_SHOWN) private var signMessageAlertShown = false
 
     var body: some View {
         let composeShape = RoundedRectangle(cornerSize: CGSize(width: 20, height: 20))
@@ -243,6 +246,14 @@ struct SendMessageView: View {
                     Label("Disappearing message", systemImage: "stopwatch")
                 }
             }
+            // hidden until message signing is user-facing (recipient-only stage)
+//            if showSign {
+//                Button {
+//                    startSignedMessage()
+//                } label: {
+//                    Label("Sign message", systemImage: "checkmark.seal")
+//                }
+//            }
         }
     }
 
@@ -352,6 +363,22 @@ struct SendMessageView: View {
         .padding([.bottom, .horizontal], 4)
     }
 
+    private func startSignedMessage() {
+        if signMessageAlertShown {
+            sendSignedMessage()
+        } else {
+            AlertManager.shared.showAlert(Alert(
+                title: Text("Sign message"),
+                message: Text("Signing proves you authored this message and can't be denied later."),
+                primaryButton: .default(Text("Send")) {
+                    signMessageAlertShown = true
+                    sendSignedMessage()
+                },
+                secondaryButton: .cancel()
+            ))
+        }
+    }
+
     private func startLiveMessage(send:  @escaping () async -> Void, update: @escaping () async -> Void) {
         if liveMessageAlertShown {
             start()
@@ -419,7 +446,7 @@ struct SendMessageView_Previews: PreviewProvider {
     static var previews: some View {
         @State var composeStateNew = ComposeState()
         @State var selectedRange = NSRange()
-        let ci = ChatItem.getSample(1, .directSnd, .now, "hello")
+        let ci = ChatItem.getSample(1, .directSnd, previewDate, "hello")
         @State var composeStateEditing = ComposeState(editingItem: ci)
         @State var selectedRangeEditing = NSRange()
         @State var sendEnabled: Bool = true
@@ -434,7 +461,7 @@ struct SendMessageView_Previews: PreviewProvider {
                     sendMessage: { _ in },
                     onMediaAdded: { _ in },
                     keyboardVisible: Binding.constant(true),
-                    keyboardHiddenDate: Binding.constant(Date.now)
+                    keyboardHiddenDate: Binding.constant(previewDate)
                 )
             }
             VStack {
@@ -446,7 +473,7 @@ struct SendMessageView_Previews: PreviewProvider {
                     sendMessage: { _ in },
                     onMediaAdded: { _ in },
                     keyboardVisible: Binding.constant(true),
-                    keyboardHiddenDate: Binding.constant(Date.now)
+                    keyboardHiddenDate: Binding.constant(previewDate)
                 )
             }
         }

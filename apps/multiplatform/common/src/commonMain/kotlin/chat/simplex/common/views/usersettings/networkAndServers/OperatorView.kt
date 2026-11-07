@@ -31,12 +31,16 @@ import chat.simplex.common.ui.theme.*
 import chat.simplex.common.views.chat.item.ItemAction
 import chat.simplex.common.views.helpers.*
 import chat.simplex.common.views.onboarding.*
-import chat.simplex.res.MR
+import chat.simplex.res.*
 import com.mikepenz.markdown.compose.Markdown
+import com.mikepenz.markdown.compose.components.MarkdownComponents
 import com.mikepenz.markdown.compose.components.markdownComponents
 import com.mikepenz.markdown.compose.elements.MarkdownHeader
 import com.mikepenz.markdown.m2.markdownColor
 import com.mikepenz.markdown.m2.markdownTypography
+import com.mikepenz.markdown.model.MarkdownColors
+import com.mikepenz.markdown.model.MarkdownPadding
+import com.mikepenz.markdown.model.MarkdownTypography
 import com.mikepenz.markdown.model.markdownPadding
 import dev.icerock.moko.resources.compose.painterResource
 import dev.icerock.moko.resources.compose.stringResource
@@ -211,15 +215,19 @@ fun OperatorViewLayout(
         rhId = rhId
       )
     }
-    val serversErr = globalServersError(serverErrors.value)
-    val serversWarn = globalServersWarning(serverWarnings.value)
-    if (serversErr != null) {
-      SectionCustomFooter {
-        ServersErrorFooter(serversErr)
+    val serversErrs = globalServersErrors(serverErrors.value)
+    val serversWarns = globalServersWarnings(serverWarnings.value)
+    if (serversErrs.isNotEmpty()) {
+      serversErrs.forEach { err ->
+        SectionCustomFooter {
+          ServersErrorFooter(err)
+        }
       }
-    } else if (serversWarn != null) {
-      SectionCustomFooter {
-        ServersWarningFooter(serversWarn)
+    } else if (serversWarns.isNotEmpty()) {
+      serversWarns.forEach { warn ->
+        SectionCustomFooter {
+          ServersWarningFooter(warn)
+        }
       }
     } else {
       val footerText = when (val c = operator.conditionsAcceptance) {
@@ -267,7 +275,7 @@ fun OperatorViewLayout(
                 userServers.value = userServers.value.toMutableList().apply {
                   this[operatorIndex] = this[operatorIndex].copy(
                     operator = this[operatorIndex].operator?.copy(
-                      smpRoles = this[operatorIndex].operator?.smpRoles?.copy(storage = enabled) ?: ServerRoles(storage = enabled, proxy = false)
+                      smpRoles = this[operatorIndex].operator?.smpRoles?.copy(storage = enabled) ?: ServerRoles(storage = enabled, proxy = false, names = false)
                     )
                   )
                 }
@@ -287,7 +295,27 @@ fun OperatorViewLayout(
                 userServers.value = userServers.value.toMutableList().apply {
                   this[operatorIndex] = this[operatorIndex].copy(
                     operator = this[operatorIndex].operator?.copy(
-                      smpRoles = this[operatorIndex].operator?.smpRoles?.copy(proxy = enabled) ?: ServerRoles(storage = false, proxy = enabled)
+                      smpRoles = this[operatorIndex].operator?.smpRoles?.copy(proxy = enabled) ?: ServerRoles(storage = false, proxy = enabled, names = false)
+                    )
+                  )
+                }
+              }
+            )
+          }
+          SectionItemView(padding = PaddingValues(horizontal = DEFAULT_PADDING)) {
+            Text(
+              stringResource(MR.strings.operator_use_for_names),
+              Modifier.padding(end = 24.dp),
+              color = Color.Unspecified
+            )
+            Spacer(Modifier.fillMaxWidth().weight(1f))
+            DefaultSwitch(
+              checked = userServers.value[operatorIndex].operator_.smpRoles.names,
+              onCheckedChange = { enabled ->
+                userServers.value = userServers.value.toMutableList().apply {
+                  this[operatorIndex] = this[operatorIndex].copy(
+                    operator = this[operatorIndex].operator?.copy(
+                      smpRoles = this[operatorIndex].operator?.smpRoles?.copy(names = enabled) ?: ServerRoles(storage = false, proxy = false, names = enabled)
                     )
                   )
                 }
@@ -371,7 +399,7 @@ fun OperatorViewLayout(
                 userServers.value = userServers.value.toMutableList().apply {
                   this[operatorIndex] = this[operatorIndex].copy(
                     operator = this[operatorIndex].operator?.copy(
-                      xftpRoles = this[operatorIndex].operator?.xftpRoles?.copy(storage = enabled) ?: ServerRoles(storage = enabled, proxy = false)
+                      xftpRoles = this[operatorIndex].operator?.xftpRoles?.copy(storage = enabled) ?: ServerRoles(storage = enabled, proxy = false, names = false)
                     )
                   )
                 }
@@ -747,22 +775,36 @@ expect fun ConditionsBox(modifier: Modifier, scrollState: ScrollState, content: 
 
 @Composable
 private fun ConditionsMarkdown(text: String) {
+  val style = documentMarkdownStyle()
   Markdown(text,
-    markdownColor(linkText = MaterialTheme.colors.primary),
+    style.colors,
+    style.typography,
+    Modifier.padding(8.dp),
+    // using CommonMarkFlavourDescriptor instead of GFMFlavourDescriptor because it shows `https://simplex.chat/` (link inside backticks) incorrectly
+    flavour = CommonMarkFlavourDescriptor(),
+    components = style.components,
+    padding = style.padding
+  )
+}
+
+class DocumentMarkdownStyle(val colors: MarkdownColors, val typography: MarkdownTypography, val components: MarkdownComponents, val padding: MarkdownPadding)
+
+@Composable
+fun documentMarkdownStyle(h1: TextStyle = MaterialTheme.typography.body1): DocumentMarkdownStyle =
+  DocumentMarkdownStyle(
+    markdownColor(),
     markdownTypography(
-      h1 = MaterialTheme.typography.body1,
+      h1 = h1,
       h2 = MaterialTheme.typography.h3.copy(fontSize = 22.sp, fontWeight = FontWeight.Bold),
       h3 = MaterialTheme.typography.h4.copy(fontWeight = FontWeight.Bold),
       h4 = MaterialTheme.typography.h5.copy(fontSize = 16.sp, fontWeight = FontWeight.Bold),
       h5 = MaterialTheme.typography.h6.copy(fontWeight = FontWeight.Bold),
       link = MaterialTheme.typography.body1.copy(
+        color = MaterialTheme.colors.primary,
         textDecoration = TextDecoration.Underline
       )
     ),
-    Modifier.padding(8.dp),
-    // using CommonMarkFlavourDescriptor instead of GFMFlavourDescriptor because it shows `https://simplex.chat/` (link inside backticks) incorrectly
-    flavour = CommonMarkFlavourDescriptor(),
-    components = markdownComponents(
+    markdownComponents(
       heading2 = {
         Spacer(Modifier.height(10.dp))
         MarkdownHeader(it.content, it.node, it.typography.h2)
@@ -779,9 +821,8 @@ private fun ConditionsMarkdown(text: String) {
         Spacer(Modifier.height(4.dp))
       },
     ),
-    padding = markdownPadding(block = 4.dp)
+    markdownPadding(block = 4.dp)
   )
-}
 
 @Composable
 private fun ConditionsLinkView(conditionsLink: String) {

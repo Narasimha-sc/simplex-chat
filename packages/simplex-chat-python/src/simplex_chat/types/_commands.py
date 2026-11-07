@@ -13,10 +13,11 @@ from . import _responses as CR
 # Network usage: interactive.
 class APICreateMyAddress(TypedDict):
     userId: int  # int64
+    pqRatchet: NotRequired[bool]
 
 
 def APICreateMyAddress_cmd_string(self: APICreateMyAddress) -> str:
-    return '/_address ' + str(self['userId'])
+    return '/_address ' + str(self['userId']) + ((' pq_ratchet=' + ('on' if self.get('pqRatchet') else 'off')) if self.get('pqRatchet') is not None else '')
 
 APICreateMyAddress_Response = CR.UserContactLinkCreated | CR.ChatCmdError
 
@@ -55,18 +56,32 @@ class APISetProfileAddress(TypedDict):
 def APISetProfileAddress_cmd_string(self: APISetProfileAddress) -> str:
     return '/_profile_address ' + str(self['userId']) + ' ' + ('on' if self['enable'] else 'off')
 
-APISetProfileAddress_Response = CR.UserProfileUpdated | CR.ChatCmdError
+APISetProfileAddress_Response = CR.UserProfileUpdated | CR.UserProfileNoChange | CR.ChatCmdError
+
+
+# Set or remove SimpleX name of bot address. The name must be registered with the address short link.
+# Network usage: interactive.
+class APISetUserDomain(TypedDict):
+    userId: int  # int64
+    simplexDomain: NotRequired[str]
+
+
+def APISetUserDomain_cmd_string(self: APISetUserDomain) -> str:
+    return '/_set domain ' + str(self['userId']) + ((' ' + self.get('simplexDomain')) if self.get('simplexDomain') is not None else '')
+
+APISetUserDomain_Response = CR.UserProfileUpdated | CR.UserProfileNoChange | CR.ChatCmdError
 
 
 # Set bot address settings.
 # Network usage: interactive.
 class APISetAddressSettings(TypedDict):
     userId: int  # int64
+    pqRatchet: NotRequired[bool]
     settings: "T.AddressSettings"
 
 
 def APISetAddressSettings_cmd_string(self: APISetAddressSettings) -> str:
-    return '/_address_settings ' + str(self['userId']) + ' ' + json.dumps(self['settings'])
+    return '/_address_settings ' + str(self['userId']) + ((' pq_ratchet=' + ('on' if self.get('pqRatchet') else 'off')) if self.get('pqRatchet') is not None else '') + ' ' + json.dumps(self['settings'])
 
 APISetAddressSettings_Response = CR.UserContactLinkUpdated | CR.ChatCmdError
 
@@ -80,11 +95,12 @@ class APISendMessages(TypedDict):
     sendRef: "T.ChatRef"
     liveMessage: bool
     ttl: NotRequired[int]  # int
+    signMessages: bool
     composedMessages: list["T.ComposedMessage"]  # non-empty
 
 
 def APISendMessages_cmd_string(self: APISendMessages) -> str:
-    return '/_send ' + T.ChatRef_cmd_string(self['sendRef']) + (' live=on' if self['liveMessage'] else '') + ((' ttl=' + str(self.get('ttl'))) if self.get('ttl') is not None else '') + ' json ' + json.dumps(self['composedMessages'])
+    return '/_send ' + T.ChatRef_cmd_string(self['sendRef']) + (' live=on' if self['liveMessage'] else '') + ((' ttl=' + str(self.get('ttl'))) if self.get('ttl') is not None else '') + (' sign=on' if self['signMessages'] else '') + ' json ' + json.dumps(self['composedMessages'])
 
 APISendMessages_Response = CR.NewChatItems | CR.ChatCmdError
 
@@ -146,6 +162,31 @@ def APIChatItemReaction_cmd_string(self: APIChatItemReaction) -> str:
 APIChatItemReaction_Response = CR.ChatItemReaction | CR.ChatCmdError
 
 
+# Share user address card
+# Network usage: no.
+class APIShareMyAddress(TypedDict):
+    toSendRef: "T.ChatRef"
+
+
+def APIShareMyAddress_cmd_string(self: APIShareMyAddress) -> str:
+    return '/_share address ' + T.ChatRef_cmd_string(self['toSendRef'])
+
+APIShareMyAddress_Response = CR.ChatMsgContent
+
+
+# Share channel address
+# Network usage: no.
+class APIShareChatMsgContent(TypedDict):
+    shareChatRef: "T.ChatRef"
+    toSendRef: "T.ChatRef"
+
+
+def APIShareChatMsgContent_cmd_string(self: APIShareChatMsgContent) -> str:
+    return '/_share chat content ' + T.ChatRef_cmd_string(self['shareChatRef']) + ' ' + T.ChatRef_cmd_string(self['toSendRef'])
+
+APIShareChatMsgContent_Response = CR.ChatMsgContent
+
+
 # File commands
 # Commands to receive and to cancel files. Files are sent as part of the message, there are no separate commands to send files.
 
@@ -192,6 +233,21 @@ def APIAddMember_cmd_string(self: APIAddMember) -> str:
     return '/_add #' + str(self['groupId']) + ' ' + str(self['contactId']) + ' ' + str(self['memberRole'])
 
 APIAddMember_Response = CR.SentGroupInvitation | CR.ChatCmdError
+
+
+# Add member of another group to group. Requires bot to have Admin role in the group, and direct messages allowed for its role in another group.
+# Network usage: interactive.
+class APIAddMemberViaGroup(TypedDict):
+    groupId: int  # int64
+    viaGroupId: int  # int64
+    groupMemberId: int  # int64
+    memberRole: "T.GroupMemberRole"
+
+
+def APIAddMemberViaGroup_cmd_string(self: APIAddMemberViaGroup) -> str:
+    return '/_add #' + str(self['groupId']) + ' #' + str(self['viaGroupId']) + ' ' + str(self['groupMemberId']) + ' ' + str(self['memberRole'])
+
+APIAddMemberViaGroup_Response = CR.SentGroupInvitationViaGroup | CR.ChatCmdError
 
 
 # Join group.
@@ -286,6 +342,32 @@ def APIListMembers_cmd_string(self: APIListMembers) -> str:
 APIListMembers_Response = CR.GroupMembers | CR.ChatCmdError
 
 
+# Create a direct message contact with a group member.
+# Network usage: interactive.
+class APICreateMemberContact(TypedDict):
+    groupId: int  # int64
+    groupMemberId: int  # int64
+
+
+def APICreateMemberContact_cmd_string(self: APICreateMemberContact) -> str:
+    return '/_create member contact #' + str(self['groupId']) + ' ' + str(self['groupMemberId'])
+
+APICreateMemberContact_Response = CR.NewMemberContact | CR.ChatCmdError
+
+
+# Send a direct message invitation to a group member contact.
+# Network usage: background.
+class APISendMemberContactInvitation(TypedDict):
+    contactId: int  # int64
+    msgContent_: NotRequired["T.MsgContent"]
+
+
+def APISendMemberContactInvitation_cmd_string(self: APISendMemberContactInvitation) -> str:
+    return '/_invite member contact @' + str(self['contactId']) + ((' json ' + json.dumps(self.get('msgContent_'))) if self.get('msgContent_') is not None else '')
+
+APISendMemberContactInvitation_Response = CR.NewMemberContactSentInv | CR.ChatCmdError
+
+
 # Create group.
 # Network usage: no.
 class APINewGroup(TypedDict):
@@ -365,6 +447,18 @@ def APIUpdateGroupProfile_cmd_string(self: APIUpdateGroupProfile) -> str:
 APIUpdateGroupProfile_Response = CR.GroupUpdated | CR.ChatCmdError
 
 
+# Verify group domain
+# Network usage: interactive.
+class APIVerifyGroupDomain(TypedDict):
+    groupId: int  # int64
+
+
+def APIVerifyGroupDomain_cmd_string(self: APIVerifyGroupDomain) -> str:
+    return '/_verify domain #' + str(self['groupId'])
+
+APIVerifyGroupDomain_Response = CR.GroupDomainVerified
+
+
 # Group link commands
 # These commands can be used by bots that manage multiple public groups
 
@@ -434,17 +528,17 @@ def APIAddContact_cmd_string(self: APIAddContact) -> str:
 APIAddContact_Response = CR.Invitation | CR.ChatCmdError
 
 
-# Determine SimpleX link type and if the bot is already connected via this link.
+# Determine SimpleX link type and if the bot is already connected via this link or name.
 # Network usage: interactive.
 class APIConnectPlan(TypedDict):
     userId: int  # int64
-    connectionLink: NotRequired[str]
-    resolveKnown: bool
+    connectTarget: NotRequired[str]
+    resolveMode: "T.PlanResolveMode"
     linkOwnerSig: NotRequired["T.LinkOwnerSig"]
 
 
 def APIConnectPlan_cmd_string(self: APIConnectPlan) -> str:
-    return '/_connect plan ' + str(self['userId']) + ' ' + self.get('connectionLink')
+    return '/_connect plan ' + str(self['userId']) + ' ' + self.get('connectTarget') + T.PlanResolveMode_cmd_string(self['resolveMode']) + ((' sig=' + json.dumps(self.get('linkOwnerSig'))) if self.get('linkOwnerSig') is not None else '')
 
 APIConnectPlan_Response = CR.ConnectionPlan | CR.ChatCmdError
 
@@ -458,22 +552,105 @@ class APIConnect(TypedDict):
 
 
 def APIConnect_cmd_string(self: APIConnect) -> str:
-    return '/_connect ' + str(self['userId']) + ((' ' + T.CreatedConnLink_cmd_string(self.get('preparedLink_'))) if self.get('preparedLink_') is not None else '')
+    return '/_connect ' + str(self['userId']) + (' incognito=on' if self['incognito'] else '') + ((' ' + T.CreatedConnLink_cmd_string(self.get('preparedLink_'))) if self.get('preparedLink_') is not None else '')
 
 APIConnect_Response = CR.SentConfirmation | CR.ContactAlreadyExists | CR.SentInvitation | CR.ChatCmdError
 
 
-# Connect via SimpleX link as string in the active user profile.
+# Connect via SimpleX link or name as string in the active user profile.
 # Network usage: interactive.
 class Connect(TypedDict):
     incognito: bool
-    connLink_: NotRequired[str]
+    connTarget_: NotRequired[str]
 
 
 def Connect_cmd_string(self: Connect) -> str:
-    return '/connect' + ((' ' + self.get('connLink_')) if self.get('connLink_') is not None else '')
+    return '/connect' + ((' ' + self.get('connTarget_')) if self.get('connTarget_') is not None else '')
 
-Connect_Response = CR.SentConfirmation | CR.ContactAlreadyExists | CR.SentInvitation | CR.ChatCmdError
+Connect_Response = (
+    CR.SentConfirmation
+    | CR.ContactAlreadyExists
+    | CR.SentInvitation
+    | CR.ConnectionPlan
+    | CR.SentInvitationToContact
+    | CR.StartedConnectionToContact
+    | CR.StartedConnectionToGroup
+    | CR.ChatCmdError
+)
+
+
+# Prepare contact chat from link data before connecting.
+# Network usage: no.
+class APIPrepareContact(TypedDict):
+    userId: int  # int64
+    connLink: "T.CreatedConnLink"
+    verifiedDomain: NotRequired[str]
+    contactSLinkData: "T.ContactShortLinkData"
+
+
+def APIPrepareContact_cmd_string(self: APIPrepareContact) -> str:
+    return '/_prepare contact ' + str(self['userId']) + ' ' + T.CreatedConnLink_cmd_string(self['connLink']) + ((' domain=' + self.get('verifiedDomain')) if self.get('verifiedDomain') is not None else '') + ' ' + json.dumps(self['contactSLinkData'])
+
+APIPrepareContact_Response = CR.NewPreparedChat | CR.ChatCmdError
+
+
+# Prepare group chat from link data before connecting.
+# Network usage: no.
+class APIPrepareGroup(TypedDict):
+    userId: int  # int64
+    connLinkContact: "T.CreatedConnLink"
+    direct: bool
+    verifiedDomain: NotRequired[str]
+    groupSLinkData: "T.GroupShortLinkData"
+
+
+def APIPrepareGroup_cmd_string(self: APIPrepareGroup) -> str:
+    return '/_prepare group ' + str(self['userId']) + ' ' + T.CreatedConnLink_cmd_string(self['connLinkContact']) + (' direct=off' if not self['direct'] else '') + ((' domain=' + self.get('verifiedDomain')) if self.get('verifiedDomain') is not None else '') + ' ' + json.dumps(self['groupSLinkData'])
+
+APIPrepareGroup_Response = CR.NewPreparedChat | CR.ChatCmdError
+
+
+# Connect to prepared contact.
+# Network usage: interactive.
+class APIConnectPreparedContact(TypedDict):
+    contactId: int  # int64
+    incognito: bool
+    msgContent_: NotRequired["T.MsgContent"]
+
+
+def APIConnectPreparedContact_cmd_string(self: APIConnectPreparedContact) -> str:
+    return '/_connect contact @' + str(self['contactId']) + (' incognito=on' if self['incognito'] else '') + ((' json ' + json.dumps(self.get('msgContent_'))) if self.get('msgContent_') is not None else '')
+
+APIConnectPreparedContact_Response = CR.StartedConnectionToContact | CR.ContactAlreadyExists | CR.ChatCmdError
+
+
+# Connect to prepared group.
+# Network usage: interactive.
+class APIConnectPreparedGroup(TypedDict):
+    groupId: int  # int64
+    incognito: bool
+    ownerContact: NotRequired["T.GroupOwnerContact"]
+    msgContent_: NotRequired["T.MsgContent"]
+
+
+def APIConnectPreparedGroup_cmd_string(self: APIConnectPreparedGroup) -> str:
+    return '/_connect group #' + str(self['groupId']) + (' incognito=on' if self['incognito'] else '') + ((' ' + T.GroupOwnerContact_cmd_string(self.get('ownerContact'))) if self.get('ownerContact') is not None else '') + ((' json ' + json.dumps(self.get('msgContent_'))) if self.get('msgContent_') is not None else '')
+
+APIConnectPreparedGroup_Response = CR.StartedConnectionToGroup | CR.ChatCmdError
+
+
+# Connect to existing contact via address in its profile.
+# Network usage: interactive.
+class APIConnectContactViaAddress(TypedDict):
+    userId: int  # int64
+    incognito: bool
+    contactId: int  # int64
+
+
+def APIConnectContactViaAddress_cmd_string(self: APIConnectContactViaAddress) -> str:
+    return '/_connect contact ' + str(self['userId']) + (' incognito=on' if self['incognito'] else '') + ' ' + str(self['contactId'])
+
+APIConnectContactViaAddress_Response = CR.SentInvitationToContact | CR.ChatCmdError
 
 
 # Accept contact request.
@@ -492,6 +669,7 @@ APIAcceptContact_Response = CR.AcceptingContactRequest | CR.ChatCmdError
 # Network usage: no.
 class APIRejectContact(TypedDict):
     contactReqId: int  # int64
+    notify: bool
 
 
 def APIRejectContact_cmd_string(self: APIRejectContact) -> str:
@@ -534,14 +712,67 @@ APIListGroups_Response = CR.GroupsList | CR.ChatCmdError
 class APIGetChats(TypedDict):
     userId: int  # int64
     pendingConnections: bool
-    pagination: "T.PaginationByTime"
+    pagination: NotRequired["T.PaginationByTime"]
     query: "T.ChatListQuery"
 
 
 def APIGetChats_cmd_string(self: APIGetChats) -> str:
-    return '/_get chats ' + str(self['userId']) + (' pcc=on' if self['pendingConnections'] else '') + ' ' + T.PaginationByTime_cmd_string(self['pagination']) + ' ' + json.dumps(self['query'])
+    return '/_get chats ' + str(self['userId']) + (' pcc=on' if self['pendingConnections'] else '') + ((' ' + T.PaginationByTime_cmd_string(self.get('pagination'))) if self.get('pagination') is not None else '') + ' ' + json.dumps(self['query'])
 
 APIGetChats_Response = CR.ApiChats | CR.ChatCmdError
+
+
+# Get chat messages.
+# Network usage: no.
+class APIGetChat(TypedDict):
+    chatRef: "T.ChatRef"
+    contentTag: NotRequired["T.MsgContentTag"]
+    chatPagination: "T.ChatPagination"
+    search: NotRequired[str]
+
+
+def APIGetChat_cmd_string(self: APIGetChat) -> str:
+    return '/_get chat ' + T.ChatRef_cmd_string(self['chatRef']) + ((' content=' + str(self.get('contentTag'))) if self.get('contentTag') is not None else '') + ' ' + T.ChatPagination_cmd_string(self['chatPagination']) + ((' search=' + self.get('search')) if self.get('search') is not None else '')
+
+APIGetChat_Response = CR.ApiChat | CR.ChatCmdError
+
+
+# Mark messages as read.
+# Network usage: no.
+class APIChatItemsRead(TypedDict):
+    chatRef: "T.ChatRef"
+    chatItemIds: list[int]  # int64, non-empty
+
+
+def APIChatItemsRead_cmd_string(self: APIChatItemsRead) -> str:
+    return '/_read chat items ' + T.ChatRef_cmd_string(self['chatRef']) + ' ' + ','.join(map(str, self['chatItemIds']))
+
+APIChatItemsRead_Response = CR.ItemsReadForChat | CR.ChatCmdError
+
+
+# Get contact information.
+# Network usage: no.
+class APIContactInfo(TypedDict):
+    contactId: int  # int64
+
+
+def APIContactInfo_cmd_string(self: APIContactInfo) -> str:
+    return '/_info @' + str(self['contactId'])
+
+APIContactInfo_Response = CR.ContactInfo | CR.ChatCmdError
+
+
+# Get message information.
+# Network usage: no.
+class APIGetChatItemInfo(TypedDict):
+    chatRef: "T.ChatRef"
+    chatItemId: int  # int64
+
+
+def APIGetChatItemInfo_cmd_string(self: APIGetChatItemInfo) -> str:
+    return '/_get item info ' + T.ChatRef_cmd_string(self['chatRef']) + ' ' + str(self['chatItemId'])
+
+APIGetChatItemInfo_Response = CR.ChatItemInfo | CR.ChatCmdError
 
 
 # Delete chat.
@@ -594,6 +825,19 @@ def APISetUserAutoAcceptMemberContacts_cmd_string(self: APISetUserAutoAcceptMemb
     return '/_set accept member contacts ' + str(self['userId']) + ' ' + ('on' if self['onOff'] else 'off')
 
 APISetUserAutoAcceptMemberContacts_Response = CR.CmdOk | CR.ChatCmdError
+
+
+# Set auto-accept group invitations.
+# Network usage: no.
+class APISetUserAutoAcceptGroupInvitations(TypedDict):
+    userId: int  # int64
+    onOff: bool
+
+
+def APISetUserAutoAcceptGroupInvitations_cmd_string(self: APISetUserAutoAcceptGroupInvitations) -> str:
+    return '/_set accept group invitations ' + str(self['userId']) + ' ' + ('on' if self['onOff'] else 'off')
+
+APISetUserAutoAcceptGroupInvitations_Response = CR.CmdOk | CR.ChatCmdError
 
 
 # User profile commands
@@ -688,6 +932,23 @@ def APISetContactPrefs_cmd_string(self: APISetContactPrefs) -> str:
 APISetContactPrefs_Response = CR.ContactPrefsUpdated | CR.ChatCmdError
 
 
+# Service commands
+# Bots with a double ratchet address can answer service requests.
+
+# Send a reply to a received service request. Returns the connection ID that correlates the reply delivery event.
+# Network usage: background.
+class APISendServiceResponse(TypedDict):
+    userId: int  # int64
+    requestId: str
+    responseData: dict[str, object]
+
+
+def APISendServiceResponse_cmd_string(self: APISendServiceResponse) -> str:
+    return '/_service_response ' + str(self['userId']) + ' ' + self['requestId'] + ' ' + json.dumps(self['responseData'])
+
+APISendServiceResponse_Response = CR.ServiceReplyAccepted | CR.ChatCmdError
+
+
 # Chat management
 # These commands should not be used with CLI-based bots
 
@@ -696,10 +957,11 @@ APISetContactPrefs_Response = CR.ContactPrefsUpdated | CR.ChatCmdError
 class StartChat(TypedDict):
     mainApp: bool
     enableSndFiles: bool
+    serviceRequests: bool
 
 
 def StartChat_cmd_string(self: StartChat) -> str:
-    return '/_start'
+    return '/_start' + ' main=' + ('on' if self['mainApp'] else 'off') + (' snd_files=off' if not self['enableSndFiles'] else '') + (' service_requests=on' if self['serviceRequests'] else '')
 
 StartChat_Response = CR.ChatStarted | CR.ChatRunning
 
@@ -714,4 +976,67 @@ def APIStopChat_cmd_string(self: APIStopChat) -> str:
     return '/_stop'
 
 APIStopChat_Response = CR.ChatStopped
+
+
+# Get network configuration.
+# Network usage: no.
+class APIGetNetworkConfig(TypedDict):
+    pass
+
+
+def APIGetNetworkConfig_cmd_string(self: APIGetNetworkConfig) -> str:
+    return '/network'
+
+APIGetNetworkConfig_Response = CR.NetworkConfig | CR.ChatCmdError
+
+
+# Set network configuration.
+# Network usage: background.
+class APISetNetworkConfig(TypedDict):
+    networkConfig: "T.NetworkConfig"
+
+
+def APISetNetworkConfig_cmd_string(self: APISetNetworkConfig) -> str:
+    return '/_network ' + json.dumps(self['networkConfig'])
+
+APISetNetworkConfig_Response = CR.CmdOk | CR.ChatCmdError
+
+
+# Get user servers and chat relays, grouped by operator.
+# Network usage: no.
+class APIGetUserServers(TypedDict):
+    userId: int  # int64
+
+
+def APIGetUserServers_cmd_string(self: APIGetUserServers) -> str:
+    return '/_servers ' + str(self['userId'])
+
+APIGetUserServers_Response = CR.UserServers | CR.ChatCmdError
+
+
+# Remote control commands
+# Allows a bot to accept an incoming remote control session from a SimpleX Desktop client, giving the desktop live access to the bot's SimpleX instance.
+
+# Connect to a remote controller using an OOB invitation link.
+# Network usage: interactive.
+class ConnectRemoteCtrl(TypedDict):
+    remoteInvitation: str
+
+
+def ConnectRemoteCtrl_cmd_string(self: ConnectRemoteCtrl) -> str:
+    return '/crc ' + self['remoteInvitation']
+
+ConnectRemoteCtrl_Response = CR.RemoteCtrlConnecting | CR.ChatCmdError
+
+
+# Verify the remote controller session code to complete the connection.
+# Network usage: no.
+class VerifyRemoteCtrlSession(TypedDict):
+    sessionCode: str
+
+
+def VerifyRemoteCtrlSession_cmd_string(self: VerifyRemoteCtrlSession) -> str:
+    return '/verify remote ctrl ' + self['sessionCode']
+
+VerifyRemoteCtrlSession_Response = CR.RemoteCtrlConnected | CR.ChatCmdError
 

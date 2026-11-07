@@ -154,7 +154,35 @@ import Simplex.Chat.Store.SQLite.Migrations.M20260403_item_viewed
 import Simplex.Chat.Store.SQLite.Migrations.M20260429_relay_request_retries
 import Simplex.Chat.Store.SQLite.Migrations.M20260507_relay_inactive_at
 import Simplex.Chat.Store.SQLite.Migrations.M20260514_relay_request_group_link_index
-import Simplex.Chat.Store.SQLite.Migrations.M20260515_delivery_job_senders
+import Simplex.Chat.Store.SQLite.Migrations.M20260515_public_group_access
+import Simplex.Chat.Store.SQLite.Migrations.M20260516_supporter_badges
+import Simplex.Chat.Store.SQLite.Migrations.M20260529_delivery_job_senders
+import Simplex.Chat.Store.SQLite.Migrations.M20260530_client_services
+import Simplex.Chat.Store.SQLite.Migrations.M20260531_member_removed_at
+import Simplex.Chat.Store.SQLite.Migrations.M20260601_relay_sent_web_domain
+import Simplex.Chat.Store.SQLite.Migrations.M20260602_group_roster
+import Simplex.Chat.Store.SQLite.Migrations.M20260603_simplex_name
+import Simplex.Chat.Store.SQLite.Migrations.M20260629_roster_catchup
+import Simplex.Chat.Store.SQLite.Migrations.M20260707_file_digest
+import Simplex.Chat.Store.SQLite.Migrations.M20260714_member_security_code
+import Simplex.Chat.Store.SQLite.Migrations.M20260715_profile_description
+import Simplex.Chat.Store.SQLite.Migrations.M20260716_signed_history
+import Simplex.Chat.Store.SQLite.Migrations.M20260720_server_roles
+import Simplex.Chat.Store.SQLite.Migrations.M20260723_contact_request_rejection
+import Simplex.Chat.Store.SQLite.Migrations.M20260813_auto_accept_group_invitations
+import Simplex.Chat.Store.SQLite.Migrations.M20260822_forward_link
+import Simplex.Chat.Store.SQLite.Migrations.M20260828_file_expiry
+import Simplex.Chat.Store.SQLite.Migrations.M20260904_file_badges
+import Simplex.Chat.Store.SQLite.Migrations.M20260915_user_badges
+import Simplex.Chat.Store.SQLite.Migrations.M20260918_badge_issue_errors
+import Simplex.Chat.Store.SQLite.Migrations.M20260923_preferences_json
+import Simplex.Chat.Store.SQLite.Migrations.M20260925_badge_bindings
+import Simplex.Chat.Store.SQLite.Migrations.M20261010_invite_member_via_group
+import Simplex.Chat.Store.SQLite.Migrations.M20261012_delivery_job_notification
+import Simplex.Chat.Store.SQLite.Migrations.M20261016_badge_store_receipts
+import Simplex.Chat.Store.SQLite.Migrations.M20261018_autoincrement_ids
+import Simplex.Chat.Store.SQLite.Migrations.M20261019_chat_layout
+import Simplex.Chat.Store.SQLite.Migrations.M20261021_badge_subscriptions
 import Simplex.Messaging.Agent.Store.Shared (Migration (..))
 
 schemaMigrations :: [(String, Query, Maybe Query)]
@@ -309,7 +337,35 @@ schemaMigrations =
     ("20260429_relay_request_retries", m20260429_relay_request_retries, Just down_m20260429_relay_request_retries),
     ("20260507_relay_inactive_at", m20260507_relay_inactive_at, Just down_m20260507_relay_inactive_at),
     ("20260514_relay_request_group_link_index", m20260514_relay_request_group_link_index, Just down_m20260514_relay_request_group_link_index),
-    ("20260515_delivery_job_senders", m20260515_delivery_job_senders, Just down_m20260515_delivery_job_senders)
+    ("20260515_public_group_access", m20260515_public_group_access, Just down_m20260515_public_group_access),
+    ("20260516_supporter_badges", m20260516_supporter_badges, Just down_m20260516_supporter_badges),
+    ("20260529_delivery_job_senders", m20260529_delivery_job_senders, Just down_m20260529_delivery_job_senders),
+    ("20260530_client_services", m20260530_client_services, Just down_m20260530_client_services),
+    ("20260531_member_removed_at", m20260531_member_removed_at, Just down_m20260531_member_removed_at),
+    ("20260601_relay_sent_web_domain", m20260601_relay_sent_web_domain, Just down_m20260601_relay_sent_web_domain),
+    ("20260602_group_roster", m20260602_group_roster, Just down_m20260602_group_roster),
+    ("20260603_simplex_name", m20260603_simplex_name, Just down_m20260603_simplex_name),
+    ("20260629_roster_catchup", m20260629_roster_catchup, Just down_m20260629_roster_catchup),
+    ("20260707_file_digest", m20260707_file_digest, Just down_m20260707_file_digest),
+    ("20260714_member_security_code", m20260714_member_security_code, Just down_m20260714_member_security_code),
+    ("20260715_profile_description", m20260715_profile_description, Just down_m20260715_profile_description),
+    ("20260716_signed_history", m20260716_signed_history, Just down_m20260716_signed_history),
+    ("20260720_server_roles", m20260720_server_roles, Just down_m20260720_server_roles),
+    ("20260723_contact_request_rejection", m20260723_contact_request_rejection, Just down_m20260723_contact_request_rejection),
+    ("20260813_auto_accept_group_invitations", m20260813_auto_accept_group_invitations, Just down_m20260813_auto_accept_group_invitations),
+    ("20260822_forward_link", m20260822_forward_link, Just down_m20260822_forward_link),
+    ("20260828_file_expiry", m20260828_file_expiry, Just down_m20260828_file_expiry),
+    ("20260904_file_badges", m20260904_file_badges, Just down_m20260904_file_badges),
+    ("20260915_user_badges", m20260915_user_badges, Just down_m20260915_user_badges),
+    ("20260918_badge_issue_errors", m20260918_badge_issue_errors, Just down_m20260918_badge_issue_errors),
+    ("20260923_preferences_json", m20260923_preferences_json, Just down_m20260923_preferences_json),
+    ("20260925_badge_bindings", m20260925_badge_bindings, Just down_m20260925_badge_bindings),
+    ("20261010_invite_member_via_group", m20261010_invite_member_via_group, Just down_m20261010_invite_member_via_group),
+    ("20261012_delivery_job_notification", m20261012_delivery_job_notification, Just down_m20261012_delivery_job_notification),
+    ("20261016_badge_store_receipts", m20261016_badge_store_receipts, Just down_m20261016_badge_store_receipts),
+    ("20261018_autoincrement_ids", m20261018_autoincrement_ids, Just down_m20261018_autoincrement_ids),
+    ("20261019_chat_layout", m20261019_chat_layout, Just down_m20261019_chat_layout),
+    ("20261021_badge_subscriptions", m20261021_badge_subscriptions, Just down_m20261021_badge_subscriptions)
   ]
 
 -- | The list of migrations in ascending order by date

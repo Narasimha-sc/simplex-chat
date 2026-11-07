@@ -33,8 +33,38 @@ from .types import T
 
 @dataclass(slots=True)
 class BotCommand:
+    """One entry in the bot's advertised slash-command list (wire-side
+    `groupPreferences.commands` or profile `preferences.commands`).
+
+    `keyword` and `label` are required: `keyword` is what the user
+    types after `/`; `label` is the human-readable description shown
+    next to the keyword in the SimpleX client's commands menu.
+
+    `params` is an optional placeholder string that controls how the
+    client behaves when the user taps the command in the menu:
+
+      * `params=None` (default) — the client SENDS `/<keyword>`
+        immediately on tap; no input-box detour. Use this for
+        zero-argument commands (`/help`, `/ping`) where the action is
+        unambiguous.
+
+      * `params="<value>"` — the client PASTES `/<keyword> <params>`
+        into the input box and positions the cursor at the end. The
+        user edits the placeholder and sends. Use this for commands
+        that take a required argument (`/review <pr-url>`,
+        `/order <number>`) so the user sees the expected shape
+        without having to remember it.
+
+    Mirrors `CBCCommand` in the Haskell core
+    (`Simplex.Chat.Types.Preferences`) and the wire TypedDict
+    `ChatBotCommand_command`. Both SimpleX clients (Android/Kotlin
+    and iOS/Swift) implement the paste-vs-send branch on the
+    `params` field; see `CommandsMenuView.{kt,swift}` for the
+    reference UI behaviour.
+    """
     keyword: str
     label: str
+    params: str | None = None
 
 
 class Bot(Client):
@@ -60,11 +90,13 @@ class Bot(Client):
         welcome: str | T.MsgContent | None = None,
         commands: list[BotCommand] | None = None,
         confirm_migrations: MigrationConfirmation = MigrationConfirmation.YES_UP,
+        queue_size: int | None = None,
         create_address: bool = True,
         update_address: bool = True,
         update_profile: bool = True,
         auto_accept: bool = True,
         business_address: bool = False,
+        chat_layout: T.ChatLayout | None = None,
         allow_files: bool = False,
         log_contacts: bool = True,
         log_network: bool = False,
@@ -73,6 +105,7 @@ class Bot(Client):
             profile=profile,
             db=db,
             confirm_migrations=confirm_migrations,
+            queue_size=queue_size,
             update_profile=update_profile,
             log_contacts=log_contacts,
             log_network=log_network,
@@ -83,6 +116,7 @@ class Bot(Client):
         self._update_address = update_address
         self._auto_accept = auto_accept
         self._business_address = business_address
+        self._chat_layout = chat_layout
         self._allow_files = allow_files
 
     # ------------------------------------------------------------------ #
@@ -91,8 +125,8 @@ class Bot(Client):
 
     async def _post_start(self, user: T.User) -> None:
         """Bots sync address first, then embed the link in the profile."""
-        link = await self._sync_address(user)
-        await self._maybe_sync_profile(user, contact_link=link)
+        self._contact_link = await self._sync_address(user)
+        await self._maybe_sync_profile(user)
 
     async def _sync_address(self, user: T.User) -> str | None:
         """Address sync. Returns the public link if any, for embedding in the profile."""
@@ -121,6 +155,8 @@ class Bot(Client):
             desired: T.AddressSettings = {"businessAddress": self._business_address}
             if self._auto_accept:
                 desired["autoAccept"] = {"acceptIncognito": False}
+            if self._chat_layout is not None:
+                desired["chatLayout"] = self._chat_layout
             if self._welcome is not None:
                 desired["autoReply"] = (
                     {"type": "text", "text": self._welcome}
@@ -145,10 +181,24 @@ class Bot(Client):
             "files": {"allow": "yes" if self._allow_files else "no"},
         }
         if self._commands:
-            prefs["commands"] = [
-                {"type": "command", "keyword": c.keyword, "label": c.label}
-                for c in self._commands
-            ]
+            cmds: list[T.ChatBotCommand] = []
+            for c in self._commands:
+                entry: T.ChatBotCommand_command = {
+                    "type": "command",
+                    "keyword": c.keyword,
+                    "label": c.label,
+                }
+                # `params` is `NotRequired[str]` on the wire; omit the
+                # key entirely when None so the Haskell parser sees
+                # `Nothing` rather than `Just ""`. The two have
+                # different client semantics: `Nothing` (`params=None`)
+                # triggers an immediate send on tap; `Just ""` would
+                # paste `/<keyword> ` (with a trailing space) into the
+                # input box, which is rarely what the operator wants.
+                if c.params is not None:
+                    entry["params"] = c.params
+                cmds.append(entry)
+            prefs["commands"] = cmds
         p["preferences"] = prefs
         p["peerType"] = "bot"
         return p

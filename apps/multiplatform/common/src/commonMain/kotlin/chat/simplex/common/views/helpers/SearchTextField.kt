@@ -23,7 +23,7 @@ import androidx.compose.ui.text.input.*
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.*
 import chat.simplex.common.platform.*
-import chat.simplex.res.MR
+import chat.simplex.res.*
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
@@ -36,7 +36,7 @@ fun SearchTextField(
   placeholder: String = stringResource(MR.strings.search_verb),
   enabled: Boolean = true,
   trailingContent: @Composable (() -> Unit)? = null,
-  reducedCloseButtonPadding: Dp = 0.dp,
+  reducedCloseButtonPadding: Dp = 8.dp,
   onValueChange: (String) -> Unit
 ) {
   val focusRequester = remember { FocusRequester() }
@@ -116,7 +116,7 @@ fun SearchTextField(
         trailingIcon = if (searchText.value.text.isNotEmpty() || trailingContent != null) {{
           Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.offset(x = 8.dp)
+            modifier = Modifier.offset(x = reducedCloseButtonPadding)
           ) {
             if (searchText.value.text.isNotEmpty()) {
               IconButton({

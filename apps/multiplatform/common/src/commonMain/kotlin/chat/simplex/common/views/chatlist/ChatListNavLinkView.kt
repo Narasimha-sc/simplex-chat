@@ -25,12 +25,12 @@ import chat.simplex.common.ui.theme.*
 import chat.simplex.common.views.chat.*
 import chat.simplex.common.views.chat.group.*
 import chat.simplex.common.views.chat.item.ItemAction
+import chat.simplex.common.views.chat.item.previewDate
 import chat.simplex.common.views.contacts.onRequestAccepted
 import chat.simplex.common.views.helpers.*
 import chat.simplex.common.views.newchat.*
-import chat.simplex.res.MR
+import chat.simplex.res.*
 import kotlinx.coroutines.*
-import kotlinx.datetime.Clock
 
 // Spec: spec/client/chat-list.md#ChatListNavLinkView
 @Composable
@@ -254,9 +254,9 @@ suspend fun apiFindMessages(chatsCtx: ChatModel.ChatsContext, ch: Chat, contentT
 suspend fun setGroupMembers(rhId: Long?, groupInfo: GroupInfo, chatModel: ChatModel) = coroutineScope {
   // groupMembers loading can take a long time and if the user already closed the screen, coroutine may be canceled
   val groupMembers = chatModel.controller.apiListMembers(rhId, groupInfo.groupId)
-  val currentMembers = chatModel.groupMembers.value
+  val currentMembersById = chatModel.groupMembers.value.associateBy { it.id }
   val newMembers = groupMembers.map { newMember ->
-    val currentMember = currentMembers.find { it.id == newMember.id }
+    val currentMember = currentMembersById[newMember.id]
     val currentMemberStats = currentMember?.activeConn?.connectionStats
     val newMemberConn = newMember.activeConn
     if (currentMemberStats != null && newMemberConn != null && newMemberConn.connectionStats == null) {
@@ -265,10 +265,13 @@ suspend fun setGroupMembers(rhId: Long?, groupInfo: GroupInfo, chatModel: ChatMo
       newMember
     }
   }
-  chatModel.groupMembersIndexes.value = emptyMap()
-  chatModel.groupMembers.value = newMembers
-  chatModel.membersLoaded.value = true
-  chatModel.populateGroupMembersIndexes()
+  withContext(Dispatchers.Main) {
+    if (chatModel.chatId.value != groupInfo.id) return@withContext
+    chatModel.groupMembersIndexes.value = emptyMap()
+    chatModel.groupMembers.value = newMembers
+    chatModel.membersLoaded.value = true
+    chatModel.populateGroupMembersIndexes()
+  }
 }
 
 @Composable
@@ -583,7 +586,7 @@ fun ContactConnectionMenuItems(rhId: Long?, chatInfo: ChatInfo.ContactConnection
     onClick = {
       ModalManager.center.closeModals()
       ModalManager.end.closeModals()
-      ModalManager.center.showModalCloseable(settings = true, showClose = appPlatform.isAndroid, cardScreen = true) { close ->
+      ModalManager.center.showModalCloseable(settings = true, cardScreen = true) { close ->
         ContactConnectionInfoView(chatModel, rhId, chatInfo.contactConnection.connLinkInv, chatInfo.contactConnection, true, close)
       }
       showMenu.value = false
@@ -772,10 +775,11 @@ fun rejectContactRequest(rhId: Long?, contactRequestId: Long, chatModel: ChatMod
 fun deleteContactConnectionAlert(rhId: Long?, connection: PendingContactConnection, chatModel: ChatModel, onSuccess: () -> Unit) {
   AlertManager.shared.showAlertDialog(
     title = generalGetString(MR.strings.delete_pending_connection__question),
-    text = generalGetString(
+    text = "${connection.displayName}\n\n" + generalGetString(
       if (connection.initiated) MR.strings.contact_you_shared_link_with_wont_be_able_to_connect
       else MR.strings.connection_you_accepted_will_be_cancelled
     ),
+    parseHtml = false,
     confirmText = generalGetString(MR.strings.delete_verb),
     onConfirm = {
       withBGApi {
@@ -945,9 +949,9 @@ fun groupInvitationAcceptedAlert(rhId: Long?) {
   )
 }
 
-fun toggleNotifications(remoteHostId: Long?, chatInfo: ChatInfo, filter: MsgFilter, chatModel: ChatModel, currentState: MutableState<MsgFilter>? = null) {
+fun toggleNotifications(remoteHostId: Long?, chatInfo: ChatInfo, filter: MsgFilter, chatModel: ChatModel) {
   val chatSettings = (chatInfo.chatSettings ?: ChatSettings.defaults).copy(enableNtfs = filter)
-  updateChatSettings(remoteHostId, chatInfo, chatSettings, chatModel, currentState)
+  updateChatSettings(remoteHostId, chatInfo, chatSettings, chatModel)
 }
 
 fun toggleChatFavorite(remoteHostId: Long?, chatInfo: ChatInfo, favorite: Boolean, chatModel: ChatModel) {
@@ -955,7 +959,7 @@ fun toggleChatFavorite(remoteHostId: Long?, chatInfo: ChatInfo, favorite: Boolea
   updateChatSettings(remoteHostId, chatInfo, chatSettings, chatModel)
 }
 
-fun updateChatSettings(remoteHostId: Long?, chatInfo: ChatInfo, chatSettings: ChatSettings, chatModel: ChatModel, currentState: MutableState<MsgFilter>? = null) {
+fun updateChatSettings(remoteHostId: Long?, chatInfo: ChatInfo, chatSettings: ChatSettings, chatModel: ChatModel) {
   val newChatInfo = when(chatInfo) {
     is ChatInfo.Direct -> with (chatInfo) {
       ChatInfo.Direct(contact.copy(chatSettings = chatSettings))
@@ -991,10 +995,6 @@ fun updateChatSettings(remoteHostId: Long?, chatInfo: ChatInfo, chatSettings: Ch
         withContext(Dispatchers.Main) {
           chatModel.chatsContext.updateChatTagReadInPrimaryContext(updatedChat, wasUnread)
         }
-      }
-      val current = currentState?.value
-      if (current != null) {
-        currentState.value = chatSettings.enableNtfs
       }
     }
   }
@@ -1048,7 +1048,7 @@ fun PreviewChatListNavLinkDirect() {
               ChatItem.getSampleData(
                 1,
                 CIDirection.DirectSnd(),
-                Clock.System.now(),
+                previewDate,
                 "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat."
               )
             ),
@@ -1093,7 +1093,7 @@ fun PreviewChatListNavLinkGroup() {
               ChatItem.getSampleData(
                 1,
                 CIDirection.DirectSnd(),
-                Clock.System.now(),
+                previewDate,
                 "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat."
               )
             ),
@@ -1130,7 +1130,7 @@ fun PreviewChatListNavLinkContactRequest() {
   SimpleXTheme {
     ChatListNavLinkLayout(
       chatLinkPreview = {
-        ContactRequestView(ChatInfo.ContactRequest.sampleData)
+        ContactRequestView(ChatInfo.ContactRequest(UserContactRequest.sampleData.run { UserContactRequest(contactRequestId, cReqChatVRange, localDisplayName, profile, createdAt = previewDate, updatedAt = previewDate) }))
       },
       click = {},
       dropdownMenuItems = null,

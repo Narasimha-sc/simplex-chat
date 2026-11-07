@@ -12,13 +12,14 @@ import {CR} from "./responses"
 // Network usage: interactive.
 export interface APICreateMyAddress {
   userId: number // int64
+  pqRatchet?: boolean
 }
 
 export namespace APICreateMyAddress {
   export type Response = CR.UserContactLinkCreated | CR.ChatCmdError
 
   export function cmdString(self: APICreateMyAddress): string {
-    return '/_address ' + self.userId
+    return '/_address ' + self.userId + (typeof self.pqRatchet == 'boolean' ? ' pq_ratchet=' + (self.pqRatchet ? 'on' : 'off') : '')
   }
 }
 
@@ -58,10 +59,25 @@ export interface APISetProfileAddress {
 }
 
 export namespace APISetProfileAddress {
-  export type Response = CR.UserProfileUpdated | CR.ChatCmdError
+  export type Response = CR.UserProfileUpdated | CR.UserProfileNoChange | CR.ChatCmdError
 
   export function cmdString(self: APISetProfileAddress): string {
     return '/_profile_address ' + self.userId + ' ' + (self.enable ? 'on' : 'off')
+  }
+}
+
+// Set or remove SimpleX name of bot address. The name must be registered with the address short link.
+// Network usage: interactive.
+export interface APISetUserDomain {
+  userId: number // int64
+  simplexDomain?: string
+}
+
+export namespace APISetUserDomain {
+  export type Response = CR.UserProfileUpdated | CR.UserProfileNoChange | CR.ChatCmdError
+
+  export function cmdString(self: APISetUserDomain): string {
+    return '/_set domain ' + self.userId + (self.simplexDomain ? ' ' + self.simplexDomain : '')
   }
 }
 
@@ -69,6 +85,7 @@ export namespace APISetProfileAddress {
 // Network usage: interactive.
 export interface APISetAddressSettings {
   userId: number // int64
+  pqRatchet?: boolean
   settings: T.AddressSettings
 }
 
@@ -76,7 +93,7 @@ export namespace APISetAddressSettings {
   export type Response = CR.UserContactLinkUpdated | CR.ChatCmdError
 
   export function cmdString(self: APISetAddressSettings): string {
-    return '/_address_settings ' + self.userId + ' ' + JSON.stringify(self.settings)
+    return '/_address_settings ' + self.userId + (typeof self.pqRatchet == 'boolean' ? ' pq_ratchet=' + (self.pqRatchet ? 'on' : 'off') : '') + ' ' + JSON.stringify(self.settings)
   }
 }
 
@@ -89,6 +106,7 @@ export interface APISendMessages {
   sendRef: T.ChatRef
   liveMessage: boolean
   ttl?: number // int
+  signMessages: boolean
   composedMessages: T.ComposedMessage[] // non-empty
 }
 
@@ -96,7 +114,7 @@ export namespace APISendMessages {
   export type Response = CR.NewChatItems | CR.ChatCmdError
 
   export function cmdString(self: APISendMessages): string {
-    return '/_send ' + T.ChatRef.cmdString(self.sendRef) + (self.liveMessage ? ' live=on' : '') + (self.ttl ? ' ttl=' + self.ttl : '') + ' json ' + JSON.stringify(self.composedMessages)
+    return '/_send ' + T.ChatRef.cmdString(self.sendRef) + (self.liveMessage ? ' live=on' : '') + (self.ttl ? ' ttl=' + self.ttl : '') + (self.signMessages ? ' sign=on' : '') + ' json ' + JSON.stringify(self.composedMessages)
   }
 }
 
@@ -165,6 +183,35 @@ export namespace APIChatItemReaction {
   }
 }
 
+// Share user address card
+// Network usage: no.
+export interface APIShareMyAddress {
+  toSendRef: T.ChatRef
+}
+
+export namespace APIShareMyAddress {
+  export type Response = CR.ChatMsgContent
+
+  export function cmdString(self: APIShareMyAddress): string {
+    return '/_share address ' + T.ChatRef.cmdString(self.toSendRef)
+  }
+}
+
+// Share channel address
+// Network usage: no.
+export interface APIShareChatMsgContent {
+  shareChatRef: T.ChatRef
+  toSendRef: T.ChatRef
+}
+
+export namespace APIShareChatMsgContent {
+  export type Response = CR.ChatMsgContent
+
+  export function cmdString(self: APIShareChatMsgContent): string {
+    return '/_share chat content ' + T.ChatRef.cmdString(self.shareChatRef) + ' ' + T.ChatRef.cmdString(self.toSendRef)
+  }
+}
+
 // File commands
 // Commands to receive and to cancel files. Files are sent as part of the message, there are no separate commands to send files.
 
@@ -216,6 +263,23 @@ export namespace APIAddMember {
 
   export function cmdString(self: APIAddMember): string {
     return '/_add #' + self.groupId + ' ' + self.contactId + ' ' + self.memberRole
+  }
+}
+
+// Add member of another group to group. Requires bot to have Admin role in the group, and direct messages allowed for its role in another group.
+// Network usage: interactive.
+export interface APIAddMemberViaGroup {
+  groupId: number // int64
+  viaGroupId: number // int64
+  groupMemberId: number // int64
+  memberRole: T.GroupMemberRole
+}
+
+export namespace APIAddMemberViaGroup {
+  export type Response = CR.SentGroupInvitationViaGroup | CR.ChatCmdError
+
+  export function cmdString(self: APIAddMemberViaGroup): string {
+    return '/_add #' + self.groupId + ' #' + self.viaGroupId + ' ' + self.groupMemberId + ' ' + self.memberRole
   }
 }
 
@@ -325,6 +389,36 @@ export namespace APIListMembers {
   }
 }
 
+// Create a direct message contact with a group member.
+// Network usage: interactive.
+export interface APICreateMemberContact {
+  groupId: number // int64
+  groupMemberId: number // int64
+}
+
+export namespace APICreateMemberContact {
+  export type Response = CR.NewMemberContact | CR.ChatCmdError
+
+  export function cmdString(self: APICreateMemberContact): string {
+    return '/_create member contact #' + self.groupId + ' ' + self.groupMemberId
+  }
+}
+
+// Send a direct message invitation to a group member contact.
+// Network usage: background.
+export interface APISendMemberContactInvitation {
+  contactId: number // int64
+  msgContent_?: T.MsgContent
+}
+
+export namespace APISendMemberContactInvitation {
+  export type Response = CR.NewMemberContactSentInv | CR.ChatCmdError
+
+  export function cmdString(self: APISendMemberContactInvitation): string {
+    return '/_invite member contact @' + self.contactId + (self.msgContent_ ? ' json ' + JSON.stringify(self.msgContent_) : '')
+  }
+}
+
 // Create group.
 // Network usage: no.
 export interface APINewGroup {
@@ -416,6 +510,20 @@ export namespace APIUpdateGroupProfile {
   }
 }
 
+// Verify group domain
+// Network usage: interactive.
+export interface APIVerifyGroupDomain {
+  groupId: number // int64
+}
+
+export namespace APIVerifyGroupDomain {
+  export type Response = CR.GroupDomainVerified
+
+  export function cmdString(self: APIVerifyGroupDomain): string {
+    return '/_verify domain #' + self.groupId
+  }
+}
+
 // Group link commands
 // These commands can be used by bots that manage multiple public groups
 
@@ -495,12 +603,12 @@ export namespace APIAddContact {
   }
 }
 
-// Determine SimpleX link type and if the bot is already connected via this link.
+// Determine SimpleX link type and if the bot is already connected via this link or name.
 // Network usage: interactive.
 export interface APIConnectPlan {
   userId: number // int64
-  connectionLink?: string
-  resolveKnown: boolean
+  connectTarget?: string
+  resolveMode: T.PlanResolveMode
   linkOwnerSig?: T.LinkOwnerSig
 }
 
@@ -508,7 +616,7 @@ export namespace APIConnectPlan {
   export type Response = CR.ConnectionPlan | CR.ChatCmdError
 
   export function cmdString(self: APIConnectPlan): string {
-    return '/_connect plan ' + self.userId + ' ' + self.connectionLink
+    return '/_connect plan ' + self.userId + ' ' + self.connectTarget + T.PlanResolveMode.cmdString(self.resolveMode) + (self.linkOwnerSig ? ' sig=' + JSON.stringify(self.linkOwnerSig) : '')
   }
 }
 
@@ -524,22 +632,114 @@ export namespace APIConnect {
   export type Response = CR.SentConfirmation | CR.ContactAlreadyExists | CR.SentInvitation | CR.ChatCmdError
 
   export function cmdString(self: APIConnect): string {
-    return '/_connect ' + self.userId + (self.preparedLink_ ? ' ' + T.CreatedConnLink.cmdString(self.preparedLink_) : '')
+    return '/_connect ' + self.userId + (self.incognito ? ' incognito=on' : '') + (self.preparedLink_ ? ' ' + T.CreatedConnLink.cmdString(self.preparedLink_) : '')
   }
 }
 
-// Connect via SimpleX link as string in the active user profile.
+// Connect via SimpleX link or name as string in the active user profile.
 // Network usage: interactive.
 export interface Connect {
   incognito: boolean
-  connLink_?: string
+  connTarget_?: string
 }
 
 export namespace Connect {
-  export type Response = CR.SentConfirmation | CR.ContactAlreadyExists | CR.SentInvitation | CR.ChatCmdError
+  export type Response = 
+    | CR.SentConfirmation
+    | CR.ContactAlreadyExists
+    | CR.SentInvitation
+    | CR.ConnectionPlan
+    | CR.SentInvitationToContact
+    | CR.StartedConnectionToContact
+    | CR.StartedConnectionToGroup
+    | CR.ChatCmdError
 
   export function cmdString(self: Connect): string {
-    return '/connect' + (self.connLink_ ? ' ' + self.connLink_ : '')
+    return '/connect' + (self.connTarget_ ? ' ' + self.connTarget_ : '')
+  }
+}
+
+// Prepare contact chat from link data before connecting.
+// Network usage: no.
+export interface APIPrepareContact {
+  userId: number // int64
+  connLink: T.CreatedConnLink
+  verifiedDomain?: string
+  contactSLinkData: T.ContactShortLinkData
+}
+
+export namespace APIPrepareContact {
+  export type Response = CR.NewPreparedChat | CR.ChatCmdError
+
+  export function cmdString(self: APIPrepareContact): string {
+    return '/_prepare contact ' + self.userId + ' ' + T.CreatedConnLink.cmdString(self.connLink) + (self.verifiedDomain ? ' domain=' + self.verifiedDomain : '') + ' ' + JSON.stringify(self.contactSLinkData)
+  }
+}
+
+// Prepare group chat from link data before connecting.
+// Network usage: no.
+export interface APIPrepareGroup {
+  userId: number // int64
+  connLinkContact: T.CreatedConnLink
+  direct: boolean
+  verifiedDomain?: string
+  groupSLinkData: T.GroupShortLinkData
+}
+
+export namespace APIPrepareGroup {
+  export type Response = CR.NewPreparedChat | CR.ChatCmdError
+
+  export function cmdString(self: APIPrepareGroup): string {
+    return '/_prepare group ' + self.userId + ' ' + T.CreatedConnLink.cmdString(self.connLinkContact) + (!self.direct ? ' direct=off' : '') + (self.verifiedDomain ? ' domain=' + self.verifiedDomain : '') + ' ' + JSON.stringify(self.groupSLinkData)
+  }
+}
+
+// Connect to prepared contact.
+// Network usage: interactive.
+export interface APIConnectPreparedContact {
+  contactId: number // int64
+  incognito: boolean
+  msgContent_?: T.MsgContent
+}
+
+export namespace APIConnectPreparedContact {
+  export type Response = CR.StartedConnectionToContact | CR.ContactAlreadyExists | CR.ChatCmdError
+
+  export function cmdString(self: APIConnectPreparedContact): string {
+    return '/_connect contact @' + self.contactId + (self.incognito ? ' incognito=on' : '') + (self.msgContent_ ? ' json ' + JSON.stringify(self.msgContent_) : '')
+  }
+}
+
+// Connect to prepared group.
+// Network usage: interactive.
+export interface APIConnectPreparedGroup {
+  groupId: number // int64
+  incognito: boolean
+  ownerContact?: T.GroupOwnerContact
+  msgContent_?: T.MsgContent
+}
+
+export namespace APIConnectPreparedGroup {
+  export type Response = CR.StartedConnectionToGroup | CR.ChatCmdError
+
+  export function cmdString(self: APIConnectPreparedGroup): string {
+    return '/_connect group #' + self.groupId + (self.incognito ? ' incognito=on' : '') + (self.ownerContact ? ' ' + T.GroupOwnerContact.cmdString(self.ownerContact) : '') + (self.msgContent_ ? ' json ' + JSON.stringify(self.msgContent_) : '')
+  }
+}
+
+// Connect to existing contact via address in its profile.
+// Network usage: interactive.
+export interface APIConnectContactViaAddress {
+  userId: number // int64
+  incognito: boolean
+  contactId: number // int64
+}
+
+export namespace APIConnectContactViaAddress {
+  export type Response = CR.SentInvitationToContact | CR.ChatCmdError
+
+  export function cmdString(self: APIConnectContactViaAddress): string {
+    return '/_connect contact ' + self.userId + (self.incognito ? ' incognito=on' : '') + ' ' + self.contactId
   }
 }
 
@@ -561,6 +761,7 @@ export namespace APIAcceptContact {
 // Network usage: no.
 export interface APIRejectContact {
   contactReqId: number // int64
+  notify: boolean
 }
 
 export namespace APIRejectContact {
@@ -609,7 +810,7 @@ export namespace APIListGroups {
 export interface APIGetChats {
   userId: number // int64
   pendingConnections: boolean
-  pagination: T.PaginationByTime
+  pagination?: T.PaginationByTime
   query: T.ChatListQuery
 }
 
@@ -617,7 +818,68 @@ export namespace APIGetChats {
   export type Response = CR.ApiChats | CR.ChatCmdError
 
   export function cmdString(self: APIGetChats): string {
-    return '/_get chats ' + self.userId + (self.pendingConnections ? ' pcc=on' : '') + ' ' + T.PaginationByTime.cmdString(self.pagination) + ' ' + JSON.stringify(self.query)
+    return '/_get chats ' + self.userId + (self.pendingConnections ? ' pcc=on' : '') + (self.pagination ? ' ' + T.PaginationByTime.cmdString(self.pagination) : '') + ' ' + JSON.stringify(self.query)
+  }
+}
+
+// Get chat messages.
+// Network usage: no.
+export interface APIGetChat {
+  chatRef: T.ChatRef
+  contentTag?: T.MsgContentTag
+  chatPagination: T.ChatPagination
+  search?: string
+}
+
+export namespace APIGetChat {
+  export type Response = CR.ApiChat | CR.ChatCmdError
+
+  export function cmdString(self: APIGetChat): string {
+    return '/_get chat ' + T.ChatRef.cmdString(self.chatRef) + (self.contentTag ? ' content=' + self.contentTag : '') + ' ' + T.ChatPagination.cmdString(self.chatPagination) + (self.search ? ' search=' + self.search : '')
+  }
+}
+
+// Mark messages as read.
+// Network usage: no.
+export interface APIChatItemsRead {
+  chatRef: T.ChatRef
+  chatItemIds: number[] // int64, non-empty
+}
+
+export namespace APIChatItemsRead {
+  export type Response = CR.ItemsReadForChat | CR.ChatCmdError
+
+  export function cmdString(self: APIChatItemsRead): string {
+    return '/_read chat items ' + T.ChatRef.cmdString(self.chatRef) + ' ' + self.chatItemIds.join(',')
+  }
+}
+
+// Get contact information.
+// Network usage: no.
+export interface APIContactInfo {
+  contactId: number // int64
+}
+
+export namespace APIContactInfo {
+  export type Response = CR.ContactInfo | CR.ChatCmdError
+
+  export function cmdString(self: APIContactInfo): string {
+    return '/_info @' + self.contactId
+  }
+}
+
+// Get message information.
+// Network usage: no.
+export interface APIGetChatItemInfo {
+  chatRef: T.ChatRef
+  chatItemId: number // int64
+}
+
+export namespace APIGetChatItemInfo {
+  export type Response = CR.ChatItemInfo | CR.ChatCmdError
+
+  export function cmdString(self: APIGetChatItemInfo): string {
+    return '/_get item info ' + T.ChatRef.cmdString(self.chatRef) + ' ' + self.chatItemId
   }
 }
 
@@ -678,6 +940,21 @@ export namespace APISetUserAutoAcceptMemberContacts {
 
   export function cmdString(self: APISetUserAutoAcceptMemberContacts): string {
     return '/_set accept member contacts ' + self.userId + ' ' + (self.onOff ? 'on' : 'off')
+  }
+}
+
+// Set auto-accept group invitations.
+// Network usage: no.
+export interface APISetUserAutoAcceptGroupInvitations {
+  userId: number // int64
+  onOff: boolean
+}
+
+export namespace APISetUserAutoAcceptGroupInvitations {
+  export type Response = CR.CmdOk | CR.ChatCmdError
+
+  export function cmdString(self: APISetUserAutoAcceptGroupInvitations): string {
+    return '/_set accept group invitations ' + self.userId + ' ' + (self.onOff ? 'on' : 'off')
   }
 }
 
@@ -785,6 +1062,25 @@ export namespace APISetContactPrefs {
   }
 }
 
+// Service commands
+// Bots with a double ratchet address can answer service requests.
+
+// Send a reply to a received service request. Returns the connection ID that correlates the reply delivery event.
+// Network usage: background.
+export interface APISendServiceResponse {
+  userId: number // int64
+  requestId: string
+  responseData: object
+}
+
+export namespace APISendServiceResponse {
+  export type Response = CR.ServiceReplyAccepted | CR.ChatCmdError
+
+  export function cmdString(self: APISendServiceResponse): string {
+    return '/_service_response ' + self.userId + ' ' + self.requestId + ' ' + JSON.stringify(self.responseData)
+  }
+}
+
 // Chat management
 // These commands should not be used with CLI-based bots
 
@@ -793,13 +1089,14 @@ export namespace APISetContactPrefs {
 export interface StartChat {
   mainApp: boolean
   enableSndFiles: boolean
+  serviceRequests: boolean
 }
 
 export namespace StartChat {
   export type Response = CR.ChatStarted | CR.ChatRunning
 
-  export function cmdString(_self: StartChat): string {
-    return '/_start'
+  export function cmdString(self: StartChat): string {
+    return '/_start main=' + (self.mainApp ? 'on' : 'off') + (!self.enableSndFiles ? ' snd_files=off' : '') + (self.serviceRequests ? ' service_requests=on' : '')
   }
 }
 
@@ -813,5 +1110,77 @@ export namespace APIStopChat {
 
   export function cmdString(_self: APIStopChat): string {
     return '/_stop'
+  }
+}
+
+// Get network configuration.
+// Network usage: no.
+export interface APIGetNetworkConfig {
+}
+
+export namespace APIGetNetworkConfig {
+  export type Response = CR.NetworkConfig | CR.ChatCmdError
+
+  export function cmdString(_self: APIGetNetworkConfig): string {
+    return '/network'
+  }
+}
+
+// Set network configuration.
+// Network usage: background.
+export interface APISetNetworkConfig {
+  networkConfig: T.NetworkConfig
+}
+
+export namespace APISetNetworkConfig {
+  export type Response = CR.CmdOk | CR.ChatCmdError
+
+  export function cmdString(self: APISetNetworkConfig): string {
+    return '/_network ' + JSON.stringify(self.networkConfig)
+  }
+}
+
+// Get user servers and chat relays, grouped by operator.
+// Network usage: no.
+export interface APIGetUserServers {
+  userId: number // int64
+}
+
+export namespace APIGetUserServers {
+  export type Response = CR.UserServers | CR.ChatCmdError
+
+  export function cmdString(self: APIGetUserServers): string {
+    return '/_servers ' + self.userId
+  }
+}
+
+// Remote control commands
+// Allows a bot to accept an incoming remote control session from a SimpleX Desktop client, giving the desktop live access to the bot's SimpleX instance.
+
+// Connect to a remote controller using an OOB invitation link.
+// Network usage: interactive.
+export interface ConnectRemoteCtrl {
+  remoteInvitation: string
+}
+
+export namespace ConnectRemoteCtrl {
+  export type Response = CR.RemoteCtrlConnecting | CR.ChatCmdError
+
+  export function cmdString(self: ConnectRemoteCtrl): string {
+    return '/crc ' + self.remoteInvitation
+  }
+}
+
+// Verify the remote controller session code to complete the connection.
+// Network usage: no.
+export interface VerifyRemoteCtrlSession {
+  sessionCode: string
+}
+
+export namespace VerifyRemoteCtrlSession {
+  export type Response = CR.RemoteCtrlConnected | CR.ChatCmdError
+
+  export function cmdString(self: VerifyRemoteCtrlSession): string {
+    return '/verify remote ctrl ' + self.sessionCode
   }
 }

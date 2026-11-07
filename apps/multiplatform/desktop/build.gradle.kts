@@ -1,5 +1,6 @@
 import org.gradle.internal.extensions.stdlib.toDefaultLowerCase
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
+import org.jetbrains.compose.desktop.application.tasks.AbstractJPackageTask
 
 plugins {
   kotlin("multiplatform")
@@ -48,6 +49,14 @@ compose {
           // 'jdk.unsupported' is for vlcj
           modules("jdk.zipfs", "jdk.unsupported")
         }
+        val os = System.getProperty("os.name", "generic").toDefaultLowerCase()
+        // 'jdk.accessibility' provides Java Access Bridge on Windows - without it the app
+        // fails to start with "Failed to launch JVM" when assistive technologies are enabled
+        // in the system (see #4146). Packages are always built on the target OS, so only
+        // the Windows build needs to bundle it.
+        if (os.contains("win")) {
+          modules("jdk.accessibility")
+        }
         //includeAllModules = true
         outputBaseDir.set(project.file("../release"))
         appResourcesRootDir.set(project.file("../build/links"))
@@ -77,6 +86,18 @@ compose {
             extraKeysRawXml = """
               <key>NSMicrophoneUsageDescription</key>
               <string>SimpleX needs microphone access to record voice messages</string>
+              <key>CFBundleURLTypes</key>
+              <array>
+                <dict>
+                  <key>CFBundleURLName</key>
+                  <string>$bundleID</string>
+                  <key>CFBundleURLSchemes</key>
+                  <array>
+                    <string>simplexchat</string>
+                    <string>simplex</string>
+                  </array>
+                </dict>
+              </array>
             """
           }
           val identity = rootProject.extra["desktop.mac.signing.identity"] as String?
@@ -97,7 +118,6 @@ compose {
             }
           }
         }
-        val os = System.getProperty("os.name", "generic").toDefaultLowerCase()
         if (os.contains("mac") || os.contains("win")) {
           packageName = "SimpleX"
         } else {
@@ -157,6 +177,19 @@ tasks.named("clean") {
 }
 tasks.named("compileKotlinJvm") {
   dependsOn("cmakeBuildAndCopy")
+}
+tasks.withType<AbstractJPackageTask>().configureEach {
+  if (targetFormat == TargetFormat.Msi) {
+    doLast {
+      exec {
+        commandLine(
+          "powershell", "-NoProfile", "-ExecutionPolicy", "Bypass",
+          "-File", project.file("../../../scripts/desktop/disable-msi-install-dir-wipe-windows.ps1"),
+          destinationDir.asFileTree.matching { include("*.msi") }.singleFile
+        )
+      }
+    }
+  }
 }
 afterEvaluate {
   tasks.create("cmakeBuildAndCopy") {

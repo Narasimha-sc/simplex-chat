@@ -535,11 +535,12 @@ struct ConnectDesktopView: View {
     }
 
     private func errorAlert(_ error: Error) {
-        let a = getErrorAlert(error, "Error")
-        alert = .error(title: a.title, error: a.message)
+        showErrorAlert(error, NSLocalizedString("Error", comment: ""))
     }
 }
 
-#Preview {
-    ConnectDesktopView()
+struct ConnectDesktopView_Previews: PreviewProvider {
+    static var previews: some View {
+        ConnectDesktopView()
+    }
 }

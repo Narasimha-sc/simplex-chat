@@ -172,7 +172,7 @@ struct MemberSupportView: View {
                     .padding(.trailing, 2)
                 VStack(alignment: .leading) {
                     let t = Text(member.chatViewName).foregroundColor(theme.colors.onBackground)
-                    (member.verified ? memberVerifiedShield + t : t)
+                    NameWithBadge((member.verified ? memberVerifiedShield + t : t), member.nameBadge)
                         .lineLimit(1)
                     Text(memberStatus(member))
                         .lineLimit(1)
@@ -205,7 +205,7 @@ struct MemberSupportView: View {
             } else if member.memberPending {
                 return member.memberStatus.text
             } else {
-                return LocalizedStringKey(member.memberRole.text)
+                return LocalizedStringKey(member.memberRole.text(isChannel: groupInfo.isChannel))
             }
         }
 
@@ -291,9 +291,11 @@ func deleteMemberSupportChat(_ groupInfo: GroupInfo, _ member: GroupMember) {
     }
 }
 
-#Preview {
-    MemberSupportView(
-        groupInfo: GroupInfo.sampleData,
-        scrollToItemId: Binding.constant(nil)
-    )
+struct MemberSupportView_Previews: PreviewProvider {
+    static var previews: some View {
+        MemberSupportView(
+            groupInfo: GroupInfo.sampleData,
+            scrollToItemId: Binding.constant(nil)
+        )
+    }
 }

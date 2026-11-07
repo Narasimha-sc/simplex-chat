@@ -169,10 +169,16 @@ struct YourServersView: View {
                     .hidden()
                 }
             } footer: {
-                if let errStr = globalServersError(serverErrors) {
-                    ServersErrorView(errStr: errStr)
-                } else if let warnStr = globalServersWarning(serverWarnings) {
-                    ServersWarningView(warnStr: warnStr)
+                let errs = globalServersErrors(serverErrors)
+                let warns = globalServersWarnings(serverWarnings)
+                if !errs.isEmpty {
+                    ForEach(errs, id: \.self) { err in
+                        ServersErrorView(errStr: err)
+                    }
+                } else if !warns.isEmpty {
+                    ForEach(warns, id: \.self) { warn in
+                        ServersWarningView(warnStr: warn)
+                    }
                 }
             }
 
@@ -445,7 +451,7 @@ struct YourServersView_Previews: PreviewProvider {
             userServers: Binding.constant([UserOperatorServers.sampleDataNilOperator]),
             serverErrors: Binding.constant([]),
             serverWarnings: Binding.constant([]),
-            operatorIndex: 1
+            operatorIndex: 0
         )
     }
 }

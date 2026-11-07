@@ -359,6 +359,36 @@ class ChannelRelaysModel: ObservableObject {
     }
 }
 
+// The badge of whichever profile it was last loaded for, kept current by the badgeChanged event so
+// that a screen already open shows what the renewal worker did with no command behind it.
+class BadgeModel: ObservableObject {
+    static let shared = BadgeModel()
+    @Published private(set) var userId: Int64?
+    @Published private(set) var badgeState: BadgeState?
+    @Published private(set) var alert: BadgeAlert?
+
+    // alert follows the state: getUserBadgeState derives it on every read, so a badgeChanged is
+    // never staler than the alert it carries - the invariant a new alert kind must keep
+    func set(userId: Int64, badgeState: BadgeState?) {
+        self.userId = userId
+        self.badgeState = badgeState
+        alert = badgeState?.alert
+    }
+
+    func setAlert(userId: Int64, alert: BadgeAlert) {
+        if self.userId == userId {
+            self.alert = alert
+            badgeState?.alert = alert
+        }
+    }
+}
+
+enum ChatListBanner {
+    case badgeAlert
+    case badgePitch
+    case getStake
+}
+
 // Spec: spec/state.md#ChatModel
 final class ChatModel: ObservableObject {
     @Published var onboardingStage: OnboardingStage?
@@ -429,6 +459,7 @@ final class ChatModel: ObservableObject {
     // audio recording and playback
     @Published var stopPreviousRecPlay: URL? = nil // coordinates currently playing source
     @Published var draft: ComposeState?
+    // chat id with chat scope, see draftChatId() - group chat and its support chats have the same chat id
     @Published var draftChatId: String?
     @Published var networkInfo = UserNetworkInfo(networkType: .other, online: true)
     // usage conditions
@@ -437,6 +468,31 @@ final class ChatModel: ObservableObject {
     var messageDelivery: Dictionary<Int64, () -> Void> = [:]
 
     var filesToDelete: Set<URL> = []
+
+    // the banner kind the chat list showed this app session: it keeps the slot until restart, so dismissing it never puts
+    // another in its place; only the badge alert shows regardless. Set while rendering, so not published.
+    var chatListBanner: ChatListBanner?
+
+    var fileToOpen: (fileId: Int64, chatId: String?, open: (CIFile) -> Void)?
+
+    func bannerSlotFree(for banner: ChatListBanner) -> Bool {
+        chatListBanner == nil || chatListBanner == banner
+    }
+
+    func openWhenReceived(_ file: CIFile, open: @escaping (CIFile) -> Void) {
+        fileToOpen = (fileId: file.fileId, chatId: chatId, open: open)
+    }
+
+    func receivedFileToOpen(_ file: CIFile) -> Bool {
+        if let f = fileToOpen { f.fileId == file.fileId && f.chatId == chatId } else { false }
+    }
+
+    func openReceivedFile(_ file: CIFile) {
+        if let f = fileToOpen, receivedFileToOpen(file) {
+            fileToOpen = nil
+            f.open(file)
+        }
+    }
 
     static let shared = ChatModel()
 
@@ -812,32 +868,63 @@ final class ChatModel: ObservableObject {
     }
 
     func removeMemberItems(_ removedMember: GroupMember, byMember: GroupMember, _ groupInfo: GroupInfo) {
+        // Mirrors backend groupFeatureMemberAllowed: fullDelete may be role-gated in business groups.
+        let fullDeletePref = groupInfo.fullGroupPreferences.fullDelete
+        let fullDelete = fullDeletePref.on
+            && byMember.memberRole >= (fullDeletePref.role ?? .observer)
         if chatId == groupInfo.id {
-            for i in 0..<im.reversedChatItems.count {
-                if let updatedItem = removedUpdatedItem(im.reversedChatItems[i]) {
-                    _updateChatItem(ciIM: im, at: i, with: updatedItem) // TODO [knocking] review: use getCIItemsModel?
+            if fullDelete {
+                var removed: [(Int64, Int, Bool)] = []
+                let cInfo = ChatInfo.group(groupInfo: groupInfo, groupChatScope: nil)
+                var i = im.reversedChatItems.count - 1
+                while i >= 0 {
+                    let item = im.reversedChatItems[i]
+                    if isRemovedMemberItem(item) {
+                        if item.isRcvNew {
+                            unreadCollector.changeUnreadCounter(groupInfo.id, by: -1, unreadMentions: item.meta.userMention ? -1 : 0)
+                        }
+                        if item.isActiveReport {
+                            decreaseGroupReportsCounter(groupInfo.id)
+                        }
+                        VoiceItemState.stopVoiceInChatView(cInfo, item)
+                        removed.append((item.id, i, item.isRcvNew))
+                        im.reversedChatItems.remove(at: i)
+                    }
+                    i -= 1
+                }
+                if !removed.isEmpty {
+                    im.chatState.itemsRemoved(removed.reversed(), im.reversedChatItems.reversed())
+                }
+            } else {
+                for i in 0..<im.reversedChatItems.count {
+                    if let updatedItem = markedUpdatedItem(im.reversedChatItems[i]) {
+                        _updateChatItem(ciIM: im, at: i, with: updatedItem) // TODO [knocking] review: use getCIItemsModel?
+                    }
                 }
             }
-        } else if let chat = getChat(groupInfo.id),
-                  chat.chatItems.count > 0,
-                  let updatedItem = removedUpdatedItem(chat.chatItems[0]) {
-                chat.chatItems = [updatedItem]
+        } else if let chat = getChat(groupInfo.id), chat.chatItems.count > 0 {
+            let preview = chat.chatItems[0]
+            if isRemovedMemberItem(preview) {
+                if fullDelete {
+                    chat.chatItems = [ChatItem.deletedItemDummy()]
+                } else if let updatedItem = markedUpdatedItem(preview) {
+                    chat.chatItems = [updatedItem]
+                }
+            }
         }
 
-        func removedUpdatedItem(_ item: ChatItem) -> ChatItem? {
-            let newContent: CIContent
-            if case .groupSnd = item.chatDir, removedMember.groupMemberId == groupInfo.membership.groupMemberId {
-                newContent = .sndModerated
-            } else if case let .groupRcv(groupMember) = item.chatDir, groupMember.groupMemberId == removedMember.groupMemberId {
-                newContent = .rcvModerated
-            } else {
-                return nil
+        func isRemovedMemberItem(_ item: ChatItem) -> Bool {
+            switch item.chatDir {
+            case .groupSnd: return removedMember.groupMemberId == groupInfo.membership.groupMemberId
+            case let .groupRcv(groupMember): return groupMember.groupMemberId == removedMember.groupMemberId
+            default: return false
             }
+        }
+
+        func markedUpdatedItem(_ item: ChatItem) -> ChatItem? {
+            guard isRemovedMemberItem(item) else { return nil }
             var updatedItem = item
             updatedItem.meta.itemDeleted = .moderated(deletedTs: Date.now, byGroupMember: byMember)
-            if groupInfo.fullGroupPreferences.fullDelete.on {
-                updatedItem.content = newContent
-            }
             if item.isActiveReport {
                 decreaseGroupReportsCounter(groupInfo.id)
             }
@@ -864,6 +951,8 @@ final class ChatModel: ObservableObject {
     func updateCurrentUser(_ newProfile: Profile, _ preferences: FullPreferences? = nil) {
         if let current = currentUser {
             currentUser?.profile = toLocalProfile(current.profile.profileId, newProfile, "")
+            currentUser?.profile.localBadge = current.profile.localBadge
+            currentUser?.profile.contactDomainVerified = current.profile.contactDomainVerified
             if let preferences = preferences {
                 currentUser?.fullPreferences = preferences
             }
@@ -1213,6 +1302,15 @@ final class ChatModel: ObservableObject {
         chats.insert(chat, at: position)
     }
 
+    func replaceConnReqView(_ id: String, _ withId: ChatId) {
+        if id == showingInvitation?.pcc.id {
+            markShowingInvitationUsed()
+            dismissAllSheets(animated: true) {
+                ItemsModel.shared.loadOpenChat(withId)
+            }
+        }
+    }
+
     func dismissConnReqView(_ id: String) {
         if id == showingInvitation?.pcc.id {
             markShowingInvitationUsed()
@@ -1367,6 +1465,10 @@ final class Chat: ObservableObject, Identifiable, ChatLike {
     }
 
     public static var sampleData: Chat = Chat(chatInfo: ChatInfo.sampleData.direct, chatItems: [])
+}
+
+func profileChatLayout(_ user: User?, _ appLayout: ChatLayout = chatLayoutDefault.get()) -> ChatLayout {
+    user?.uiThemes?.chatLayout?.known ?? appLayout.known ?? .classic
 }
 
 final class GMember: ObservableObject, Identifiable {

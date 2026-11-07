@@ -35,7 +35,7 @@ import chat.simplex.common.views.helpers.*
 import chat.simplex.common.views.newchat.QRCodeScanner
 import chat.simplex.common.views.usersettings.PreferenceToggle
 import chat.simplex.common.views.usersettings.SettingsActionItem
-import chat.simplex.res.MR
+import chat.simplex.res.*
 import dev.icerock.moko.resources.ImageResource
 import dev.icerock.moko.resources.compose.painterResource
 import dev.icerock.moko.resources.compose.stringResource
@@ -147,9 +147,11 @@ private fun ConnectDesktop(deviceName: String, remoteCtrls: SnapshotStateList<Re
 private fun ConnectingDesktop(session: RemoteCtrlSession, rc: RemoteCtrlInfo?) {
   AppBarTitle(stringResource(MR.strings.connecting_to_desktop))
   SectionView(stringResource(MR.strings.connecting_to_desktop), contentPadding = PaddingValues(horizontal = DEFAULT_PADDING)) {
-    CtrlDeviceNameText(session, rc)
-    Spacer(Modifier.height(DEFAULT_PADDING_HALF))
-    CtrlDeviceVersionText(session)
+    Column {
+      CtrlDeviceNameText(session, rc)
+      Spacer(Modifier.height(DEFAULT_PADDING_HALF))
+      CtrlDeviceVersionText(session)
+    }
   }
 
   if (session.sessionCode != null) {
@@ -224,10 +226,12 @@ private fun FoundDesktop(
   }
   SectionDividerSpaced()
   SectionView(stringResource(MR.strings.found_desktop), contentPadding = PaddingValues(horizontal = DEFAULT_PADDING)) {
-    CtrlDeviceNameText(session, rc)
-    CtrlDeviceVersionText(session)
-    if (!compatible) {
-      Text(stringResource(MR.strings.not_compatible), color = MaterialTheme.colors.error)
+    Column {
+      CtrlDeviceNameText(session, rc)
+      CtrlDeviceVersionText(session)
+      if (!compatible) {
+        Text(stringResource(MR.strings.not_compatible), color = MaterialTheme.colors.error)
+      }
     }
   }
 
@@ -256,24 +260,25 @@ private fun FoundDesktop(
 private fun VerifySession(session: RemoteCtrlSession, rc: RemoteCtrlInfo?, sessCode: String, remoteCtrls: SnapshotStateList<RemoteCtrlInfo>) {
   AppBarTitle(stringResource(MR.strings.verify_connection))
   SectionView(stringResource(MR.strings.connected_to_desktop), contentPadding = PaddingValues(horizontal = DEFAULT_PADDING)) {
-    CtrlDeviceNameText(session, rc)
-    Spacer(Modifier.height(DEFAULT_PADDING_HALF))
-    CtrlDeviceVersionText(session)
+    Column {
+      CtrlDeviceNameText(session, rc)
+      Spacer(Modifier.height(DEFAULT_PADDING_HALF))
+      CtrlDeviceVersionText(session)
+    }
   }
 
   SectionDividerSpaced()
 
   SectionView(stringResource(MR.strings.verify_code_with_desktop)) {
     SessionCodeText(sessCode)
+    SectionItemView({ verifyDesktopSessionCode(remoteCtrls, sessCode) }) {
+      Icon(painterResource(MR.images.ic_check), generalGetString(MR.strings.confirm_verb), tint = MaterialTheme.colors.secondary)
+      TextIconSpaced(false)
+      Text(generalGetString(MR.strings.confirm_verb))
+    }
   }
 
   SectionDividerSpaced()
-
-  SectionItemView({ verifyDesktopSessionCode(remoteCtrls, sessCode) }) {
-    Icon(painterResource(MR.images.ic_check), generalGetString(MR.strings.confirm_verb), tint = MaterialTheme.colors.secondary)
-    TextIconSpaced(false)
-    Text(generalGetString(MR.strings.confirm_verb))
-  }
 
   SectionView {
     DisconnectButton(onClick = ::disconnectDesktop)
@@ -311,9 +316,11 @@ private fun CtrlDeviceVersionText(session: RemoteCtrlSession) {
 private fun ActiveSession(session: RemoteCtrlSession, rc: RemoteCtrlInfo, close: () -> Unit) {
   AppBarTitle(stringResource(MR.strings.connected_to_desktop))
   SectionView(stringResource(MR.strings.connected_desktop), contentPadding = PaddingValues(horizontal = DEFAULT_PADDING)) {
-    Text(rc.deviceViewName)
-    Spacer(Modifier.height(DEFAULT_PADDING_HALF))
-    CtrlDeviceVersionText(session)
+    Column {
+      Text(rc.deviceViewName)
+      Spacer(Modifier.height(DEFAULT_PADDING_HALF))
+      CtrlDeviceVersionText(session)
+    }
   }
 
   if (session.sessionCode != null) {

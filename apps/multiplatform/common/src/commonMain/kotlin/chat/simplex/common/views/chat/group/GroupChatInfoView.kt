@@ -13,6 +13,7 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.desktop.ui.tooling.preview.Preview
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
@@ -27,6 +28,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.AnnotatedString
 import dev.icerock.moko.resources.compose.painterResource
 import dev.icerock.moko.resources.compose.stringResource
@@ -47,7 +49,7 @@ import chat.simplex.common.views.chat.item.*
 import chat.simplex.common.views.chatlist.*
 import chat.simplex.common.views.database.TtlOptions
 import chat.simplex.common.views.newchat.SimpleXLinkQRCode
-import chat.simplex.res.MR
+import chat.simplex.res.*
 import dev.icerock.moko.resources.StringResource
 import kotlinx.coroutines.*
 
@@ -61,6 +63,7 @@ fun ModalData.GroupChatInfoView(
   rhId: Long?,
   chatId: String,
   groupLink: GroupLink?,
+  groupLinkLoaded: Boolean,
   selectedItems: MutableState<Set<Long>?>,
   appBar: MutableState<@Composable (BoxScope.() -> Unit)?>,
   scrollToItemId: MutableState<Long?>,
@@ -75,7 +78,7 @@ fun ModalData.GroupChatInfoView(
   val developerTools = chatModel.controller.appPrefs.developerTools.get()
   if (chat != null && chat.chatInfo is ChatInfo.Group && currentUser != null) {
     val groupInfo = chat.chatInfo.groupInfo
-    val sendReceipts = remember { mutableStateOf(SendReceipts.fromBool(groupInfo.chatSettings.sendRcpts, currentUser.sendRcptsSmallGroups)) }
+    val sendReceipts = remember(groupInfo.id, groupInfo.chatSettings.sendRcpts, currentUser.sendRcptsSmallGroups) { mutableStateOf(SendReceipts.fromBool(groupInfo.chatSettings.sendRcpts, currentUser.sendRcptsSmallGroups)) }
     val chatItemTTL = remember(groupInfo.id) { mutableStateOf(if (groupInfo.chatItemTTL != null) ChatItemTTL.fromSeconds(groupInfo.chatItemTTL) else null) }
     val deletingItems = rememberSaveable(groupInfo.id) { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
@@ -107,6 +110,7 @@ fun ModalData.GroupChatInfoView(
       developerTools,
       onLocalAliasChanged = { setGroupAlias(chat, it, chatModel) },
       groupLink,
+      groupLinkLoaded,
       selectedItems,
       appBar,
       scrollToItemId,
@@ -121,23 +125,27 @@ fun ModalData.GroupChatInfoView(
         }
       },
       showMemberInfo = { member, groupRelay ->
+        val connStats = mutableStateOf<ConnectionStats?>(null)
+        val connectionCode = mutableStateOf<String?>(null)
+        val connectionLoaded = mutableStateOf(false)
+        ModalManager.end.showModalCloseable(showClose = true, cardScreen = true) { closeCurrent ->
+          GroupMemberInfoView(rhId, groupInfo, member, scrollToItemId, connStats, connectionCode, connectionLoaded, chatModel, openedFromSupportChat = false, groupRelay = groupRelay, close = closeCurrent) {
+            closeCurrent()
+            close()
+          }
+        }
         withBGApi {
           val r = chatModel.controller.apiGroupMemberInfo(rhId, groupInfo.groupId, member.groupMemberId)
           val stats = r?.second
-          val (_, code) = if (member.memberActive) {
+          val (_, code) = if ((member.memberActive || (groupInfo.useRelays && member.memberCurrent)) && member.memberRole != GroupMemberRole.Relay) {
             val memCode = chatModel.controller.apiGetGroupMemberCode(rhId, groupInfo.apiId, member.groupMemberId)
             member to memCode?.second
           } else {
             member to null
           }
-          ModalManager.end.showModalCloseable(showClose = true, cardScreen = true) { closeCurrent ->
-            remember { derivedStateOf { chatModel.getGroupMember(member.groupMemberId) } }.value?.let { mem ->
-              GroupMemberInfoView(rhId, groupInfo, mem, scrollToItemId, stats, code, chatModel, openedFromSupportChat = false, groupRelay = groupRelay, close = closeCurrent) {
-                closeCurrent()
-                close()
-              }
-            }
-          }
+          connStats.value = stats
+          connectionCode.value = code
+          connectionLoaded.value = true
         }
       },
       editGroupProfile = {
@@ -173,6 +181,30 @@ fun ModalData.GroupChatInfoView(
       manageGroupLink = {
           ModalManager.end.showModal(cardScreen = true) { GroupLinkView(chatModel, rhId, groupInfo, groupLink, onGroupLinkUpdated, isChannel = groupInfo.useRelays, shareGroupInfo = groupInfo) }
       },
+      manageWebPage = {
+          ModalManager.end.showCustomModal { close -> ChannelWebPageView(rhId, groupInfo, chatModel, close) }
+      },
+      setSimplexName = {
+          ModalManager.end.showCustomModal { close ->
+            val domain = groupInfo.groupProfile.publicGroup?.publicGroupAccess?.groupDomainClaim?.shortName
+            SetSimplexDomainView(
+              title = generalGetString(MR.strings.set_simplex_name),
+              footer = generalGetString(MR.strings.set_channel_simplex_name_footer),
+              placeholder = "#channelname.testing",
+              simplexName = if (domain == null) "" else "#$domain",
+              save = { domain ->
+                val access = groupInfo.groupProfile.publicGroup?.publicGroupAccess ?: PublicGroupAccess()
+                val newAccess = access.copy(groupDomainClaim = domain?.let { SimplexDomainClaim(it) })
+                val gInfo = chatModel.controller.apiSetPublicGroupAccess(rhId, groupInfo.groupId, newAccess)
+                if (gInfo != null) {
+                  withContext(Dispatchers.Main) { chatModel.chatsContext.updateGroup(rhId, gInfo) }
+                  true
+                } else false
+              },
+              close = close
+            )
+          }
+      },
       onSearchClicked = onSearchClicked,
       deletingItems = deletingItems
     )
@@ -197,7 +229,8 @@ fun deleteGroupDialog(chat: Chat, groupInfo: GroupInfo, chatModel: ChatModel, cl
     }
   AlertManager.shared.showAlertDialog(
     title = generalGetString(titleId),
-    text = generalGetString(messageId),
+    text = "${groupInfo.displayName}\n\n${generalGetString(messageId)}",
+    parseHtml = false,
     confirmText = generalGetString(MR.strings.delete_verb),
     onConfirm = {
       withBGApi {
@@ -231,7 +264,8 @@ fun leaveGroupDialog(rhId: Long?, groupInfo: GroupInfo, chatModel: ChatModel, cl
     MR.strings.you_will_stop_receiving_messages_from_this_chat_chat_history_will_be_preserved
   AlertManager.shared.showAlertDialog(
     title = generalGetString(titleId),
-    text = generalGetString(messageId),
+    text = "${groupInfo.displayName}\n\n${generalGetString(messageId)}",
+    parseHtml = false,
     confirmText = generalGetString(MR.strings.leave_group_button),
     onConfirm = {
       withLongRunningApi(60_000) {
@@ -389,8 +423,7 @@ fun MuteButton(
   chat: Chat,
   groupInfo: GroupInfo
 ) {
-  val notificationMode = remember { mutableStateOf(groupInfo.chatSettings.enableNtfs) }
-  val nextNotificationMode by remember { derivedStateOf { notificationMode.value.nextMode(true) } }
+  val nextNotificationMode = groupInfo.chatSettings.enableNtfs.nextMode(true)
 
   InfoViewActionButton(
     modifier = modifier,
@@ -399,7 +432,7 @@ fun MuteButton(
     disabled = !groupInfo.ready,
     disabledLook = !groupInfo.ready,
     onClick = {
-      toggleNotifications(chat.remoteHostId, chat.chatInfo, nextNotificationMode, chatModel, notificationMode)
+      toggleNotifications(chat.remoteHostId, chat.chatInfo, nextNotificationMode, chatModel)
     }
   )
 }
@@ -430,14 +463,15 @@ fun AddGroupMembersButton(
 fun ChannelLinkActionButton(
   modifier: Modifier,
   groupInfo: GroupInfo,
+  groupLinkLoaded: Boolean,
   manageGroupLink: () -> Unit
 ) {
   InfoViewActionButton(
     modifier = modifier,
     icon = painterResource(MR.images.ic_link),
     title = stringResource(MR.strings.action_button_channel_link),
-    disabled = !groupInfo.ready,
-    disabledLook = !groupInfo.ready,
+    disabled = !groupInfo.ready || !groupLinkLoaded,
+    disabledLook = !groupInfo.ready || !groupLinkLoaded,
     onClick = manageGroupLink
   )
 }
@@ -489,6 +523,7 @@ fun ModalData.GroupChatInfoLayout(
   developerTools: Boolean,
   onLocalAliasChanged: (String) -> Unit,
   groupLink: GroupLink?,
+  groupLinkLoaded: Boolean,
   selectedItems: MutableState<Set<Long>?>,
   appBar: MutableState<@Composable (BoxScope.() -> Unit)?>,
   scrollToItemId: MutableState<Long?>,
@@ -502,20 +537,23 @@ fun ModalData.GroupChatInfoLayout(
   clearChat: () -> Unit,
   leaveGroup: () -> Unit,
   manageGroupLink: () -> Unit,
+  manageWebPage: () -> Unit,
+  setSimplexName: () -> Unit,
   close: () -> Unit = { ModalManager.closeAllModalsEverywhere()},
   onSearchClicked: () -> Unit,
   deletingItems: State<Boolean>
 ) {
   val listState = remember { appBarHandler.listState }
   val scope = rememberCoroutineScope()
+  val showMemberSearch = activeSortedMembers.size > 8
   KeyChangeEffect(chat.id) {
     scope.launch { listState.scrollToItem(0) }
   }
-  val searchText = remember { stateGetOrPut("searchText") { TextFieldValue() } }
-  val filteredMembers = remember(activeSortedMembers) {
+  val searchText = remember(chat.id) { stateGetOrPut("searchText:${chat.id}") { TextFieldValue() } }
+  val filteredMembers = remember(activeSortedMembers, searchText) {
     derivedStateOf {
       val s = searchText.value.text.trim().lowercase()
-      if (s.isEmpty()) activeSortedMembers else activeSortedMembers.filter { m -> m.anyNameContains(s) }
+      if (!showMemberSearch || s.isEmpty()) activeSortedMembers else activeSortedMembers.filter { m -> m.anyNameContains(s) }
     }
   }
   Box {
@@ -572,7 +610,7 @@ fun ModalData.GroupChatInfoLayout(
         ) {
           if (groupInfo.useRelays && groupInfo.isOwner) {
             SearchButton(modifier = Modifier.fillMaxWidth(0.33f), chat, groupInfo, close, onSearchClicked)
-            ChannelLinkActionButton(modifier = Modifier.fillMaxWidth(0.5f), groupInfo, manageGroupLink)
+            ChannelLinkActionButton(modifier = Modifier.fillMaxWidth(0.5f), groupInfo, groupLinkLoaded, manageGroupLink)
             MuteButton(modifier = Modifier.fillMaxWidth(1f), chat, groupInfo)
           } else if (!groupInfo.useRelays && groupInfo.canAddMembers) {
             SearchButton(modifier = Modifier.fillMaxWidth(0.33f), chat, groupInfo, close, onSearchClicked)
@@ -608,7 +646,7 @@ fun ModalData.GroupChatInfoLayout(
           if (groupInfo.isOwner && groupLink != null) {
             anyTopSectionRowShow = true
             ChannelLinkButton(manageGroupLink)
-          } else if (channelLink != null) {
+          } else if (channelLink != null && (groupLinkLoaded || !groupInfo.isOwner)) {
             anyTopSectionRowShow = true
             ChannelLinkQRCodeSection(channelLink)
             ShareViaChatButton {
@@ -617,7 +655,7 @@ fun ModalData.GroupChatInfoLayout(
               ModalManager.closeAllModalsEverywhere()
             }
           }
-          if (groupInfo.isOwner || activeSortedMembers.any { it.memberRole >= GroupMemberRole.Owner }) {
+          if (groupInfo.canModerate || activeSortedMembers.any { it.memberRole >= GroupMemberRole.Owner }) {
             anyTopSectionRowShow = true
             ChannelMembersButton(chat.remoteHostId, groupInfo, showMemberInfo)
           }
@@ -633,9 +671,21 @@ fun ModalData.GroupChatInfoLayout(
         if (!groupInfo.isOwner && channelLink != null) {
           SectionTextFooter(stringResource(MR.strings.you_can_share_channel_link_anybody_will_be_able_to_connect))
         }
+        if (groupInfo.isOwner && groupLink != null) {
+          SectionDividerSpaced()
+          val channelDomain = groupInfo.groupProfile.publicGroup?.publicGroupAccess?.groupDomainClaim?.shortName
+          SectionView(title = if (channelDomain != null) generalGetString(MR.strings.channel_simplex_name) else null) {
+            SettingsActionItem(
+              painterResource(MR.images.ic_tag),
+              channelDomain ?: generalGetString(MR.strings.get_simplex_name_beta),
+              setSimplexName,
+              iconColor = MaterialTheme.colors.secondary
+            )
+          }
+        }
       } else {
         SectionView {
-          if (groupInfo.canAddMembers && groupInfo.businessChat == null) {
+          if (groupInfo.canAddMembers && groupInfo.businessChat == null && groupLinkLoaded) {
             anyTopSectionRowShow = true
             if (groupLink == null) {
               CreateGroupLinkButton(manageGroupLink)
@@ -717,13 +767,13 @@ fun ModalData.GroupChatInfoLayout(
             }
             AddMembersButton(addMembersTitleId, tint, onAddMembersClick)
           }
-          if (activeSortedMembers.size > 8) {
+          if (showMemberSearch) {
             SectionItemView(padding = PaddingValues(start = 14.dp, end = DEFAULT_PADDING_HALF)) {
               MemberListSearchRowView(searchText)
             }
           }
           SectionItemView(minHeight = 54.dp, padding = PaddingValues(horizontal = DEFAULT_PADDING)) {
-            MemberRow(groupInfo.membership, user = true)
+            MemberRow(groupInfo.membership, user = true, isChannel = groupInfo.isChannel)
           }
         }
       }
@@ -757,7 +807,7 @@ fun ModalData.GroupChatInfoLayout(
               val selectionOffset by animateDpAsState(if (selectedItems.value != null) 20.dp + 22.dp * fontSizeMultiplier else 0.dp)
               DropDownMenuForMember(chat.remoteHostId, member, groupInfo, selectedItems, showMenu)
               Box(Modifier.padding(start = selectionOffset)) {
-                MemberRow(member)
+                MemberRow(member, isChannel = groupInfo.isChannel)
               }
             }
           }
@@ -789,6 +839,13 @@ fun ModalData.GroupChatInfoLayout(
               else MR.strings.button_leave_chat
             LeaveGroupButton(titleId, leaveGroup)
           }
+        }
+      }
+
+      if (groupInfo.useRelays && groupInfo.isOwner) {
+        SectionDividerSpaced()
+        SectionView(title = stringResource(MR.strings.advanced_options)) {
+          ChannelWebPageButton(groupInfo, manageWebPage)
         }
       }
 
@@ -930,6 +987,19 @@ private fun GroupChatInfoHeader(cInfo: ChatInfo, groupInfo: GroupInfo) {
       modifier = Modifier.combinedClickable(onClick = copyDisplayName, onLongClick = copyDisplayName).onRightClick(copyDisplayName)
     )
     ChatInfoDescription(cInfo, displayName, copyNameToClipboard)
+    GroupSimplexNameView(groupInfo)
+    val webPage = groupInfo.groupProfile.publicGroup?.publicGroupAccess?.groupWebPage
+    if (webPage != null) {
+      val uriHandler = LocalUriHandler.current
+      Text(
+        webPage,
+        style = MaterialTheme.typography.body2,
+        color = MaterialTheme.colors.primary,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        modifier = Modifier.clickable { uriHandler.openUriCatching(webPage) }
+      )
+    }
     if (groupInfo.useRelays) {
       val count = groupInfo.groupSummary.publicMemberCount
       if (count != null && count > 0) {
@@ -989,7 +1059,7 @@ private fun GroupReportsButton(chat: Chat, onClick: () -> Unit) {
 
 @Composable
 private fun SendReceiptsOption(currentUser: User, state: State<SendReceipts>, onSelected: (SendReceipts) -> Unit) {
-  val values = remember {
+  val values = remember(currentUser.sendRcptsSmallGroups) {
     mutableListOf(SendReceipts.Yes, SendReceipts.No, SendReceipts.UserDefault(currentUser.sendRcptsSmallGroups)).map { it to it.text }
   }
   ExposedDropDownSettingRow(
@@ -1030,7 +1100,7 @@ private fun AddMembersButton(titleId: StringResource, tint: Color = MaterialThem
 }
 
 @Composable
-fun MemberRow(member: GroupMember, user: Boolean = false, infoPage: Boolean = true, showlocalAliasAndFullName: Boolean = false, selected: Boolean = false) {
+fun MemberRow(member: GroupMember, user: Boolean = false, infoPage: Boolean = true, showlocalAliasAndFullName: Boolean = false, selected: Boolean = false, isChannel: Boolean = false) {
   @Composable
   fun MemberInfo() {
     if (member.blocked) {
@@ -1038,7 +1108,7 @@ fun MemberRow(member: GroupMember, user: Boolean = false, infoPage: Boolean = tr
     } else {
       val role = member.memberRole
       if (role in listOf(GroupMemberRole.Owner, GroupMemberRole.Admin, GroupMemberRole.Moderator, GroupMemberRole.Observer)) {
-        Text(role.text, color = MaterialTheme.colors.secondary)
+        Text(role.text(isChannel = isChannel), color = MaterialTheme.colors.secondary)
       }
     }
   }
@@ -1072,8 +1142,10 @@ fun MemberRow(member: GroupMember, user: Boolean = false, infoPage: Boolean = tr
           if (member.verified) {
             MemberVerifiedShield()
           }
-          Text(
-            if (showlocalAliasAndFullName) member.localAliasAndFullName else member.chatViewName, maxLines = 1, overflow = TextOverflow.Ellipsis,
+          NameWithBadge(
+            if (showlocalAliasAndFullName) member.localAliasAndFullName else member.chatViewName,
+            member.nameBadge,
+            maxLines = 1, overflow = TextOverflow.Ellipsis,
             color = if (member.memberIncognito) Indigo else Color.Unspecified
           )
         }
@@ -1192,6 +1264,16 @@ private fun ChannelLinkButton(onClick: () -> Unit) {
 }
 
 @Composable
+private fun ChannelWebPageButton(groupInfo: GroupInfo, onClick: () -> Unit) {
+  SettingsActionItem(
+    painterResource(MR.images.ic_travel_explore),
+    stringResource(if (groupInfo.isChannel) MR.strings.channel_webpage else MR.strings.group_webpage),
+    onClick,
+    iconColor = MaterialTheme.colors.secondary
+  )
+}
+
+@Composable
 private fun ChannelLinkQRCodeSection(groupLink: String) {
   val clipboard = LocalClipboardManager.current
   Box(Modifier.padding(vertical = DEFAULT_PADDING_HALF)) {
@@ -1217,7 +1299,7 @@ private fun ShareViaChatButton(onClick: () -> Unit) {
 
 @Composable
 private fun ChannelMembersButton(rhId: Long?, groupInfo: GroupInfo, showMemberInfo: (GroupMember, GroupRelay?) -> Unit) {
-  val title = if (groupInfo.isOwner) {
+  val title = if (groupInfo.canModerate) {
     stringResource(MR.strings.channel_members_title_subscribers)
   } else {
     stringResource(MR.strings.channel_members_section_owners)
@@ -1382,6 +1464,7 @@ fun PreviewGroupChatInfoLayout() {
       developerTools = false,
       onLocalAliasChanged = {},
       groupLink = null,
+      groupLinkLoaded = true,
       selectedItems = remember { mutableStateOf(null) },
       appBar = remember { mutableStateOf(null) },
       scrollToItemId = remember { mutableStateOf(null) },
@@ -1395,7 +1478,9 @@ fun PreviewGroupChatInfoLayout() {
       clearChat = {},
       leaveGroup = {},
       manageGroupLink = {},
+      manageWebPage = {},
       onSearchClicked = {},
+      setSimplexName = {},
       deletingItems = remember { mutableStateOf(true) }
     )
   }

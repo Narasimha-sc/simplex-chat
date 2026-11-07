@@ -13,6 +13,8 @@ import SimpleXChat
 
 let simplexTeamURL = URL(string: "simplex:/a#lrdvu2d8A1GumSmoKb2krQmtKhWXq-tyGpHuM7aMwsw?h=smp6.simplex.im")!
 
+let simplexNewsURL = URL(string: "simplex:/c#grcfG3ulVI4Sh6ow33qBsmSk7uEy3gRSl2KkJ5ER6tA?h=smp18.simplex.im")!
+
 let appVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
 
 let appBuild = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion")  as? String
@@ -32,6 +34,9 @@ let DEFAULT_PRIVACY_ACCEPT_IMAGES = "privacyAcceptImages" // unused. Use GROUP_D
 let DEFAULT_PRIVACY_LINK_PREVIEWS = "privacyLinkPreviews" // deprecated, moved to app group
 let DEFAULT_PRIVACY_SIMPLEX_LINK_MODE = "privacySimplexLinkMode"
 let DEFAULT_PRIVACY_SHOW_CHAT_PREVIEWS = "privacyShowChatPreviews"
+let DEFAULT_PRIVACY_VERIFY_SIMPLEX_NAMES = "privacyVerifySimplexNames"
+let DEFAULT_PRIVACY_SHOW_SIGNATURE = "privacyShowSignature"
+let DEFAULT_PRIVACY_SHOW_FILE_ENCRYPTION = "privacyShowEncryption"
 let DEFAULT_PRIVACY_SAVE_LAST_DRAFT = "privacySaveLastDraft"
 let DEFAULT_PRIVACY_PROTECT_SCREEN = "privacyProtectScreen"
 let DEFAULT_PRIVACY_DELIVERY_RECEIPTS_SET = "privacyDeliveryReceiptsSet"
@@ -44,6 +49,7 @@ let DEFAULT_SHOULD_IMPORT_APP_SETTINGS = "shouldImportAppSettings"
 let DEFAULT_DEVELOPER_TOOLS = "developerTools"
 let DEFAULT_ENCRYPTION_STARTED = "encryptionStarted"
 let DEFAULT_ENCRYPTION_STARTED_AT = "encryptionStartedAt"
+let DEFAULT_SHOULD_DELETE_DATABASE_BACKUPS = "shouldDeleteDatabaseBackups"
 let DEFAULT_ACCENT_COLOR_RED = "accentColorRed" // deprecated, only used for migration
 let DEFAULT_ACCENT_COLOR_GREEN = "accentColorGreen" // deprecated, only used for migration
 let DEFAULT_ACCENT_COLOR_BLUE = "accentColorBlue" // deprecated, only used for migration
@@ -51,11 +57,17 @@ let DEFAULT_USER_INTERFACE_STYLE = "userInterfaceStyle" // deprecated, only used
 let DEFAULT_PROFILE_IMAGE_CORNER_RADIUS = "profileImageCornerRadius"
 let DEFAULT_CHAT_ITEM_ROUNDNESS = "chatItemRoundness"
 let DEFAULT_CHAT_ITEM_TAIL = "chatItemTail"
+let DEFAULT_CHAT_LAYOUT = "chatLayout"
 let DEFAULT_ONE_HAND_UI_CARD_SHOWN = "oneHandUICardShown"
 let DEFAULT_ADDRESS_CREATION_CARD_SHOWN = "addressCreationCardShown"
+let DEFAULT_SUPPORTER_BANNER_SHOWN = "supporterBannerShown"
+let DEFAULT_SUPPORTER_BANNER_TAPPED = "supporterBannerTapped"
+let DEFAULT_GET_STAKE_BANNER_TAPPED = "getStakeBannerTapped"
+let DEFAULT_GET_STAKE_BANNER_DISMISSED = "getStakeBannerDismissed"
 let DEFAULT_TOOLBAR_MATERIAL = "toolbarMaterial"
 let DEFAULT_CONNECT_VIA_LINK_TAB = "connectViaLinkTab"
 let DEFAULT_LIVE_MESSAGE_ALERT_SHOWN = "liveMessageAlertShown"
+let DEFAULT_SIGN_MESSAGE_ALERT_SHOWN = "signMessageAlertShown"
 let DEFAULT_SHOW_HIDDEN_PROFILES_NOTICE = "showHiddenProfilesNotice"
 let DEFAULT_SHOW_MUTE_PROFILE_ALERT = "showMuteProfileAlert"
 let DEFAULT_SHOW_REPORTS_IN_SUPPORT_CHAT_ALERT = "showReportsInSupportChatAlert"
@@ -73,6 +85,7 @@ let DEFAULT_SHOW_DELETE_CONVERSATION_NOTICE = "showDeleteConversationNotice"
 let DEFAULT_SHOW_DELETE_CONTACT_NOTICE = "showDeleteContactNotice"
 let DEFAULT_SHOW_SENT_VIA_RPOXY = "showSentViaProxy"
 let DEFAULT_SHOW_SUBSCRIPTION_PERCENTAGE = "showSubscriptionPercentage"
+let DEFAULT_MARKDOWN_FILE_TEXT_VIEW = "markdownFileTextView"
 
 let DEFAULT_CURRENT_THEME = "currentTheme"
 let DEFAULT_SYSTEM_DARK_THEME = "systemDarkTheme"
@@ -99,6 +112,7 @@ let appDefaults: [String: Any] = [
     DEFAULT_PRIVACY_LINK_PREVIEWS: true,
     DEFAULT_PRIVACY_SIMPLEX_LINK_MODE: SimpleXLinkMode.description.rawValue,
     DEFAULT_PRIVACY_SHOW_CHAT_PREVIEWS: true,
+    DEFAULT_PRIVACY_VERIFY_SIMPLEX_NAMES: false,
     DEFAULT_PRIVACY_SAVE_LAST_DRAFT: true,
     DEFAULT_PRIVACY_PROTECT_SCREEN: false,
     DEFAULT_PRIVACY_DELIVERY_RECEIPTS_SET: false,
@@ -110,11 +124,17 @@ let appDefaults: [String: Any] = [
     DEFAULT_PROFILE_IMAGE_CORNER_RADIUS: defaultProfileImageCorner,
     DEFAULT_CHAT_ITEM_ROUNDNESS: defaultChatItemRoundness,
     DEFAULT_CHAT_ITEM_TAIL: true,
+    DEFAULT_CHAT_LAYOUT: ChatLayout.classic.rawValue,
     DEFAULT_ONE_HAND_UI_CARD_SHOWN: false,
     DEFAULT_ADDRESS_CREATION_CARD_SHOWN: false,
+    DEFAULT_SUPPORTER_BANNER_SHOWN: false,
+    DEFAULT_SUPPORTER_BANNER_TAPPED: false,
+    DEFAULT_GET_STAKE_BANNER_TAPPED: false,
+    DEFAULT_GET_STAKE_BANNER_DISMISSED: false,
     DEFAULT_TOOLBAR_MATERIAL: ToolbarMaterial.defaultMaterial,
     DEFAULT_CONNECT_VIA_LINK_TAB: ConnectViaLinkTab.scan.rawValue,
     DEFAULT_LIVE_MESSAGE_ALERT_SHOWN: false,
+    DEFAULT_SIGN_MESSAGE_ALERT_SHOWN: false,
     DEFAULT_SHOW_HIDDEN_PROFILES_NOTICE: true,
     DEFAULT_SHOW_MUTE_PROFILE_ALERT: true,
     DEFAULT_SHOW_REPORTS_IN_SUPPORT_CHAT_ALERT: true,
@@ -128,6 +148,7 @@ let appDefaults: [String: Any] = [
     DEFAULT_SHOW_DELETE_CONTACT_NOTICE: true,
     DEFAULT_SHOW_SENT_VIA_RPOXY: false,
     DEFAULT_SHOW_SUBSCRIPTION_PERCENTAGE: false,
+    DEFAULT_MARKDOWN_FILE_TEXT_VIEW: false,
     ANDROID_DEFAULT_CALL_ON_LOCK_SCREEN: AppSettingsLockScreenCalls.show.rawValue,
 
     DEFAULT_THEME_OVERRIDES: "{}",
@@ -142,7 +163,12 @@ let hintDefaults = [
     DEFAULT_LA_NOTICE_SHOWN,
     DEFAULT_ONE_HAND_UI_CARD_SHOWN,
     DEFAULT_ADDRESS_CREATION_CARD_SHOWN,
+    DEFAULT_SUPPORTER_BANNER_SHOWN,
+    DEFAULT_SUPPORTER_BANNER_TAPPED,
+    DEFAULT_GET_STAKE_BANNER_TAPPED,
+    DEFAULT_GET_STAKE_BANNER_DISMISSED,
     DEFAULT_LIVE_MESSAGE_ALERT_SHOWN,
+    DEFAULT_SIGN_MESSAGE_ALERT_SHOWN,
     DEFAULT_SHOW_HIDDEN_PROFILES_NOTICE,
     DEFAULT_SHOW_MUTE_PROFILE_ALERT,
     DEFAULT_SHOW_REPORTS_IN_SUPPORT_CHAT_ALERT,
@@ -186,7 +212,11 @@ let encryptionStartedDefault = BoolDefault(defaults: UserDefaults.standard, forK
 
 let encryptionStartedAtDefault = DateDefault(defaults: UserDefaults.standard, forKey: DEFAULT_ENCRYPTION_STARTED_AT)
 
+let shouldDeleteDatabaseBackupsDefault = BoolDefault(defaults: UserDefaults.standard, forKey: DEFAULT_SHOULD_DELETE_DATABASE_BACKUPS)
+
 let connectViaLinkTabDefault = EnumDefault<ConnectViaLinkTab>(defaults: UserDefaults.standard, forKey: DEFAULT_CONNECT_VIA_LINK_TAB, withDefault: .scan)
+
+let chatLayoutDefault = EnumDefault<ChatLayout>(defaults: UserDefaults.standard, forKey: DEFAULT_CHAT_LAYOUT, withDefault: .classic)
 
 let privacySimplexLinkModeDefault = EnumDefault<SimpleXLinkMode>(defaults: UserDefaults.standard, forKey: DEFAULT_PRIVACY_SIMPLEX_LINK_MODE, withDefault: .description)
 
@@ -277,6 +307,7 @@ struct SettingsView: View {
     @EnvironmentObject var chatModel: ChatModel
     @EnvironmentObject var sceneDelegate: SceneDelegate
     @EnvironmentObject var theme: AppTheme
+    @ObservedObject private var badgeModel = BadgeModel.shared
     @State private var showProgress: Bool = false
 
     var body: some View {
@@ -290,47 +321,7 @@ struct SettingsView: View {
 
     func settingsView() -> some View {
         List {
-            let user = chatModel.currentUser
-            Section(header: Text("Settings").foregroundColor(theme.colors.secondary)) {
-                NavigationLink {
-                    NotificationsView()
-                        .navigationTitle("Notifications")
-                        .modifier(ThemedBackground(grouped: true))
-                } label: {
-                    HStack {
-                        notificationsIcon()
-                        Text("Notifications")
-                    }
-                }
-                .disabled(chatModel.chatRunning != true)
-
-                NavigationLink {
-                    NetworkAndServers()
-                        .navigationTitle("Network & servers")
-                        .modifier(ThemedBackground(grouped: true))
-                } label: {
-                    settingsRow("externaldrive.connected.to.line.below", color: theme.colors.secondary) { Text("Network & servers") }
-                }
-                .disabled(chatModel.chatRunning != true)
-
-                NavigationLink {
-                    CallSettings()
-                        .navigationTitle("Your calls")
-                        .modifier(ThemedBackground(grouped: true))
-                } label: {
-                    settingsRow("video", color: theme.colors.secondary) { Text("Audio & video calls") }
-                }
-                .disabled(chatModel.chatRunning != true)
-
-                NavigationLink {
-                    PrivacySettings()
-                        .navigationTitle("Your privacy")
-                        .modifier(ThemedBackground(grouped: true))
-                } label: {
-                    settingsRow("lock", color: theme.colors.secondary) { Text("Privacy & security") }
-                }
-                .disabled(chatModel.chatRunning != true)
-
+            Section(header: Text(verbatim: "").foregroundColor(theme.colors.secondary)) {
                 if UIApplication.shared.supportsAlternateIcons {
                     NavigationLink {
                         AppearanceSettings()
@@ -341,10 +332,24 @@ struct SettingsView: View {
                     }
                     .disabled(chatModel.chatRunning != true)
                 }
-            }
 
-            Section(header: Text("Chat database").foregroundColor(theme.colors.secondary)) {
+                NavigationLink {
+                    PrivacySettings()
+                        .navigationTitle("Your privacy")
+                        .modifier(ThemedBackground(grouped: true))
+                } label: {
+                    settingsRow("lock", color: theme.colors.secondary) { Text("Your privacy") }
+                }
+                .disabled(chatModel.chatRunning != true)
+
+                NavigationLink {
+                    helpAndSupportView
+                } label: {
+                    settingsRow("questionmark", color: theme.colors.secondary) { Text("Help & support") }
+                }
+
                 chatDatabaseRow()
+
                 NavigationLink {
                     MigrateFromDevice(showProgressOnSettings: $showProgress)
                         .toolbar {
@@ -360,6 +365,95 @@ struct SettingsView: View {
                 }
             }
 
+            let badgeRow = badgeRowTexts()
+            Section {
+                NavigationLink {
+                    BadgesView()
+                        .modifier(ThemedBackground())
+                } label: {
+                    let badgeType = chatModel.currentUser?.profile.localBadge?.badge.badgeType ?? .supporter
+                    ZStack(alignment: .leading) {
+                        Image(badgeImageName(badgeType))
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 24, height: 24)
+                        Text(badgeRow.label).padding(.leading, indent)
+                    }
+                }
+            } footer: {
+                Text(badgeRow.benefits)
+                    .foregroundColor(theme.colors.secondary)
+            }
+
+            Section(header: Text("Advanced settings").foregroundColor(theme.colors.secondary)) {
+                NavigationLink {
+                    NetworkAndServers()
+                        .navigationTitle("Network & servers")
+                        .modifier(ThemedBackground(grouped: true))
+                } label: {
+                    settingsRow("externaldrive.connected.to.line.below", color: theme.colors.secondary) { Text("Network & servers") }
+                }
+                .disabled(chatModel.chatRunning != true)
+
+                NavigationLink {
+                    NotificationsView()
+                        .navigationTitle("Notifications")
+                        .modifier(ThemedBackground(grouped: true))
+                } label: {
+                    let (icon, color) = notificationsIcon()
+                    settingsRow(icon, color: color) { Text("Notifications") }
+                }
+                .disabled(chatModel.chatRunning != true)
+
+                NavigationLink {
+                    CallSettings()
+                        .navigationTitle("Your calls")
+                        .modifier(ThemedBackground(grouped: true))
+                } label: {
+                    settingsRow("video", color: theme.colors.secondary) { Text("Audio & video calls") }
+                }
+                .disabled(chatModel.chatRunning != true)
+
+                NavigationLink {
+                    VersionView()
+                        .navigationBarTitle("App version")
+                        .modifier(ThemedBackground(grouped: true))
+                } label: {
+                    Text(verbatim: "v\(appVersion ?? "?")")
+                }
+            }
+
+            if isInUS {
+                Section(header: Text("Own a part of SimpleX Chat").foregroundColor(theme.colors.secondary)) {
+                    NavigationLink {
+                        GetStakeView(fromSettings: true, showFirstImage: true)
+                            .navigationBarTitle("", displayMode: .inline)
+                    } label: {
+                        settingsRow("dollarsign.circle", color: theme.colors.secondary) { Text("Crowdfunding on Wefunder") }
+                    }
+                }
+            }
+        }
+        .navigationTitle("Your settings")
+        .modifier(ThemedBackground(grouped: true))
+        .onDisappear {
+            chatModel.showingTerminal = false
+            chatModel.terminalItems = []
+        }
+    }
+
+    private func badgeRowTexts() -> (label: LocalizedStringKey, benefits: LocalizedStringKey) {
+        switch currentShownBadge()?.badgeType {
+        case nil: return ("Support SimpleX", "Larger files available for longer.")
+        case .legend?: return ("Your legend badge", "Files up to 5 GB, stored for 21 days.")
+        default: return ("Your badge", "Files up to 2 GB, stored for 7 days.")
+        }
+    }
+
+    @ViewBuilder
+    private var helpAndSupportView: some View {
+        List {
+            let user = chatModel.currentUser
             Section(header: Text("Help").foregroundColor(theme.colors.secondary)) {
                 if let user = user {
                     NavigationLink {
@@ -378,6 +472,7 @@ struct SettingsView: View {
                 } label: {
                     settingsRow("plus", color: theme.colors.secondary) { Text("What's new") }
                 }
+
                 NavigationLink {
                     SimpleXInfo(onboarding: false)
                         .navigationBarTitle("", displayMode: .inline)
@@ -386,11 +481,25 @@ struct SettingsView: View {
                 } label: {
                     settingsRow("info", color: theme.colors.secondary) { Text("About SimpleX Chat") }
                 }
+            }
+
+            Section(header: Text("Contact").foregroundColor(theme.colors.secondary)) {
+                settingsRow("antenna.radiowaves.left.and.right", color: theme.colors.secondary) {
+                    Button("Follow SimpleX Network News") {
+                        dismiss()
+                        DispatchQueue.main.async {
+                            ChatModel.shared.appOpenUrl = simplexNewsURL
+                        }
+                    }
+                }
+                .disabled(chatModel.chatRunning != true)
                 settingsRow("number", color: theme.colors.secondary) {
                     Button("Send questions and ideas") {
                         dismiss()
                         DispatchQueue.main.async {
-                            UIApplication.shared.open(simplexTeamURL)
+                            // simplexTeamURL targets this same app; route to the in-app connect flow
+                            // (UIApplication.shared.open is dropped for self-owned URLs in the foreground)
+                            ChatModel.shared.appOpenUrl = simplexTeamURL
                         }
                     }
                 }
@@ -398,7 +507,7 @@ struct SettingsView: View {
                 settingsRow("envelope", color: theme.colors.secondary) { Text("[Send us email](mailto:chat@simplex.chat)") }
             }
 
-            Section(header: Text("Support SimpleX Chat").foregroundColor(theme.colors.secondary)) {
+            Section(header: Text("Support the project").foregroundColor(theme.colors.secondary)) {
                 settingsRow("keyboard", color: theme.colors.secondary) {
                     ExternalLink("Contribute", destination: URL(string: "https://github.com/simplex-chat/simplex-chat#contribute")!)
                 }
@@ -421,42 +530,21 @@ struct SettingsView: View {
                     }
                 }
             }
-
-            Section(header: Text("Develop").foregroundColor(theme.colors.secondary)) {
-                NavigationLink {
-                    DeveloperView()
-                        .navigationTitle("Developer tools")
-                        .modifier(ThemedBackground(grouped: true))
-                } label: {
-                    settingsRow("chevron.left.forwardslash.chevron.right", color: theme.colors.secondary) { Text("Developer tools") }
-                }
-                NavigationLink {
-                    VersionView()
-                        .navigationBarTitle("App version")
-                        .modifier(ThemedBackground())
-                } label: {
-                    Text("v\(appVersion ?? "?") (\(appBuild ?? "?"))")
-                }
-            }
         }
-        .navigationTitle("Your settings")
+        .navigationTitle("Help & support")
         .modifier(ThemedBackground(grouped: true))
-        .onDisappear {
-            chatModel.showingTerminal = false
-            chatModel.terminalItems = []
-        }
     }
-    
+
     private func chatDatabaseRow() -> some View {
         NavigationLink {
             DatabaseView(dismissSettingsSheet: dismiss, chatItemTTL: chatModel.chatItemTTL)
-                .navigationTitle("Your chat database")
+                .navigationTitle("Chat data")
                 .modifier(ThemedBackground(grouped: true))
         } label: {
             let color: Color = chatModel.chatDbEncrypted == false ? .orange : theme.colors.secondary
             settingsRow("internaldrive", color: color) {
                 HStack {
-                    Text("Database passphrase & export")
+                    Text("Chat data")
                     Spacer()
                     if chatModel.chatRunning == false {
                         Image(systemName: "exclamationmark.octagon.fill").foregroundColor(.red)
@@ -478,7 +566,7 @@ struct SettingsView: View {
         case error(LocalizedStringKey, String)
     }
 
-    private func notificationsIcon() -> some View {
+    private func notificationsIcon() -> (String, Color) {
         let icon: String
         let color: Color
         switch (chatModel.tokenStatus) {
@@ -508,9 +596,7 @@ struct SettingsView: View {
             icon = "bolt"
             color = theme.colors.secondary
         }
-        return Image(systemName: icon)
-            .padding(.trailing, 9)
-            .foregroundColor(color)
+        return (icon, color)
     }
 }
 
@@ -526,12 +612,14 @@ func settingsRow<Content : View>(_ icon: String, color: Color/* = .secondary*/, 
 struct ProfilePreview: View {
     var profileOf: NamedChat
     var color = Color(uiColor: .tertiarySystemGroupedBackground)
+    var badge: LocalBadge? = nil
 
     var body: some View {
         HStack {
             ProfileImage(imageStr: profileOf.image, size: 44, color: color)
                 .padding(.trailing, 6)
-            profileName(profileOf).lineLimit(1)
+            NameWithBadge(profileName(profileOf), badge, .title2)
+                .lineLimit(1)
         }
     }
 }
