@@ -10,7 +10,6 @@ module Simplex.Chat.Core
     sendChatCmdStr,
     sendChatCmd,
     printResponseEvent,
-    logResponseToFile,
   )
 where
 
@@ -43,7 +42,7 @@ import Simplex.Messaging.Agent.Store.Common (DBStore, withTransaction)
 import Simplex.Messaging.Agent.Store.Shared (MigrationConfig (..), MigrationConfirmation (..))
 import Simplex.Messaging.Encoding.String
 import System.Exit (exitFailure)
-import System.IO (IOMode (..), hFlush, hPutStr, stdout, withFile)
+import System.IO (hFlush, stdout)
 import Text.Read (readMaybe)
 import UnliftIO.Async
 import UnliftIO.Exception (finally)
@@ -210,13 +209,6 @@ printResponseEvent hu cfg = \case
 
 printChatError :: ChatConfig -> ChatError -> IO ()
 printChatError cfg e = putStrLn $ serializeChatError True cfg e
-
-logResponseToFile :: Maybe User -> ChatConfig -> Either ChatError ChatEvent -> FilePath -> IO ()
-logResponseToFile u_ cfg r path = do
-  ts <- getCurrentTime
-  tz <- getCurrentTimeZone
-  let s = either (serializeChatError False cfg) (serializeChatResponse (Nothing, u_) cfg ts tz Nothing) r
-  withFile path AppendMode $ \h -> hPutStr h s
 
 withPrompt :: String -> IO a -> IO a
 withPrompt s a = putStr s >> hFlush stdout >> a
