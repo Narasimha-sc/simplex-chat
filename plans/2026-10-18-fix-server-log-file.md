@@ -4,7 +4,7 @@ Fixes #7113.
 
 ## Problem
 
-`simplex-chat -p 5225 --log-file a.log` never creates `a.log`, with or without a connected client. Without `-p` the CLI appends errors and service events (`logEventToFile`, `Controller.hs`) to the file.
+`simplex-chat -p 5225 --log-file a.log` never creates `a.log`, with or without a connected client. In terminal mode (without `-p`, `-e` or `--headless`) the CLI appends errors and service events (`logEventToFile`, `Controller.hs`) to the file.
 
 ## Cause
 
