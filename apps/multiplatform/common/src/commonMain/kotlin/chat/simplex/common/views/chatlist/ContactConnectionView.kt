@@ -14,10 +14,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import chat.simplex.common.ui.theme.*
-import chat.simplex.common.model.ChatController
 import chat.simplex.common.model.PendingContactConnection
 import chat.simplex.common.model.chatTimestampText
-import chat.simplex.common.model.timestampTick
 import chat.simplex.common.views.helpers.*
 import chat.simplex.res.*
 
@@ -55,8 +53,6 @@ fun ContactConnectionView(contactConnection: PendingContactConnection) {
     Box(
       contentAlignment = Alignment.TopEnd
     ) {
-      timestampTick.value
-      remember { ChatController.appPrefs.relativeTimestamps.state }.value
       val ts = chatTimestampText(contactConnection.updatedAt)
       ChatListTimestampView(ts)
       Box(

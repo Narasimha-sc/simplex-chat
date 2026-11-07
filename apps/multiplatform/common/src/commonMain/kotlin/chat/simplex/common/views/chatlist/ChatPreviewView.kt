@@ -415,9 +415,6 @@ fun ChatPreviewView(
             chatPreviewTitle()
           }
           Spacer(Modifier.width(8.sp.toDp()))
-          // Subscribe so this preview redraws on each minute tick and when the pref toggles.
-          timestampTick.value
-          remember { ChatController.appPrefs.relativeTimestamps.state }.value
           val ts = chatTimestampText(chat.chatItems.lastOrNull()?.meta?.itemTs ?: chat.chatInfo.chatTs)
           ChatListTimestampView(ts)
         }

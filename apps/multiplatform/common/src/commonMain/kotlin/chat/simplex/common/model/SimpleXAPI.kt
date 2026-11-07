@@ -8796,7 +8796,6 @@ data class AppSettings(
   var uiThemes: List<ThemeOverrides>? = null,
   var oneHandUI: Boolean? = null,
   var chatBottomBar: Boolean? = null,
-  var relativeTimestamps: Boolean? = null,
   var uiChatLayout: ChatLayoutMode? = null
 ) {
   fun prepareForExport(): AppSettings {
@@ -8835,7 +8834,6 @@ data class AppSettings(
     if (uiThemes != def.uiThemes) { empty.uiThemes = uiThemes }
     if (oneHandUI != def.oneHandUI) { empty.oneHandUI = oneHandUI }
     if (chatBottomBar != def.chatBottomBar) { empty.chatBottomBar = chatBottomBar }
-    if (relativeTimestamps != def.relativeTimestamps) { empty.relativeTimestamps = relativeTimestamps }
     if (uiChatLayout != def.uiChatLayout) { empty.uiChatLayout = uiChatLayout }
     return empty
   }
@@ -8885,7 +8883,6 @@ data class AppSettings(
     uiThemes?.let { def.themeOverrides.set(it.skipDuplicates()) }
     oneHandUI?.let { def.oneHandUI.set(it) }
     chatBottomBar?.let { if (appPlatform.isAndroid) def.chatBottomBar.set(it) else def.chatBottomBar.set(true) }
-    relativeTimestamps?.let { def.relativeTimestamps.set(it) }
     uiChatLayout?.let { def.chatLayout.set(it) }
   }
 
@@ -8925,7 +8922,6 @@ data class AppSettings(
         uiThemes = null,
         oneHandUI = true,
         chatBottomBar = true,
-        relativeTimestamps = false,
         uiChatLayout = ChatLayoutMode.Classic,
       )
 
@@ -8966,7 +8962,6 @@ data class AppSettings(
           uiThemes = def.themeOverrides.get(),
           oneHandUI = def.oneHandUI.get(),
           chatBottomBar = def.chatBottomBar.get(),
-          relativeTimestamps = def.relativeTimestamps.get(),
           uiChatLayout = def.chatLayout.get()
         )
     }

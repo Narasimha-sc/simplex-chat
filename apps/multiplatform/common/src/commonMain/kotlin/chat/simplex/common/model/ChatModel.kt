@@ -4042,9 +4042,6 @@ data class CIMeta (
   val msgVerified: MsgVerified? = null
 ) {
   val timestampText: String get() = chatTimestampText(itemTs, true)
-  val timestampReserveText: String get() =
-    if (appPreferences.relativeTimestamps.get()) WORST_CASE_RELATIVE_TIMESTAMP
-    else getTimestampText(itemTs, true)
 
   val recent: Boolean get() = updatedAt + 10.toDuration(DurationUnit.SECONDS) > Clock.System.now()
   val isLive: Boolean get() = itemLive == true
@@ -4124,15 +4121,10 @@ fun getTimestampDateText(t: Instant): String {
   return "$weekday, $dayMonthYear"
 }
 
-// 10 chars - wider than any non-pathological relative timestamp.
-// Used by reserveSpaceForMeta so the bubble layout doesn't reflow on minute ticks.
-const val WORST_CASE_RELATIVE_TIMESTAMP = "1y100d ago"
-
-// Single global ticker advanced once a minute by AppScreen while the pref is on.
-val timestampTick = mutableStateOf(0L)
+val relativeTimestampsNow = mutableStateOf(Clock.System.now())
 
 fun chatTimestampText(t: Instant, shortFormat: Boolean = false): String =
-  if (appPreferences.relativeTimestamps.get()) getRelativeTimestampText(t)
+  if (appPreferences.relativeTimestamps.state.value) getRelativeTimestampText(t, relativeTimestampsNow.value)
   else getTimestampText(t, shortFormat)
 
 fun getTimestampText(t: Instant, shortFormat: Boolean = false): String {
@@ -4166,9 +4158,8 @@ fun getTimestampText(t: Instant, shortFormat: Boolean = false): String {
   return time.toJavaLocalDateTime().format(dateFormatter)
 }
 
-fun getRelativeTimestampText(t: Instant): String {
-  val diff = Clock.System.now() - t
-  if (diff.isNegative()) return generalGetString(MR.strings.relative_time_less_than_minute)
+fun getRelativeTimestampText(t: Instant, now: Instant): String {
+  val diff = now - t
   val days = diff.inWholeDays.toInt()
   return when {
     diff.inWholeMinutes < 1 -> generalGetString(MR.strings.relative_time_less_than_minute)
