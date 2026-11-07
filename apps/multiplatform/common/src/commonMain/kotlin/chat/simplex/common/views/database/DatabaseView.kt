@@ -603,14 +603,10 @@ fun deleteDatabaseBackups() {
   File(dataDir, "$agentDatabaseFileName.bak").delete()
 }
 
-// export holds a copy of the data in databaseExportDir while it writes the archive to archiveDir,
-// where a migration upload then also writes an encrypted copy of the archive
 suspend fun confirmExportStorage(archiveDir: File = databaseExportDir, dataBytes: Long = exportDataBytes()): Boolean {
   databaseExportDir.mkdirs()
   archiveDir.mkdirs()
-  val (shortDir, requiredBytes) = listOf(archiveDir to 2L * dataBytes, databaseExportDir to dataBytes)
-    .firstOrNull { (dir, needed) -> dir.usableSpace < needed } ?: return true
-  val availableBytes = shortDir.usableSpace
+  val (requiredBytes, availableBytes) = exportStorageShortfall(databaseExportDir, archiveDir, dataBytes) ?: return true
   val proceed = CompletableDeferred<Boolean>()
   AlertManager.shared.showAlertDialog(
     title = generalGetString(MR.strings.not_enough_storage_title),
@@ -622,6 +618,11 @@ suspend fun confirmExportStorage(archiveDir: File = databaseExportDir, dataBytes
   )
   return proceed.await()
 }
+
+fun exportStorageShortfall(exportDir: File, archiveDir: File, dataBytes: Long): Pair<Long, Long>? =
+  listOf(archiveDir to 2L * dataBytes, exportDir to dataBytes)
+    .firstOrNull { (dir, needed) -> dir.usableSpace < needed }
+    ?.let { (dir, needed) -> needed to dir.usableSpace }
 
 fun exportDataBytes(): Long =
   directoryFileCountAndSize(appFilesDir.absolutePath).second +

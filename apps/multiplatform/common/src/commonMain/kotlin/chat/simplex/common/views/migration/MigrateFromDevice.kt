@@ -489,7 +489,7 @@ private fun showDatabaseTooLargeAlert(bytes: Long) {
 private fun MutableState<MigrationFromState>.exportArchive() {
   withLongRunningApi {
     val dataBytes = exportDataBytes()
-    if (dataBytes > MAX_FILE_SIZE_XFTP_HARD) {
+    if (exceedsXftpUploadLimit(dataBytes)) {
       showDatabaseTooLargeAlert(dataBytes)
       state = MigrationFromState.UploadConfirmation
       return@withLongRunningApi
@@ -502,7 +502,7 @@ private fun MutableState<MigrationFromState>.exportArchive() {
       getMigrationTempFilesDirectory().mkdir()
       val (archivePath, archiveErrors) = exportChatArchive(chatModel, getMigrationTempFilesDirectory(), mutableStateOf(""))
       val archiveBytes = File(archivePath).length()
-      if (archiveBytes > MAX_FILE_SIZE_XFTP_HARD) {
+      if (exceedsXftpUploadLimit(archiveBytes)) {
         File(archivePath).delete()
         showDatabaseTooLargeAlert(archiveBytes)
         state = MigrationFromState.UploadConfirmation
