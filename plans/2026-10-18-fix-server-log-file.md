@@ -4,7 +4,7 @@ Fixes #7113.
 
 ## Problem
 
-`simplex-chat -p 5225 --log-file a.log` never creates `a.log`, with or without a connected client. In terminal mode (without `-p`, `-e` or `--headless`) the CLI appends errors and service events (`logEventToFile`, `Controller.hs`) to the file.
+`simplex-chat -p 5225 --log-file a.log` never creates `a.log`, with or without a connected client.
 
 ## Cause
 
@@ -12,16 +12,17 @@ Fixes #7113.
 
 ## Fix
 
-In the `-p` branch of `simplexChatCLI'`, when `--log-file` is set, `addLogFileHook` sets `ChatHooks.eventHook` in the config passed to the server. The core calls the hook in `toView_` for each local event before it is queued, so events are written whether or not a client is connected; the hook returns the event unchanged.
+In the `-p` branch of `simplexChatCLI'`, when `--log-file` is set, `addLogFileHook` sets `ChatHooks.eventHook` in the config passed to the server. The core calls the hook in `toView_` for each local event before it is queued; the hook returns the event unchanged.
 
 The hook:
-- writes errors and `logEventToFile` events, formatted by `serializeChatError` / `serializeChatResponse` with the current user, as terminal mode writes them;
-- appends under an `MVar` lock, because the core calls it from several threads and GHC allows one write handle per file in a process;
+- writes errors and `logEventToFile` events, formatted by `serializeChatError` / `serializeChatResponse` with the local current user (`currentUser`);
+- appends under an `MVar` lock;
 - prints `log-file write error: …` on a failed write, and the server continues.
 
 ## Scope
 
 - `src/Simplex/Chat/Terminal/Main.hs`: `simplexChatCLI'` and `addLogFileHook`.
-- CLI only: `-p` is parsed by `simplexChatCLI'`, which only the `simplex-chat` executable calls with a server; the directory and badge services pass `Nothing`, and the apps do not use this module.
+- CLI only: `simplex-chat` executable (the directory and badge services pass `Nothing`).
 - Terminal mode, `-e` and `--headless` are unchanged.
 - Events of a remote host controlled by the server (`pollEvents`, `Remote.hs`) are written to `outputQ` without `toView_` and are not logged.
+- While a remote controller session is connected (`RCSessionConnected`), `toView_` writes events to `remoteOutputQ`; the hook logs them, and terminal mode does not.
