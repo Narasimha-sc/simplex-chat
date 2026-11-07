@@ -479,7 +479,7 @@ struct MigrateFromDevice: View {
                     alert = databaseTooLargeAlert(dataBytes)
                     migrationState = .uploadConfirmation
                 }
-            } else if let s = await exportStorageShortfall(dataBytes) {
+            } else if let s = exportStorageShortfall(dataBytes) {
                 await MainActor.run { alert = .lowStorage(required: s.required, available: s.available) }
             } else {
                 await archiveAndUpload()
@@ -491,7 +491,7 @@ struct MigrateFromDevice: View {
         do {
             try? FileManager.default.createDirectory(at: getMigrationTempFilesDirectory(), withIntermediateDirectories: true)
             let (archivePath, errs) = try await exportChatArchive(getMigrationTempFilesDirectory())
-            let archiveBytes = (try? FileManager.default.attributesOfItem(atPath: archivePath.path)[.size] as? Int64) ?? 0
+            let archiveBytes = fileContentSize(archivePath.path)
             if archiveBytes > MAX_FILE_SIZE_XFTP_HARD {
                 try? FileManager.default.removeItem(at: archivePath)
                 await MainActor.run {
@@ -829,7 +829,7 @@ func exportDataBytes() async -> Int64 {
     await Task.detached { estimatedExportBytes() }.value
 }
 
-func exportStorageShortfall(_ dataBytes: Int64) async -> (required: Int64, available: Int64)? {
+func exportStorageShortfall(_ dataBytes: Int64) -> (required: Int64, available: Int64)? {
     let required = dataBytes * 2
     guard let available = availableImportantBytes(at: getDocumentsDirectory()), available < required else { return nil }
     return (required, available)
