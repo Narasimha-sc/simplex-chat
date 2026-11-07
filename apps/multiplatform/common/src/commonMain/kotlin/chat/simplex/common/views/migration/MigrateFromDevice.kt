@@ -260,7 +260,7 @@ private fun MutableState<MigrationFromState>.UploadConfirmationView() {
       icon = painterResource(MR.images.ic_ios_share),
       text = stringResource(MR.strings.migrate_from_device_archive_and_upload),
       textColor = MaterialTheme.colors.primary,
-      click = { state = MigrationFromState.Archiving }
+      click = { confirmArchiving() }
     ){}
     SectionTextFooter(stringResource(MR.strings.migrate_from_device_all_data_will_be_uploaded))
   }
@@ -486,18 +486,17 @@ private fun showDatabaseTooLargeAlert(bytes: Long) {
   )
 }
 
+private fun MutableState<MigrationFromState>.confirmArchiving() {
+  val dataBytes = exportDataBytes()
+  if (exceedsXftpUploadLimit(dataBytes)) {
+    showDatabaseTooLargeAlert(dataBytes)
+  } else {
+    confirmExportStorage(getMigrationTempFilesDirectory(), dataBytes) { state = MigrationFromState.Archiving }
+  }
+}
+
 private fun MutableState<MigrationFromState>.exportArchive() {
   withLongRunningApi {
-    val dataBytes = exportDataBytes()
-    if (exceedsXftpUploadLimit(dataBytes)) {
-      showDatabaseTooLargeAlert(dataBytes)
-      state = MigrationFromState.UploadConfirmation
-      return@withLongRunningApi
-    }
-    if (!confirmExportStorage(getMigrationTempFilesDirectory(), dataBytes)) {
-      state = MigrationFromState.UploadConfirmation
-      return@withLongRunningApi
-    }
     try {
       getMigrationTempFilesDirectory().mkdir()
       val (archivePath, archiveErrors) = exportChatArchive(chatModel, getMigrationTempFilesDirectory(), mutableStateOf(""))

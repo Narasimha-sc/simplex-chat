@@ -254,8 +254,10 @@ fun DatabaseManagementView() {
                 DatabaseEncryptionView(chatModel, false)
               }
             } else {
-              stopChatRunBlockStartChat(stopped, chatLastStart, progressIndicator) {
-                exportArchive(m, progressIndicator, chatArchiveFile, saveArchiveLauncher)
+              confirmExportStorage(databaseExportDir, exportDataBytes()) {
+                stopChatRunBlockStartChat(stopped, chatLastStart, progressIndicator) {
+                  exportArchive(m, progressIndicator, chatArchiveFile, saveArchiveLauncher)
+                }
               }
             }
           },
@@ -603,26 +605,27 @@ fun deleteDatabaseBackups() {
   File(dataDir, "$agentDatabaseFileName.bak").delete()
 }
 
-suspend fun confirmExportStorage(archiveDir: File = databaseExportDir, dataBytes: Long = exportDataBytes()): Boolean {
+fun confirmExportStorage(archiveDir: File, dataBytes: Long, onConfirm: () -> Unit) {
   databaseExportDir.mkdirs()
   archiveDir.mkdirs()
-  val (requiredBytes, availableBytes) = exportStorageShortfall(databaseExportDir, archiveDir, dataBytes) ?: return true
-  val proceed = CompletableDeferred<Boolean>()
-  AlertManager.shared.showAlertDialog(
-    title = generalGetString(MR.strings.not_enough_storage_title),
-    text = String.format(generalGetString(MR.strings.not_enough_storage_desc), formatBytes(requiredBytes), formatBytes(availableBytes)),
-    confirmText = generalGetString(MR.strings.continue_to_next_step),
-    onConfirm = { proceed.complete(true) },
-    onDismiss = { proceed.complete(false) },
-    onDismissRequest = { proceed.complete(false) },
-  )
-  return proceed.await()
+  val shortfall = exportStorageShortfall(databaseExportDir.usableSpace, archiveDir.usableSpace, dataBytes)
+  if (shortfall == null) {
+    onConfirm()
+  } else {
+    val (requiredBytes, availableBytes) = shortfall
+    AlertManager.shared.showAlertDialog(
+      title = generalGetString(MR.strings.not_enough_storage_title),
+      text = String.format(generalGetString(MR.strings.not_enough_storage_desc), formatBytes(requiredBytes), formatBytes(availableBytes)),
+      confirmText = generalGetString(MR.strings.continue_to_next_step),
+      onConfirm = onConfirm,
+    )
+  }
 }
 
-fun exportStorageShortfall(exportDir: File, archiveDir: File, dataBytes: Long): Pair<Long, Long>? =
-  listOf(archiveDir to 2L * dataBytes, exportDir to dataBytes)
-    .firstOrNull { (dir, needed) -> dir.usableSpace < needed }
-    ?.let { (dir, needed) -> needed to dir.usableSpace }
+fun exportStorageShortfall(exportFreeBytes: Long, archiveFreeBytes: Long, dataBytes: Long): Pair<Long, Long>? =
+  listOf(archiveFreeBytes to 2L * dataBytes, exportFreeBytes to dataBytes)
+    .firstOrNull { (free, needed) -> free < needed }
+    ?.let { (free, needed) -> needed to free }
 
 fun exportDataBytes(): Long =
   directoryFileCountAndSize(appFilesDir.absolutePath).second +
@@ -637,10 +640,6 @@ private suspend fun exportArchive(
   saveArchiveLauncher: FileChooserLauncher
 ): Boolean {
   progressIndicator.value = true
-  if (!confirmExportStorage()) {
-    progressIndicator.value = false
-    return false
-  }
   try {
     val (archiveFile, archiveErrors) = exportChatArchive(m, null, chatArchiveFile)
     chatArchiveFile.value = archiveFile

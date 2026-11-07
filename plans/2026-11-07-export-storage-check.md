@@ -10,9 +10,9 @@ The core export copies both databases and the files to a temporary folder, then 
 
 ## Fix
 
-- Before "Export database" and before archiving for migration, the data size (`exportDataBytes`) is compared with free space. If short, "You may not have enough storage" shows the space needed and the space available, with Continue and Cancel. Continue proceeds as before; Cancel stops (migration returns to "Archive and upload").
-- Android, desktop: `exportStorageShortfall(exportDir, archiveDir, dataBytes)` in `DatabaseView.kt` requires twice the data size in the archive folder (the export folder, or `migration_temp_files` for migration) and the data size in the export folder. On desktop the two folders can be on different volumes. `confirmExportStorage` shows the alert and awaits the answer.
-- iOS: `exportStorageShortfall` requires twice the data size in `volumeAvailableCapacityForImportantUsage` of the documents volume. The alert is a case of each screen's own alert enum, and Continue starts the export from it.
+- Before "Export database" and before archiving for migration, the data size (`exportDataBytes`) is compared with free space. If short, "You may not have enough storage" shows the space needed and the space available, with Continue and Cancel. Continue proceeds as before; Cancel stops (migration stays at or returns to "Archive and upload").
+- Android, desktop: `exportStorageShortfall(exportFreeBytes, archiveFreeBytes, dataBytes)` in `DatabaseView.kt` requires twice the data size free in the archive folder (the export folder, or `migration_temp_files` for migration) and the data size free in the export folder. `confirmExportStorage` runs the check on the "Export database" click before the chat is stopped, and on the "Archive and upload" click before the state changes to "Archiving database"; Continue starts the step.
+- iOS: `exportStorageShortfall` requires twice the data size in `volumeAvailableCapacityForImportantUsage` of the documents volume.
 - Strings: `not_enough_storage_title`, `not_enough_storage_desc`.
 
 ## Scope

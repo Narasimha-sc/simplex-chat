@@ -18,16 +18,11 @@ class MigrationExportChecksTest {
   }
 
   @Test
-  fun testExportStorageNeedsTwiceTheDataInArchiveFolder() = withTempDir { exportDir ->
-    withTempDir { archiveDir ->
-      val usable = archiveDir.toFile().usableSpace
-      val dataBytes = usable / 4 * 3
+  fun testExportStorageNeedsTwiceTheDataInArchiveFolderAndTheDataInExportFolder() {
+    val dataBytes = 100L
 
-      val (required, available) = exportStorageShortfall(exportDir.toFile(), archiveDir.toFile(), dataBytes)!!
-
-      assertEquals(2 * dataBytes, required)
-      assertTrue(available < required)
-      assertNull(exportStorageShortfall(exportDir.toFile(), archiveDir.toFile(), usable / 4))
-    }
+    assertEquals(200L to 199L, exportStorageShortfall(exportFreeBytes = 100, archiveFreeBytes = 199, dataBytes))
+    assertEquals(100L to 99L, exportStorageShortfall(exportFreeBytes = 99, archiveFreeBytes = 200, dataBytes))
+    assertNull(exportStorageShortfall(exportFreeBytes = 100, archiveFreeBytes = 200, dataBytes))
   }
 }
