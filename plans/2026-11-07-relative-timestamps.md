@@ -21,17 +21,16 @@ The app formats these times only with `getTimestampText`, which returns a clock 
   | under 365 days | `182d ago` |
   | 365 days or more | `1y100d ago` |
 
-- `relativeTimestampsNow`: one `Instant` state. `MainScreen` sets it to the current time when the preference is on and every 60 s after that; the loop ends when the preference is off.
-- `chatTimestampText(t, shortFormat)` reads the preference state and `relativeTimestampsNow`: an age when on, `getTimestampText` when off. A composition that shows a time reads both states, so it is recomposed on each update and on each toggle.
-- `chatTimestampText` replaces `getTimestampText` in `CIMeta.timestampText` (message and event times) and in the chat-list rows (`ChatPreviewView`, `ContactRequestView`, `ContactConnectionView`).
-- The space reserved for the time in a bubble (`reserveSpaceForMeta`, `metaReserveCopy`) is built from `CIMeta.timestampText`, so it equals the shown text in both modes.
-- `getItemSeparation` compares the clock times of adjacent items (`getTimestampText(itemTs, true)`), so the items that show a time do not change as ages advance.
+- `relativeTimestampsNow`: one `Instant` state. While the preference is on, `MainScreen` sets it every second to the current time truncated to the minute; the state changes once per minute, and within a second after the device wakes from sleep.
+- `chatTimestampText(t, shortFormat)` reads the preference state and `relativeTimestampsNow`: an age when on, `getTimestampText` when off. A composition that shows a time is recomposed on each change of either state.
+- `chatTimestampText` replaces `getTimestampText` in `CIMeta.timestampText` (message and event times, and the space reserved for the time in a bubble) and in the chat-list rows (`ChatPreviewView`, `ContactRequestView`, `ContactConnectionView`).
+- `getItemSeparation` compares the clock times of adjacent items (`getTimestampText(itemTs, true)`).
 
 ```mermaid
 flowchart LR
   P[relativeTimestamps state] --> C[chatTimestampText]
   N[relativeTimestampsNow state] --> C
-  M[MainScreen loop, 60 s] --> N
+  M[MainScreen loop, 1 s, minute value] --> N
   C --> T[CIMeta.timestampText]
   C --> L[chat-list rows]
   T --> V[CIMetaView time]

@@ -15,7 +15,7 @@ import kotlin.time.Duration.Companion.seconds
 
 class RelativeTimestampsTest {
   private val now = Instant.parse("2026-11-07T12:00:00Z")
-  private val iconSpace = "    "
+  private val iconSpace = " \u00A0\u00A0\u00A0"
 
   private fun inUsLocale(test: () -> Unit) {
     val locale = Locale.getDefault()
@@ -41,7 +41,7 @@ class RelativeTimestampsTest {
   }
 
   @Test
-  fun enabledToggleShowsAgesInMessagesAndChatList() = inUsLocale {
+  fun enabledToggleShowsAgesAndReservesTheirSpace() = inUsLocale {
     val enabled = appPrefs.relativeTimestamps.get()
     val shownNow = relativeTimestampsNow.value
     try {
@@ -49,7 +49,7 @@ class RelativeTimestampsTest {
       relativeTimestampsNow.value = now
       val sentEdited = CIMeta.getSample(1, now - 23.hours - 59.minutes, "", status = CIStatus.SndSent(SndCIStatusProgress.Complete), itemEdited = true)
       assertEquals("23h59m ago", sentEdited.timestampText)
-      assertEquals(iconSpace + iconSpace + " " + "23h59m ago", reserveSpaceForMeta(sentEdited, null, null, Color.Gray, showTimestamp = true))
+      assertEquals(iconSpace + iconSpace + "\u00A0" + "23h59m ago", reserveSpaceForMeta(sentEdited, null, null, Color.Gray, showTimestamp = true))
       assertEquals("2h5m ago", chatTimestampText(now - 2.hours - 5.minutes))
     } finally {
       appPrefs.relativeTimestamps.set(enabled)

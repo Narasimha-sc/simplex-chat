@@ -43,6 +43,7 @@ import dev.icerock.moko.resources.compose.stringResource
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import kotlinx.datetime.Clock
+import kotlinx.datetime.Instant
 
 // Spec: spec/client/navigation.md#AppScreen
 @Composable
@@ -118,8 +119,8 @@ fun MainScreen() {
   val useRelativeTimestamps by remember { appPrefs.relativeTimestamps.state }
   LaunchedEffect(useRelativeTimestamps) {
     while (useRelativeTimestamps) {
-      relativeTimestampsNow.value = Clock.System.now()
-      delay(60_000)
+      relativeTimestampsNow.value = Instant.fromEpochSeconds(Clock.System.now().epochSeconds / 60 * 60)
+      delay(1_000)
     }
   }
 

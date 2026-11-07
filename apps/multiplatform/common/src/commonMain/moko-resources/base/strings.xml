@@ -3372,7 +3372,7 @@
   <string name="v7_1_flat_layout">Flat layout and markdown</string>
   <string name="v7_1_flat_layout_descr">Enable in Appearance settings.</string>
   <string name="relative_timestamps">Relative timestamps</string>
-  <string name="relative_timestamps_desc">Show timestamps as "2h5m ago" instead of "12:00"</string>
+  <string name="relative_timestamps_desc">Show the age of messages and chats, e.g. 2h5m ago, instead of the time.</string>
   <string name="relative_time_less_than_minute">just now</string>
   <string name="relative_time_minutes_ago">%dm ago</string>
   <string name="relative_time_hours_minutes_ago">%1$dh%2$dm ago</string>
