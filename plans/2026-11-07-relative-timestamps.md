@@ -2,7 +2,7 @@
 
 ## Problem
 
-The chat list and the messages show only clock times (`12:00`, `02/01`). A reader works out the age of a message from the current time.
+The chat list and the messages show only clock times and dates (`12:00`, `02/01`). A reader works out the age of a message from the current time.
 
 ## Cause
 
