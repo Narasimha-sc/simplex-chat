@@ -829,7 +829,6 @@ func exportDataBytes() async -> Int64 {
     await Task.detached { estimatedExportBytes() }.value
 }
 
-// export transiently holds a copy of the data and the archive of it
 func exportStorageShortfall(_ dataBytes: Int64) async -> (required: Int64, available: Int64)? {
     let required = dataBytes * 2
     guard let available = availableImportantBytes(at: getDocumentsDirectory()), available < required else { return nil }
