@@ -4124,8 +4124,7 @@ fun getTimestampDateText(t: Instant): String {
 val relativeTimestampsNow = mutableStateOf(Clock.System.now())
 
 fun chatTimestampText(t: Instant, shortFormat: Boolean = false): String =
-  if (appPreferences.relativeTimestamps.state.value) getRelativeTimestampText(t, relativeTimestampsNow.value)
-  else getTimestampText(t, shortFormat)
+  getTimestampText(t, shortFormat)
 
 fun getTimestampText(t: Instant, shortFormat: Boolean = false): String {
   val tz = TimeZone.currentSystemDefault()
