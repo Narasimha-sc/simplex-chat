@@ -4,15 +4,11 @@ import android.app.*
 import android.content.Context
 import chat.simplex.common.platform.Log
 import android.content.Intent
-import android.content.pm.ActivityInfo
 import android.os.*
 import android.view.View
 import androidx.compose.animation.core.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.platform.LocalContext
 import androidx.core.view.ViewCompat
 import androidx.lifecycle.*
 import androidx.work.*
@@ -361,19 +357,6 @@ class SimplexApp: Application(), LifecycleEventObserver {
       override suspend fun androidUnfinishedBadgePurchases(): List<BadgePurchaseOutcome> = unfinishedBadgePurchases()
 
       override fun androidManageBadgeSubscription(productId: String) = manageBadgeSubscription(productId)
-
-      @Composable
-      override fun androidLockPortraitOrientation() {
-        val context = LocalContext.current
-        DisposableEffect(Unit) {
-          val activity = context as? Activity ?: return@DisposableEffect onDispose {}
-          activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LOCKED
-          onDispose {
-            // Unlock orientation
-            activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-          }
-        }
-      }
 
       override suspend fun androidAskToAllowBackgroundCalls(): Boolean {
         if (SimplexService.isBackgroundRestricted()) {

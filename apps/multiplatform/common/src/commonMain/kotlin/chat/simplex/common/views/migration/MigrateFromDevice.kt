@@ -161,7 +161,7 @@ private fun MigrateFromDeviceLayout(
     SectionByState(migrationState, tempDatabaseFile.value, chatReceiver)
     SectionBottomSpacer()
   }
-  platform.androidLockPortraitOrientation()
+  LockToCurrentOrientationUntilDispose()
 }
 
 @Composable
