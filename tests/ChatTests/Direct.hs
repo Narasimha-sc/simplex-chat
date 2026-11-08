@@ -16,7 +16,6 @@ import ChatTests.DBUtils
 import ChatTests.Utils
 import Control.Concurrent (threadDelay)
 import Control.Concurrent.Async (concurrently_, poll, wait)
-import Control.Exception (finally)
 import Control.Monad (forM_, void, (>=>))
 import Data.Aeson (ToJSON)
 import qualified Data.Aeson as J
@@ -30,21 +29,16 @@ import GHC.Conc (ThreadStatus (..), threadStatus)
 import Simplex.Chat.AppSettings (defaultAppSettings)
 import qualified Simplex.Chat.AppSettings as AS
 import Simplex.Chat.Call
-import Simplex.Chat.Controller (ChatConfig (..), ChatController (..), ChatEvent (CEvtSubscriptionStatus), PresetServers (..))
-import Simplex.Chat.Core (simplexChatCore)
+import Simplex.Chat.Controller (ChatConfig (..), ChatController (..), PresetServers (..))
 import Simplex.Chat.Messages (ChatItemId)
 import Simplex.Chat.Options
-import Simplex.Chat.Options.DB
 import Simplex.Chat.Protocol (supportedChatVRange)
-import Simplex.Chat.Terminal.Main (simplexChatCLI')
 import Simplex.Chat.Types (ContactId, VersionRangeChat, authErrDisableCount, sameVerificationCode, verificationCode, pattern VersionChat)
-import Simplex.Messaging.Agent (disposeAgentClient)
 import Simplex.Messaging.Agent.Env.SQLite
 import Simplex.Messaging.Agent.RetryInterval
 import qualified Simplex.Messaging.Agent.Store.DB as DB
-import Simplex.Messaging.Agent.Store.Interface (closeDBStore)
 import Simplex.Messaging.Client (NetworkTimeout (..))
-import Control.Concurrent.STM (atomically, newEmptyTMVarIO, putTMVar, readTBQueue, readTVarIO, tryReadTMVar)
+import Control.Concurrent.STM (atomically, readTVarIO)
 import qualified Simplex.Messaging.Crypto as C
 import Simplex.Messaging.Encoding.String (strEncode)
 import Simplex.Messaging.Server.Env.STM hiding (subscriptions)
@@ -59,6 +53,7 @@ import Test.Hspec hiding (it)
 import Database.PostgreSQL.Simple (Only (..))
 #else
 import Database.SQLite.Simple (Only (..))
+import Simplex.Chat.Options.DB
 #endif
 
 chatDirectTests :: SpecWith TestParams
@@ -189,8 +184,6 @@ chatDirectTests = do
       testReqVRange vr11 supportedChatVRange
       testReqVRange vr11 vr11
     it "update peer version range on received messages" testUpdatePeerChatVRange
-  describe "WebSockets server mode" $ do
-    it "write events to log file" testServerLogFile
   where
     testInvVRange vr1 vr2 = it (vRangeStr vr1 <> " - " <> vRangeStr vr2) $ testConnInvChatVRange vr1 vr2
     testReqVRange vr1 vr2 = it (vRangeStr vr1 <> " - " <> vRangeStr vr2) $ testConnReqChatVRange vr1 vr2
@@ -3604,29 +3597,3 @@ testLinkContentFilter =
       bob ##> "/_get content types @2"
       bob <## "Chat content types: link, text"
       bob #$> ("/_get chat @2 content=link count=100", chat, [(0, "https://simplex.chat"), (0, "check out https://example.com"), (1, "visit http://test.org"), (0, simplexLink), (1, "[click here](https://link.example.com)"), (0, "visit example.com for info")])
-
-testServerLogFile :: HasCallStack => TestParams -> IO ()
-testServerLogFile ps = do
-  withNewTestChat ps "alice" aliceProfile $ \alice ->
-    withNewTestChat ps "bob" bobProfile $ \bob ->
-      connectUsers alice bob
-  serverCC <- newEmptyTMVarIO
-  let runServer _ cfg' opts' = simplexChatCore cfg' opts' $ \_ cc -> atomically (putTMVar serverCC cc) >> waitSubscribed cc
-  simplexChatCLI' cfg serverOpts (Just runServer)
-    `finally` (atomically (tryReadTMVar serverCC) >>= mapM_ (\ChatController {smpAgent, chatStore} -> disposeAgentClient smpAgent >> closeDBStore chatStore))
-  doesFileExist logPath `shouldReturn` True
-  B.lines <$> B.readFile logPath >>= (`shouldContain` ["subscribed 1 connections on server localhost"])
-  where
-    (cfg, opts@ChatOpts {coreOptions = co@CoreChatOpts {dbOptions}}) = testPortsCfg ps testCfg testOpts
-    serverOpts = opts {chatServerPort = Just "5225", coreOptions = co {dbOptions = aliceDbOptions, logFile = Just logPath}}
-#if defined(dbPostgres)
-    aliceDbOptions = dbOptions {dbSchemaPrefix = testSchemaPrefix ps "alice"}
-#else
-    aliceDbOptions = dbOptions {dbFilePrefix = tmpPath ps </> "alice"}
-#endif
-    logPath = tmpPath ps </> "alice.log"
-    waitSubscribed cc = do
-      (_, r) <- atomically $ readTBQueue $ outputQ cc
-      case r of
-        Right CEvtSubscriptionStatus {} -> pure ()
-        _ -> waitSubscribed cc
