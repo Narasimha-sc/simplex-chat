@@ -307,7 +307,7 @@ Path prefix: `common/src/commonMain/kotlin/chat/simplex/common/`
 | `views/helpers/Enums.kt` | — | Low | Enum utility extensions |
 | `views/helpers/ExposedDropDownSettingRow.kt` | — | Low | Dropdown setting row composable |
 | `views/helpers/GestureDetector.kt` | — | Low | Touch gesture utilities |
-| `views/helpers/Modifiers.kt` | — | Low | Compose modifier extensions |
+| `views/helpers/Modifiers.kt` | — | Low | Compose modifier extensions, right-to-left mirrored painter |
 | `views/helpers/SubscriptionStatusIcon.kt` | PC25 | Low | Server connection status icon |
 
 ### 1.14 Views — Other
