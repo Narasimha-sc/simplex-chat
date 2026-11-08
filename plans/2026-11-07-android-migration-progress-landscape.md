@@ -21,6 +21,15 @@ In landscape on Android:
 - `LargeProgressView` sizes the ring to the height between the top of its box and that bottom, minus the padding, at least 120dp. The percentage and byte count are scaled by ring size / 300dp, between 0.4 and 1.
 - `LinkShownView` limits the QR code, with its vertical padding, to the height between `topPaddingToContent(false)` and that bottom, and centres it. The same height limits the intrinsic height of the QR code, from which `ColumnWithScrollBar(maxIntrinsicSize = true)` sizes the screen.
 
+```mermaid
+flowchart LR
+  B["landscapeWindowBottomPx()"] --> P["LargeProgressView: ring size, text scale"]
+  B --> L["LinkShownView: QR code width and height limit"]
+  T["topPaddingToContent(false)"] --> L
+  P --> U[UploadProgressView]
+  P --> D[DownloadProgressView]
+```
+
 ## Scope
 
 - Portrait Android and desktop keep their sizes.
