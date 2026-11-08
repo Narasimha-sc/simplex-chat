@@ -44,8 +44,8 @@ class RelativeTimestampsTest {
     try {
       appPrefs.relativeTimestamps.set(true)
       relativeTimestampsNow.value = now
-      val sentEdited = CIMeta.getSample(1, now - 23.hours - 59.minutes, "", status = CIStatus.SndSent(SndCIStatusProgress.Complete), itemEdited = true)
-      assertEquals("23h59m ago", sentEdited.timestampText)
+      val meta = CIMeta.getSample(1, now - 23.hours - 59.minutes, "")
+      assertEquals("23h59m ago", meta.timestampText)
       assertEquals("2h5m ago", chatTimestampText(now - 2.hours - 5.minutes))
     } finally {
       appPrefs.relativeTimestamps.set(enabled)
