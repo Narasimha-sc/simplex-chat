@@ -3,7 +3,8 @@
 # PR #8 (fork): the migration upload limit (5 GiB) and the free-space warnings of migration and Export database.
 # Checks, in this order, each printed as "CHECK <name> expected=<token> observed=<token>(<details>) MATCH|MISMATCH|INVALID":
 #   E1-export-low-storage-cancel     Documents on a 64 MB disk image, 48 MB of zeros in app_files; Export database, Cancel
-#                                    base: BUG (no warning, the archive is written and shared)  PR: OK (warning, no archive)
+#                                    base: BUG (no warning, the archive is written and shared)
+#                                    PR: OK (warning, no archive, the chat still running); INVALID when the chat was not running
 #   E2-export-low-storage-continue   the same, Continue                                    base: BUG  PR: OK (warning, archive)
 #   L1-migrate-low-storage-cancel    the same data; Migrate to another device, Archive and upload, Cancel
 #                                    base: BUG (no warning, archiving and upload start)    PR: OK (warning, back on Archive and upload)
@@ -244,10 +245,32 @@ close_share_sheet() {
 
 storage_alert='"You may not have enough storage"'
 
+# the Run chat toggle of the Database passphrase & export page: running|stopped|unknown, read for up to 20 s
+# until it shows the state given as the argument
+chat_state() {
+  local want=${1:-} t state=unknown deadline=$((SECONDS + 20))
+  while [ "$SECONDS" -lt "$deadline" ]; do
+    t=$(tree)
+    if grep -qE -- "$(label "Chat is running")" <<< "$t"; then state=running
+    elif grep -qE -- "$(label "Chat is stopped")" <<< "$t"; then state=stopped
+    else
+      state=unknown
+      "$ui" swipe 201 650 201 350 > /dev/null 2>&1 || true
+    fi
+    if [ "$state" != unknown ] && { [ -z "$want" ] || [ "$state" = "$want" ]; }; then break; fi
+    sleep 2
+  done
+  echo "$state"
+}
+
 export_check() {   # name answer(Cancel|Continue)
-  local name=$1 answer=$2 got zips0 zips1 observed shared=0
+  local name=$1 answer=$2 got zips0 zips1 observed shared=0 chat0 chat1 after=stopped
+  if [ "$answer" = Cancel ]; then
+    after=running
+  fi
   open_database_page
   zips0=$(zips_in_documents)
+  chat0=$(chat_state running)
   "$ui" shot "$name-start"
   tap_match "$(label "Export database")" || fail "no Export database button"
   got=none
@@ -267,19 +290,25 @@ export_check() {   # name answer(Cancel|Continue)
     zips1=$(zips_in_documents)
     "$ui" shot "$name-after-$answer"
     close_share_sheet
-    if [ "$answer" = Cancel ] && [ "$shared" = 0 ] && [ "$zips1" = "$zips0" ]; then
-      observed="OK(warning, Cancel: no archive)"
+    chat1=$(chat_state "$after")
+    "$ui" shot "$name-chat-$chat1"
+    if [ "$answer" = Cancel ] && [ "$chat0" != running ]; then
+      observed="INVALID(warning, Cancel: chat $chat0 before Export database)"
+    elif [ "$answer" = Cancel ] && [ "$shared" = 0 ] && [ "$zips1" = "$zips0" ] && [ "$chat1" = running ]; then
+      observed="OK(warning, Cancel: no archive, chat $chat0 -> $chat1)"
     elif [ "$answer" = Continue ] && [ "$zips1" -gt "$zips0" ]; then
-      observed="OK(warning, Continue: archive written, share sheet $shared)"
+      observed="OK(warning, Continue: archive written, share sheet $shared, chat $chat0 -> $chat1)"
     else
-      observed="OTHER(warning, $answer: archives $zips0 -> $zips1, share sheet $shared)"
+      observed="OTHER(warning, $answer: archives $zips0 -> $zips1, share sheet $shared, chat $chat0 -> $chat1)"
     fi
   elif [ "$got" = stage ]; then
     sleep 3
     zips1=$(zips_in_documents)
     share_sheet_open && shared=1
     close_share_sheet
-    observed="BUG(no warning: archives $zips0 -> $zips1, share sheet $shared, free $free_docs, data $(data_bytes))"
+    chat1=$(chat_state "$after")
+    "$ui" shot "$name-chat-$chat1"
+    observed="BUG(no warning: archives $zips0 -> $zips1, share sheet $shared, chat $chat0 -> $chat1, free $free_docs, data $(data_bytes))"
   else
     observed="OTHER(no alert and no share sheet in 300 s)"
   fi
