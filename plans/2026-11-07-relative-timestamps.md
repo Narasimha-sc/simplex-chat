@@ -29,8 +29,10 @@ The app formats these times only with `getTimestampText`, which returns a clock 
 ```mermaid
 flowchart LR
   P[relativeTimestamps state] --> C[chatTimestampText]
+  P -->|on| M
   N[relativeTimestampsNow state] --> C
   M[MainScreen loop, 1 s, minute value] --> N
+  G[getTimestampText, clock time] --> S[getItemSeparation]
   C --> T[CIMeta.timestampText]
   C --> L[chat-list rows]
   T --> V[CIMetaView time]
