@@ -8,13 +8,13 @@ Part 1 of #7696.
 
 ## Cause
 
-`APIUploadStandaloneFile` rejects a file over `maxFileSizeHard` (5 GiB, simplexmq `Simplex.FileTransfer.Description`) with `CEFileSize`. The migration screens of both apps export and upload without checking that limit.
+`APIUploadStandaloneFile` rejects a file over `maxFileSizeHard` (5 GiB, simplexmq `Simplex.FileTransfer.Description`) with `CEFileSize`. On the migration screen, both apps export and upload without checking that limit.
 
 ## Fix
 
-- `MAX_FILE_SIZE_XFTP_HARD` = 5 GiB in Kotlin `Utils.kt` and Swift `FileUtils.swift`, separate from the badge tier `MAX_FILE_SIZE_XFTP_LEGEND`. Kotlin compares with `exceedsXftpUploadLimit`, the same `>` as the core.
-- Before archiving, `MigrateFromDevice` estimates the data size: the files and wallpapers folders (top-level files) plus both databases (`exportDataBytes`); Kotlin in `confirmArchiving` on the "Archive and upload" click, Swift in `exportArchive`. Over the limit, "Database is too large" shows the size and the limit, and the state stays at or returns to "Archive and upload".
-- After archiving, the archive size is compared with the limit before the "exported with errors" alert and the upload. Over the limit, the archive is deleted and the same alert is shown.
+- `MAX_FILE_SIZE_XFTP_HARD` = 5 GiB in Kotlin `Utils.kt` and Swift `FileUtils.swift`, separate from the badge tier `MAX_FILE_SIZE_XFTP_LEGEND`. Kotlin `exceedsXftpUploadLimit` is `bytes > MAX_FILE_SIZE_XFTP_HARD`, the comparison of the core.
+- Before archiving, the data size is estimated: the top-level files of the files and wallpapers folders plus both databases (`exportDataBytes`); in Kotlin in `confirmArchiving` on the "Archive and upload" click, in Swift in `exportArchive`. Over the limit, "Database is too large" shows the size and the limit, and the state stays at or returns to "Archive and upload".
+- After archiving, the archive size is compared with the limit before the "Chat database exported" alert of archive errors and before the upload. Over the limit, the archive is deleted and the same alert is shown.
 - Strings: `migrate_from_device_database_too_large_title`, `migrate_from_device_database_too_large_desc`.
 
 ```mermaid
