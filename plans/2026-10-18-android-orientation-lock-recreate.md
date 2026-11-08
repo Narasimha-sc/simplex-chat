@@ -16,7 +16,7 @@ On a display that is landscape at rotation 0 (Waydroid in a landscape window, la
 
 ## Fix
 
-`LockToCurrentOrientationUntilDispose()` requests `SCREEN_ORIENTATION_LOCKED`, which keeps the current rotation. The migration screens call it in place of `androidLockPortraitOrientation()`, which is removed from `PlatformInterface`, `SimplexApp`, `spec/architecture.md` and `product/README.md`. Each lock is released, as before, when its screen leaves the composition.
+`LockToCurrentOrientationUntilDispose()` requests `SCREEN_ORIENTATION_LOCKED`, which keeps the current rotation. The migration screens call it in place of `androidLockPortraitOrientation()`, which is removed from `PlatformInterface`, `SimplexApp` and `spec/architecture.md`; `product/README.md` no longer lists orientation locking among the `PlatformInterface` features. Each lock is released, as before, when its screen leaves the composition.
 
 ## Scope
 
