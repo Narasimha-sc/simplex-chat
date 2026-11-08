@@ -17,6 +17,7 @@ enum DatabaseAlert: Identifiable {
     case archiveImported
     case archiveImportedWithErrors(archiveErrors: [ArchiveError])
     case archiveExportedWithErrors(archivePath: URL, archiveErrors: [ArchiveError])
+    case lowStorage(required: Int64, available: Int64)
     case deleteChat
     case chatDeleted
     case deleteLegacyDatabase
@@ -32,6 +33,7 @@ enum DatabaseAlert: Identifiable {
         case .archiveImported: return "archiveImported"
         case .archiveImportedWithErrors: return "archiveImportedWithErrors"
         case .archiveExportedWithErrors: return "archiveExportedWithErrors"
+        case .lowStorage: return "lowStorage"
         case .deleteChat: return "deleteChat"
         case .chatDeleted: return "chatDeleted"
         case .deleteLegacyDatabase: return "deleteLegacyDatabase"
@@ -191,7 +193,6 @@ struct DatabaseView: View {
 
     private func databaseManagementView() -> some View {
         List {
-            let stopped = m.chatRunning == false
             Section {
                 let unencrypted = m.chatDbEncrypted == false
                 let color: Color = unencrypted ? .orange : theme.colors.secondary
@@ -214,8 +215,17 @@ struct DatabaseView: View {
                                 alert = .exportProhibited
                             }
                         } else {
-                            stopChatRunBlockStartChat(stopped, $progressIndicator) {
-                                await exportArchive()
+                            progressIndicator = true
+                            Task {
+                                let shortfall = exportStorageShortfall(await exportDataBytes())
+                                await MainActor.run {
+                                    progressIndicator = false
+                                    if let s = shortfall {
+                                        alert = .lowStorage(required: s.required, available: s.available)
+                                    } else {
+                                        stopChatAndExportArchive()
+                                    }
+                                }
                             }
                         }
                     }
@@ -306,6 +316,8 @@ struct DatabaseView: View {
                     showShareSheet(items: [archivePath])
                 }
             )
+        case let .lowStorage(required, available):
+            return lowStorageAlert(required, available, onContinue: { stopChatAndExportArchive() }, onCancel: {})
         case .deleteChat:
             return Alert(
                 title: Text("Delete chat profile?"),
@@ -462,6 +474,12 @@ struct DatabaseView: View {
                 showAlert(NSLocalizedString("Error starting chat", comment: ""), message: responseError(error))
             }
             progressIndicator.wrappedValue = false
+        }
+    }
+
+    private func stopChatAndExportArchive() {
+        stopChatRunBlockStartChat(m.chatRunning == false, $progressIndicator) {
+            await exportArchive()
         }
     }
 
