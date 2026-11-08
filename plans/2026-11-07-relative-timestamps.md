@@ -11,11 +11,11 @@ These times are formatted only by `getTimestampText`, whose result is a clock ti
 ## Fix
 
 - Preference `relativeTimestamps` (key `RelativeTimestamps`, off by default), toggle "Relative timestamps" in its own Appearance section, before the font scale section, on Android and desktop.
-- `getRelativeTimestampText(t, now)`:
+- `getRelativeTimestampText(t, now)`, with the age counted in clock minutes (the minute of `now` less the minute of `t`):
 
   | Age | Text |
   |---|---|
-  | under 1 minute, or in the future | `just now` |
+  | 0 minutes, or in the future | `just now` |
   | under 1 hour | `5m ago` |
   | under 1 day | `2h5m ago` |
   | under 365 days | `182d ago` |

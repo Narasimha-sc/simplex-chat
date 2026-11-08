@@ -4159,12 +4159,12 @@ fun getTimestampText(t: Instant, shortFormat: Boolean = false): String {
 }
 
 fun getRelativeTimestampText(t: Instant, now: Instant): String {
-  val diff = now - t
-  val days = diff.inWholeDays.toInt()
+  val minutes = now.epochSeconds / 60 - t.epochSeconds / 60
+  val days = (minutes / (24 * 60)).toInt()
   return when {
-    diff.inWholeMinutes < 1 -> generalGetString(MR.strings.relative_time_less_than_minute)
-    diff.inWholeHours < 1 -> generalGetString(MR.strings.relative_time_minutes_ago).format(diff.inWholeMinutes.toInt())
-    days < 1 -> generalGetString(MR.strings.relative_time_hours_minutes_ago).format(diff.inWholeHours.toInt(), (diff.inWholeMinutes % 60).toInt())
+    minutes < 1 -> generalGetString(MR.strings.relative_time_less_than_minute)
+    minutes < 60 -> generalGetString(MR.strings.relative_time_minutes_ago).format(minutes.toInt())
+    days < 1 -> generalGetString(MR.strings.relative_time_hours_minutes_ago).format((minutes / 60).toInt(), (minutes % 60).toInt())
     days < 365 -> generalGetString(MR.strings.relative_time_days_ago).format(days)
     else -> generalGetString(MR.strings.relative_time_years_days_ago).format(days / 365, days % 365)
   }

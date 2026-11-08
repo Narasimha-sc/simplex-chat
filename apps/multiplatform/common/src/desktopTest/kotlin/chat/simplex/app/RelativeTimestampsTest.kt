@@ -26,8 +26,9 @@ class RelativeTimestampsTest {
 
   @Test
   fun agesOfPastAndFutureTimes() = inUsLocale {
-    assertEquals("just now", getRelativeTimestampText(now - 59.seconds, now))
+    assertEquals("just now", getRelativeTimestampText(now + 59.seconds, now))
     assertEquals("just now", getRelativeTimestampText(now + 5.minutes, now))
+    assertEquals("1m ago", getRelativeTimestampText(now - 1.seconds, now))
     assertEquals("1m ago", getRelativeTimestampText(now - 1.minutes, now))
     assertEquals("59m ago", getRelativeTimestampText(now - 59.minutes, now))
     assertEquals("2h5m ago", getRelativeTimestampText(now - 2.hours - 5.minutes, now))
