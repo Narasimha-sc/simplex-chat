@@ -27,6 +27,7 @@ These times are formatted only by `getTimestampText`, whose result is a clock ti
 - `getTimestampText` is replaced by `chatTimestampText` in `CIMeta.timestampText` (message and event times, and the space reserved for the time in a bubble) and in the chat-list rows (`ChatPreviewView`, `ContactRequestView`, `ContactConnectionView`).
 - In `getItemSeparation`, the clock times of adjacent items (`getTimestampText(itemTs, true)`) are compared.
 - `spec/`: the line links to `AppScreen`, `MainScreen`, `PreviewInEitherLayout` and `ChatLayoutRow` are updated to their shifted lines.
+- `SnapshotTest` sets the preference off while it renders.
 
 ```mermaid
 flowchart LR
