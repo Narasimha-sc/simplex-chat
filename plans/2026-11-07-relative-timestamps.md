@@ -15,14 +15,15 @@ These times are formatted only by `getTimestampText`, whose result is a clock ti
 
   | Age | Text |
   |---|---|
-  | 0 minutes, or in the future | `just now` |
+  | 2 minutes or more in the future | none |
+  | 0 minutes, or 1 minute in the future | `just now` |
   | under 1 hour | `5m ago` |
   | under 1 day | `2h5m ago` |
   | under 365 days | `182d ago` |
   | 365 days or more | `1y100d ago` |
 
 - `relativeTimestampsNow`: one `Instant` state. While the preference is on, it is set in `MainScreen` every second to the current time truncated to the minute; its value changes once per minute, and within a second after the device wakes from sleep.
-- `chatTimestampText(t, shortFormat)`: the result of `getRelativeTimestampText` when the preference is on, of `getTimestampText` when it is off. Both states are read inside it, so a composition that shows a time is recomposed on each change of either state.
+- `chatTimestampText(t, shortFormat)`: the result of `getRelativeTimestampText` when the preference is on, of `getTimestampText` when it is off or the age is none. Both states are read inside it, so a composition that shows a time is recomposed on each change of either state.
 - `getTimestampText` is replaced by `chatTimestampText` in `CIMeta.timestampText` (message and event times, and the space reserved for the time in a bubble) and in the chat-list rows (`ChatPreviewView`, `ContactRequestView`, `ContactConnectionView`).
 - In `getItemSeparation`, the clock times of adjacent items (`getTimestampText(itemTs, true)`) are compared.
 - `spec/`: the line links to `AppScreen`, `MainScreen`, `PreviewInEitherLayout` and `ChatLayoutRow` are updated to their shifted lines.
@@ -34,6 +35,7 @@ flowchart LR
   N[relativeTimestampsNow state] --> C
   M[MainScreen loop, 1 s, minute value] --> N
   G[getTimestampText, clock time] --> S[getItemSeparation]
+  G -->|off, or 2 min or more ahead| C
   C --> T[CIMeta.timestampText]
   C --> L[chat-list rows]
   T --> V[CIMetaView time]

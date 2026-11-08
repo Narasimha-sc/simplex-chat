@@ -4123,9 +4123,10 @@ fun getTimestampDateText(t: Instant): String {
 
 val relativeTimestampsNow = mutableStateOf(Clock.System.now())
 
-fun chatTimestampText(t: Instant, shortFormat: Boolean = false): String =
-  if (appPreferences.relativeTimestamps.state.value) getRelativeTimestampText(t, relativeTimestampsNow.value)
-  else getTimestampText(t, shortFormat)
+fun chatTimestampText(t: Instant, shortFormat: Boolean = false): String {
+  val age = if (appPreferences.relativeTimestamps.state.value) getRelativeTimestampText(t, relativeTimestampsNow.value) else null
+  return age ?: getTimestampText(t, shortFormat)
+}
 
 fun getTimestampText(t: Instant, shortFormat: Boolean = false): String {
   val tz = TimeZone.currentSystemDefault()
@@ -4158,10 +4159,11 @@ fun getTimestampText(t: Instant, shortFormat: Boolean = false): String {
   return time.toJavaLocalDateTime().format(dateFormatter)
 }
 
-fun getRelativeTimestampText(t: Instant, now: Instant): String {
+fun getRelativeTimestampText(t: Instant, now: Instant): String? {
   val minutes = now.epochSeconds / 60 - t.epochSeconds / 60
   val days = (minutes / (24 * 60)).toInt()
   return when {
+    minutes < -1 -> null
     minutes < 1 -> generalGetString(MR.strings.relative_time_less_than_minute)
     minutes < 60 -> generalGetString(MR.strings.relative_time_minutes_ago).format(minutes.toInt())
     days < 1 -> generalGetString(MR.strings.relative_time_hours_minutes_ago).format((minutes / 60).toInt(), (minutes % 60).toInt())

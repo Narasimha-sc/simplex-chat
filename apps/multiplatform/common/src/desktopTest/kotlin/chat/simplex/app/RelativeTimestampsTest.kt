@@ -6,6 +6,7 @@ import kotlinx.datetime.Instant
 import java.util.Locale
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
@@ -27,7 +28,8 @@ class RelativeTimestampsTest {
   @Test
   fun agesOfPastAndFutureTimes() = inUsLocale {
     assertEquals("just now", getRelativeTimestampText(now + 59.seconds, now))
-    assertEquals("just now", getRelativeTimestampText(now + 5.minutes, now))
+    assertEquals("just now", getRelativeTimestampText(now + 1.minutes + 59.seconds, now))
+    assertNull(getRelativeTimestampText(now + 2.minutes, now))
     assertEquals("1m ago", getRelativeTimestampText(now - 1.seconds, now))
     assertEquals("1m ago", getRelativeTimestampText(now - 1.minutes, now))
     assertEquals("59m ago", getRelativeTimestampText(now - 59.minutes, now))
@@ -48,6 +50,7 @@ class RelativeTimestampsTest {
       val meta = CIMeta.getSample(1, now - 23.hours - 59.minutes, "")
       assertEquals("23h59m ago", meta.timestampText)
       assertEquals("2h5m ago", chatTimestampText(now - 2.hours - 5.minutes))
+      assertEquals(getTimestampText(now + 2.days), chatTimestampText(now + 2.days))
     } finally {
       appPrefs.relativeTimestamps.set(enabled)
       relativeTimestampsNow.value = shownNow
