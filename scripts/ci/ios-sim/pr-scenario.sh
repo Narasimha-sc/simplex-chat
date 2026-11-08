@@ -119,15 +119,24 @@ answer_start_chat() {
   fi
 }
 
-# the chat list with the toolbar (one-hand UI: its profile image is at y >= 750)
+# the chat list with the toolbar (one-hand UI: its profile image is at y >= 750); the chat list stays in the tree
+# under the Settings sheet, so the sheet's pages are left by their back button (top left) and the sheet by a swipe down
 to_chat_list() {
-  local i
-  for i in 1 2 3 4 5 6; do
+  local i t back x y w h
+  for i in 1 2 3 4 5 6 7 8; do
     answer_start_chat
-    if has '^Image "Account" .* at [0-9]+,(7[5-9][0-9]|8[0-9][0-9]) '; then
+    t=$(tree)
+    back=$(grep -E '^Button "[^"]+" value=[^ ]+ at 0,([5-9][0-9]|1[01][0-9]) size ' <<< "$t" | head -n 1) || true
+    if [ -n "$back" ]; then
+      read -r x y w h < <(sed -E 's/.* at (-?[0-9]+),(-?[0-9]+) size ([0-9]+)x([0-9]+).*/\1 \2 \3 \4/' <<< "$back")
+      "$ui" tap-xy $((x + w / 2)) $((y + h / 2))
+    elif grep -qE '"Your settings"|"Migrate to another device"|"Chat data"' <<< "$t"; then
+      "$ui" swipe 201 100 201 840 > /dev/null 2>&1 || true
+    elif grep -qE '^Image "Account" .* at [0-9]+,(7[5-9][0-9]|8[0-9][0-9]) ' <<< "$t"; then
       return 0
+    else
+      "$ui" tap Back 2 > /dev/null 2>&1 || "$ui" tap Done 2 > /dev/null 2>&1 || "$ui" tap Close 2 > /dev/null 2>&1 || true
     fi
-    "$ui" tap Back 2 > /dev/null 2>&1 || "$ui" tap Done 2 > /dev/null 2>&1 || "$ui" tap Close 2 > /dev/null 2>&1 || true
     sleep 2
   done
   "$ui" relaunch || true
@@ -159,8 +168,10 @@ to_archive_and_upload() {
     tap_match "$(label "Set passphrase" Button)" || tap_match "$(label "Set passphrase")" || fail "no Set passphrase button"
     wait_match '"Change database passphrase\?"|"Encrypt database\?"' 20 || fail "no passphrase confirmation alert"
     "$ui" tap Update 5 || "$ui" tap Encrypt 5 || fail "no Update button"
-    wait_match '"Database encrypted!"' 120 || fail "no Database encrypted! alert"
-    "$ui" tap OK 5 || "$ui" tap Ok 5 || true
+    wait_match "\"Database encrypted!\"|$(label "Archive and upload")" 120 || fail "no Database encrypted! alert and no Archive and upload"
+    if has '"Database encrypted!"'; then
+      "$ui" tap OK 5 || "$ui" tap Ok 5 || true
+    fi
   elif has 'Current passphrase…'; then
     "$ui" tap-value "Current passphrase…" 10 || fail "no Current passphrase field"
     "$ui" type "$passphrase"
