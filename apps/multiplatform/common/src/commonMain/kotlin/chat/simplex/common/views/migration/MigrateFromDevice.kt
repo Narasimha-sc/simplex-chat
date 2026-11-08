@@ -11,9 +11,14 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.foundation.background
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import chat.simplex.common.model.*
@@ -25,10 +30,12 @@ import chat.simplex.common.model.ChatCtrl
 import chat.simplex.common.model.ChatModel.controller
 import chat.simplex.common.platform.*
 import chat.simplex.common.ui.theme.*
+import chat.simplex.common.views.chat.topPaddingToContent
 import chat.simplex.common.views.database.*
 import chat.simplex.common.views.helpers.*
 import chat.simplex.common.views.newchat.LinkTextView
 import chat.simplex.common.views.newchat.SimpleXLinkQRCode
+import chat.simplex.common.views.onboarding.OnboardingStage
 import chat.simplex.common.views.usersettings.*
 import chat.simplex.res.*
 import dev.icerock.moko.resources.compose.painterResource
@@ -156,7 +163,7 @@ private fun MigrateFromDeviceLayout(
     SectionByState(migrationState, tempDatabaseFile.value, chatReceiver)
     SectionBottomSpacer()
   }
-  platform.androidLockPortraitOrientation()
+  LockToCurrentOrientationUntilDispose()
 }
 
 @Composable
@@ -367,7 +374,13 @@ private fun MutableState<MigrationFromState>.LinkShownView(fileId: Long, link: S
   SectionTextFooter(annotatedStringResource(MR.strings.migrate_from_device_choose_migrate_from_another_device))
   SectionDividerSpaced()
   SectionView(stringResource(MR.strings.show_QR_code)) {
-    SimpleXLinkQRCode(link, onShare = {})
+    val qrMaxSize = landscapeWindowBottomPx()?.let { bottomPx ->
+      val maxHeight = with(LocalDensity.current) { (bottomPx - topPaddingToContent(false).toPx()).toDp() }
+      Modifier.widthIn(max = maxHeight - DEFAULT_PADDING_HALF * 2 + DEFAULT_PADDING * 4).heightIn(max = maxHeight)
+    } ?: Modifier
+    Box(Modifier.fillMaxWidth().wrapContentWidth().then(qrMaxSize)) {
+      SimpleXLinkQRCode(link, onShare = {})
+    }
   }
   SectionDividerSpaced()
   SectionView(stringResource(MR.strings.migrate_from_device_or_share_this_file_link)) {
@@ -427,21 +440,54 @@ private fun ProgressView() {
 
 @Composable
 fun LargeProgressView(value: Float, title: String, description: String) {
-  Box(Modifier.padding(DEFAULT_PADDING).fillMaxSize(), contentAlignment = Alignment.Center) {
+  val windowBottomPx = landscapeWindowBottomPx()
+  var contentTopPx by remember { mutableStateOf<Float?>(null) }
+  val boxModifier: Modifier
+  val size: Dp
+  val textScale: Float
+  if (windowBottomPx != null) {
+    val scrollState = LocalAppBarHandler.current?.scrollState
+    val density = LocalDensity.current
+    boxModifier = Modifier
+      .onGloballyPositioned { contentTopPx = it.positionInWindow().y + (scrollState?.value ?: 0) }
+      .padding(DEFAULT_PADDING)
+      .fillMaxWidth()
+    size = contentTopPx?.let { top ->
+      (with(density) { (windowBottomPx - top).toDp() } - DEFAULT_PADDING * 2).coerceAtLeast(120.dp)
+    } ?: 120.dp
+    textScale = (size / 300.dp).coerceIn(0.4f, 1f)
+  } else {
+    boxModifier = Modifier.padding(DEFAULT_PADDING).fillMaxSize()
+    size = if (appPlatform.isDesktop) DEFAULT_START_MODAL_WIDTH * fontSizeSqrtMultiplier else windowWidth() - DEFAULT_PADDING * 2
+    textScale = 1f
+  }
+  Box(boxModifier, contentAlignment = Alignment.Center) {
     CircularProgressIndicator(
       progress = value,
-      (if (appPlatform.isDesktop) Modifier.size(DEFAULT_START_MODAL_WIDTH * fontSizeSqrtMultiplier) else Modifier.size(windowWidth() - DEFAULT_PADDING *
-          2))
+      Modifier.size(size)
         .rotate(-90f),
       color = MaterialTheme.colors.primary,
       strokeWidth = 25.dp
     )
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-      Text(description, color = Color.Transparent)
-      Text(title, style = MaterialTheme.typography.h1.copy(fontSize = 50.sp, fontWeight = FontWeight.Bold), color = MaterialTheme.colors.primary)
-      Text(description, style = MaterialTheme.typography.subtitle1)
+      Text(description, style = LocalTextStyle.current.let { it.copy(fontSize = it.fontSize * textScale) }, color = Color.Transparent)
+      Text(title, style = MaterialTheme.typography.h1.copy(fontSize = 50.sp * textScale, fontWeight = FontWeight.Bold), color = MaterialTheme.colors.primary)
+      Text(description, style = MaterialTheme.typography.subtitle1.let { it.copy(fontSize = it.fontSize * textScale) })
     }
   }
+}
+
+@Composable
+private fun landscapeWindowBottomPx(): Int? {
+  if (appPlatform.isDesktop || windowOrientation() != WindowOrientation.LANDSCAPE) return null
+  val density = LocalDensity.current
+  val oneHandUI = remember { derivedStateOf { appPrefs.onboardingStage.state.value == OnboardingStage.OnboardingComplete && appPrefs.oneHandUI.state.value } }
+  val bottomBarsPx = if (oneHandUI.value) {
+    WindowInsets.navigationBars.getBottom(density) + with(density) { (AppBarHeight * fontSizeSqrtMultiplier).roundToPx() }
+  } else {
+    WindowInsets.systemBars.getBottom(density)
+  }
+  return LocalWindowInfo.current.containerSize.height - bottomBarsPx
 }
 
 private fun MutableState<MigrationFromState>.stopChat() {

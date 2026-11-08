@@ -347,7 +347,7 @@ Key `expect`/`actual` abstractions: `appPlatform`, `BackHandler`, `VideoPlayer`,
 ### 2. Runtime `PlatformInterface`
 
 Defined in `common/src/commonMain/kotlin/chat/simplex/common/platform/Platform.kt`, this interface provides platform-specific callbacks that cannot use `expect`/`actual` (because `android/` module code cannot be called from `common/androidMain/`). The `platform` variable is reassigned at app startup:
-- **Android:** `SimplexApp` sets `platform` to an implementation with `CallService`, notification channels, orientation locking, status bar theming, and PiP support.
+- **Android:** `SimplexApp` sets `platform` to an implementation with `CallService`, notification channels, status bar theming, and PiP support.
 - **Desktop:** `Main.kt` sets `platform` to an implementation with `desktopShowAppUpdateNotice()`.
 
 ### 3. Haskell Core (JNI/FFI)

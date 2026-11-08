@@ -172,7 +172,7 @@ private fun ModalData.MigrateToDeviceLayout(
     SectionByState(migrationState, tempDatabaseFile.value, chatReceiver, close)
     SectionBottomSpacer()
   }
-  platform.androidLockPortraitOrientation()
+  LockToCurrentOrientationUntilDispose()
 }
 
 @Composable
