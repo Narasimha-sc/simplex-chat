@@ -17,7 +17,7 @@ Each of these is drawn with left/right coordinates instead of start/end ones:
 
 - `chatItemShape` (`ChatItemView.kt`) ignores the `LayoutDirection` that `GenericShape` passes and mirrors the tail by `sent` alone, while the padding reserved for the tail (`FramedItemView.kt`, `ChatView.kt`) and `chatItemOffset` follow the layout direction.
 - `CenteredRowLayout` (`FramedItemView.kt`), used by every centred `DefaultAppBar`, places its navigation and buttons slots with `place`.
-- `PriorityLayout` places its rows with `place` when they are limited to the media width (the classic layout and captionless media), `DependentLayout` always; `SupportSimpleXBanner` places its picture with `place` at the right edge.
+- `PriorityLayout` places its rows with `place` when `limitToPriorityWidth` is set (classic items and captionless media), `DependentLayout` always; `SupportSimpleXBanner` places its picture with `place` at the right edge.
 - The directional vector icons are drawn as they are in the SVG files in both directions.
 
 ## Fix
