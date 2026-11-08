@@ -25,6 +25,7 @@ import chat.simplex.common.ui.theme.DEFAULT_PADDING_HALF
 import chat.simplex.common.views.chat.group.*
 import chat.simplex.common.views.chat.item.sendCommandMsg
 import chat.simplex.common.views.helpers.commandMenuAnimSpec
+import chat.simplex.common.views.helpers.mirrorIfRtl
 import chat.simplex.res.*
 import dev.icerock.moko.resources.compose.painterResource
 import kotlinx.coroutines.launch
@@ -124,7 +125,7 @@ fun CommandsMenuView(
     ) {
       Row(Modifier.padding(horizontal = DEFAULT_PADDING), verticalAlignment = Alignment.CenterVertically) {
         Icon(
-          painterResource(MR.images.ic_arrow_back_ios_new),
+          painterResource(MR.images.ic_arrow_back_ios_new).mirrorIfRtl(),
           contentDescription = null,
           tint = MaterialTheme.colors.secondary
         )
@@ -203,7 +204,7 @@ fun CommandsMenuView(
             )
             Spacer(Modifier.width(DEFAULT_PADDING_HALF))
             Icon(
-              painterResource(MR.images.ic_chevron_right),
+              painterResource(MR.images.ic_chevron_right).mirrorIfRtl(),
               contentDescription = null,
               tint = MaterialTheme.colors.secondary
             )

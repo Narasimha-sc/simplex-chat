@@ -393,7 +393,7 @@ fun ChatItemInfoView(chatRh: Long?, ci: ChatItem, ciInfo: ChatItemInfo, devTools
           contentAlignment = Alignment.Center
         ) {
           Icon(
-            painterResource(MR.images.ic_arrow_forward),
+            painterResource(MR.images.ic_arrow_forward).mirrorIfRtl(),
             contentDescription = null,
             tint = CurrentColors.value.colors.secondary
           )
@@ -412,7 +412,7 @@ fun ChatItemInfoView(chatRh: Long?, ci: ChatItem, ciInfo: ChatItemInfo, devTools
       }
       Box(modifier, contentAlignment = Alignment.Center) {
         Icon(
-          painterResource(icon),
+          painterResource(icon).let { if (icon == MR.images.ic_chevron_right_2) it.mirrorIfRtl() else it },
           contentDescription = null,
           tint = statusColor
         )

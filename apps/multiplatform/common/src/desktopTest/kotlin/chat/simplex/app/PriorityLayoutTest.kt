@@ -58,7 +58,7 @@ class PriorityLayoutTest {
   }
 
   @Test
-  fun classicPlacementUnmirroredRightToLeft() {
+  fun classicElementsAtMediaWidthRightToLeft() {
     val r = layOut(limitToPriorityWidth = true, direction = LayoutDirection.Rtl)
     assertEquals(Placed(0, 0, 200, 30), r["header"])
     assertEquals(Placed(0, 30, 200, 100), r["media"])
