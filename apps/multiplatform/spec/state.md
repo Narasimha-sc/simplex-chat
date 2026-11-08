@@ -429,6 +429,7 @@ val appPrefs: AppPreferences by lazy { AppPreferences() }
 | `densityScale` | `Float` | `1f` | UI density scale |
 | `inAppBarsAlpha` | `Float` | varies | Bar transparency |
 | `appearanceBarsBlurRadius` | `Int` | 50 or 0 | Bar blur radius (device-dependent) |
+| `relativeTimestamps` | `Boolean` | `false` | Show the age of messages and chats (`2h5m ago`) instead of the time |
 
 #### Developer (lines 135-139)
 

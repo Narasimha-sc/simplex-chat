@@ -26,7 +26,7 @@ These times are formatted only by `getTimestampText`, whose result is a clock ti
 - `chatTimestampText(t, shortFormat)`: the result of `getRelativeTimestampText` when the preference is on, of `getTimestampText` when it is off or the age is none. Both states are read inside it, so a composition that shows a time is recomposed on each change of either state.
 - `getTimestampText` is replaced by `chatTimestampText` in `CIMeta.timestampText` (message and event times, and the space reserved for the time in a bubble) and in the chat-list rows (`ChatPreviewView`, `ContactRequestView`, `ContactConnectionView`).
 - In `getItemSeparation`, the clock times of adjacent items (`getTimestampText(itemTs, true)`) are compared.
-- `spec/`: the line links to `AppScreen`, `MainScreen`, `PreviewInEitherLayout` and `ChatLayoutRow` are updated to their shifted lines.
+- `spec/`: the line links to `AppScreen`, `MainScreen`, `PreviewInEitherLayout` and `ChatLayoutRow` are updated to their shifted lines; `spec/state.md` lists the preference.
 - `SnapshotTest` sets the preference off while it renders.
 
 ```mermaid
