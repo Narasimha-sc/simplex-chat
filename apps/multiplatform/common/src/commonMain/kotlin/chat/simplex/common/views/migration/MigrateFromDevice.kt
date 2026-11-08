@@ -18,7 +18,6 @@ import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.foundation.background
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import chat.simplex.common.model.*
@@ -374,10 +373,11 @@ private fun MutableState<MigrationFromState>.LinkShownView(fileId: Long, link: S
   SectionTextFooter(annotatedStringResource(MR.strings.migrate_from_device_choose_migrate_from_another_device))
   SectionDividerSpaced()
   SectionView(stringResource(MR.strings.show_QR_code)) {
-    val qrMaxWidth = landscapeWindowBottomPx()?.let { bottomPx ->
-      with(LocalDensity.current) { (bottomPx - topPaddingToContent(false).toPx()).toDp() } - DEFAULT_PADDING_HALF * 2 + DEFAULT_PADDING * 4
-    } ?: Dp.Unspecified
-    Box(Modifier.fillMaxWidth().wrapContentWidth().widthIn(max = qrMaxWidth)) {
+    val qrMaxSize = landscapeWindowBottomPx()?.let { bottomPx ->
+      val maxHeight = with(LocalDensity.current) { (bottomPx - topPaddingToContent(false).toPx()).toDp() }
+      Modifier.widthIn(max = maxHeight - DEFAULT_PADDING_HALF * 2 + DEFAULT_PADDING * 4).heightIn(max = maxHeight)
+    } ?: Modifier
+    Box(Modifier.fillMaxWidth().wrapContentWidth().then(qrMaxSize)) {
       SimpleXLinkQRCode(link, onShare = {})
     }
   }

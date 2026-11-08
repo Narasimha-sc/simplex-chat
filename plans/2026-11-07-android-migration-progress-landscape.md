@@ -18,10 +18,9 @@ With the migration screens kept in landscape (`2026-10-18-android-orientation-lo
 
 In landscape on Android:
 
-- `LargeProgressView` sizes the ring to the height between the top of its box and that bottom, minus the padding, at least 120dp. The top is measured with `onGloballyPositioned` plus the scroll offset. The box fills the width instead of the whole size. The percentage and byte count are scaled by ring size / 300dp, between 0.4 and 1.
-- `LinkShownView` limits the QR code width to the height between `topPaddingToContent(false)` and that bottom, plus the padding of `SimpleXLinkQRCode`, and centres it.
+- `LargeProgressView` sizes the ring to the height between the top of its box and that bottom, minus the padding, at least 120dp. The percentage and byte count are scaled by ring size / 300dp, between 0.4 and 1.
+- `LinkShownView` limits the QR code, with its vertical padding, to the height between `topPaddingToContent(false)` and that bottom, and centres it. The same height limits the intrinsic height of the QR code, from which `ColumnWithScrollBar(maxIntrinsicSize = true)` sizes the screen.
 
 ## Scope
 
 - Portrait Android and desktop keep their sizes.
-- Landscape is `windowOrientation() == WindowOrientation.LANDSCAPE`.
