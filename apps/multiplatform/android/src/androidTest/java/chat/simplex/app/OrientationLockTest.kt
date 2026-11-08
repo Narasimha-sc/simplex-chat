@@ -2,6 +2,7 @@ package chat.simplex.app
 
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ActivityInfo
 import android.content.res.Configuration
 import android.hardware.display.DisplayManager
 import android.os.ParcelFileDescriptor
@@ -37,6 +38,7 @@ class OrientationLockTest {
       Thread.sleep(3000)
       instrumentation.waitForIdleSync()
       assertSame(activity, mainActivity.get())
+      assertEquals(ActivityInfo.SCREEN_ORIENTATION_LOCKED, activity.requestedOrientation)
     } finally {
       mainActivity.get()?.finish()
       shell(if (override == null) "wm size reset" else "wm size $override")
