@@ -73,8 +73,9 @@ simplexChatCLI' cfg opts@ChatOpts {chatCmd, chatCmdLog, chatCmdDelay, chatServer
 addLogFileHook :: ChatConfig -> FilePath -> IO ChatConfig
 addLogFileHook cfg@ChatConfig {chatHooks} path = do
   logLock <- newMVar ()
-  pure cfg {chatHooks = chatHooks {eventHook = Just $ logEvent logLock}}
+  pure cfg {chatHooks = chatHooks {eventHook = Just $ \cc r -> cfgHook cc r >>= logEvent logLock cc}}
   where
+    cfgHook = fromMaybe (const pure) $ eventHook chatHooks
     logEvent logLock cc r = do
       when (either (const True) logEventToFile r) $
         withMVar logLock (\_ -> appendEvent cc r) `catchAny` \e -> putStrLn ("log-file write error: " <> show e)

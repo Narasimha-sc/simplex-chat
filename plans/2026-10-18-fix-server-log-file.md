@@ -12,9 +12,10 @@ With `simplex-chat -p 5225 --log-file a.log`, `a.log` is never created, with or 
 
 ## Fix
 
-In the `-p` branch of `simplexChatCLI'`, when `--log-file` is set, `ChatHooks.eventHook` is set by `addLogFileHook` in the config passed to the server. The core calls the hook in `toView_` for each local event before the event is queued; the event is returned unchanged.
+In the `-p` branch of `simplexChatCLI'`, when `--log-file` is set, `ChatHooks.eventHook` is set by `addLogFileHook` in the config passed to the server. The core calls the hook in `toView_` for each local event before the event is queued.
 
 Hook mechanics:
+- the `eventHook` of the passed config, when set, is called first, and its result is logged and returned;
 - errors and `logEventToFile` events are written, formatted by `serializeChatError` / `serializeChatResponse` with the local current user (`currentUser`);
 - appends are serialised by an `MVar` lock;
 - on a failed write, `log-file write error: …` is printed, and the server continues.
