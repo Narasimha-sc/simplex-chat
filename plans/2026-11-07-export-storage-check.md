@@ -15,6 +15,38 @@ The core export copies both databases and the files to a temporary folder, then 
 - iOS: `exportStorageShortfall` requires twice the data size in `volumeAvailableCapacityForImportantUsage` of the documents volume.
 - Strings: `not_enough_storage_title`, `not_enough_storage_desc`.
 
+Android, desktop:
+
+```mermaid
+flowchart LR
+  E["Export database click"] --> C1{"storage short?"}
+  C1 -- no --> S["stop chat, export"]
+  C1 -- yes --> W1["Not enough storage alert"]
+  W1 -- Continue --> S
+  W1 -- Cancel --> R["chat keeps running"]
+  A["Archive and upload click"] --> C2{"storage short?"}
+  C2 -- no --> AR["Archiving database"]
+  C2 -- yes --> W2["Not enough storage alert"]
+  W2 -- Continue --> AR
+  W2 -- Cancel --> U["Archive and upload"]
+```
+
+iOS:
+
+```mermaid
+flowchart LR
+  E["Export database tap"] --> S["stop chat"] --> C1{"storage short?"}
+  C1 -- no --> X["export"]
+  C1 -- yes --> W1["Not enough storage alert"]
+  W1 -- Continue --> X
+  W1 -- Cancel --> P["chat stays stopped"]
+  A["Archiving database"] --> C2{"storage short?"}
+  C2 -- no --> X2["archive and upload"]
+  C2 -- yes --> W2["Not enough storage alert"]
+  W2 -- Continue --> X2
+  W2 -- Cancel --> U["Archive and upload"]
+```
+
 ## Scope
 
 - Android, desktop: `DatabaseView.kt`, `MigrateFromDevice.kt`, `strings.xml`.

@@ -17,6 +17,18 @@ Part 1 of #7696.
 - After archiving, the archive size is compared with the limit before the "exported with errors" alert and the upload. Over the limit, the archive is deleted and the same alert is shown.
 - Strings: `migrate_from_device_database_too_large_title`, `migrate_from_device_database_too_large_desc`.
 
+```mermaid
+flowchart LR
+  U["Archive and upload"] --> D{"exportDataBytes over 5 GiB?"}
+  D -- yes --> T1["Database is too large"] --> U
+  D -- no --> AR["export archive"]
+  AR --> Z{"archive over 5 GiB?"}
+  Z -- yes --> DEL["delete archive"] --> T2["Database is too large"] --> U
+  Z -- no --> UP["upload"]
+```
+
+Kotlin evaluates the first check on the "Archive and upload" click, Swift in the "Archiving database" state.
+
 ## Scope
 
 - Android, desktop: `MigrateFromDevice.kt`, `DatabaseView.kt` (`exportDataBytes`), `Utils.kt`, `strings.xml`.
