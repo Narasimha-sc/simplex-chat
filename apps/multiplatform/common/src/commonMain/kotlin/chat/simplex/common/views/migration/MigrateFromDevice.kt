@@ -18,6 +18,7 @@ import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.foundation.background
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import chat.simplex.common.model.*
@@ -440,24 +441,27 @@ private fun ProgressView() {
 @Composable
 fun LargeProgressView(value: Float, title: String, description: String) {
   val windowBottomPx = landscapeWindowBottomPx()
-  val landscape = windowBottomPx != null
-  val scrollState = LocalAppBarHandler.current?.scrollState
-  val density = LocalDensity.current
   var contentTopPx by remember { mutableStateOf<Float?>(null) }
-  val size = when {
-    appPlatform.isDesktop -> DEFAULT_START_MODAL_WIDTH * fontSizeSqrtMultiplier
-    windowBottomPx != null -> contentTopPx?.let { top ->
+  val boxModifier: Modifier
+  val size: Dp
+  val textScale: Float
+  if (windowBottomPx != null) {
+    val scrollState = LocalAppBarHandler.current?.scrollState
+    val density = LocalDensity.current
+    boxModifier = Modifier
+      .onGloballyPositioned { contentTopPx = it.positionInWindow().y + (scrollState?.value ?: 0) }
+      .padding(DEFAULT_PADDING)
+      .fillMaxWidth()
+    size = contentTopPx?.let { top ->
       (with(density) { (windowBottomPx - top).toDp() } - DEFAULT_PADDING * 2).coerceAtLeast(120.dp)
     } ?: 120.dp
-    else -> windowWidth() - DEFAULT_PADDING * 2
+    textScale = (size / 300.dp).coerceIn(0.4f, 1f)
+  } else {
+    boxModifier = Modifier.padding(DEFAULT_PADDING).fillMaxSize()
+    size = if (appPlatform.isDesktop) DEFAULT_START_MODAL_WIDTH * fontSizeSqrtMultiplier else windowWidth() - DEFAULT_PADDING * 2
+    textScale = 1f
   }
-  Box(
-    Modifier
-      .onGloballyPositioned { if (landscape) contentTopPx = it.positionInWindow().y + (scrollState?.value ?: 0) }
-      .padding(DEFAULT_PADDING)
-      .then(if (landscape) Modifier.fillMaxWidth() else Modifier.fillMaxSize()),
-    contentAlignment = Alignment.Center
-  ) {
+  Box(boxModifier, contentAlignment = Alignment.Center) {
     CircularProgressIndicator(
       progress = value,
       Modifier.size(size)
@@ -465,7 +469,6 @@ fun LargeProgressView(value: Float, title: String, description: String) {
       color = MaterialTheme.colors.primary,
       strokeWidth = 25.dp
     )
-    val textScale = if (landscape) (size / 300.dp).coerceIn(0.4f, 1f) else 1f
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
       Text(description, style = LocalTextStyle.current.let { it.copy(fontSize = it.fontSize * textScale) }, color = Color.Transparent)
       Text(title, style = MaterialTheme.typography.h1.copy(fontSize = 50.sp * textScale, fontWeight = FontWeight.Bold), color = MaterialTheme.colors.primary)
