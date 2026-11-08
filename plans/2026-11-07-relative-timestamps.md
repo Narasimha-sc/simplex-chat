@@ -2,11 +2,11 @@
 
 ## Problem
 
-The chat list and the messages show only clock times and dates (`12:00`, `02/01`). A reader works out the age of a message from the current time.
+Only clock times and dates (`12:00`, `02/01`) are shown in the chat list and the messages. The age of a message is worked out by the reader from the current time.
 
 ## Cause
 
-The app formats these times only with `getTimestampText`, which returns a clock time or a date.
+These times are formatted only by `getTimestampText`, whose result is a clock time or a date.
 
 ## Fix
 
@@ -21,11 +21,11 @@ The app formats these times only with `getTimestampText`, which returns a clock 
   | under 365 days | `182d ago` |
   | 365 days or more | `1y100d ago` |
 
-- `relativeTimestampsNow`: one `Instant` state. While the preference is on, `MainScreen` sets it every second to the current time truncated to the minute; the state changes once per minute, and within a second after the device wakes from sleep.
-- `chatTimestampText(t, shortFormat)` reads the preference state and `relativeTimestampsNow`: an age when on, `getTimestampText` when off. A composition that shows a time is recomposed on each change of either state.
-- `chatTimestampText` replaces `getTimestampText` in `CIMeta.timestampText` (message and event times, and the space reserved for the time in a bubble) and in the chat-list rows (`ChatPreviewView`, `ContactRequestView`, `ContactConnectionView`).
-- `getItemSeparation` compares the clock times of adjacent items (`getTimestampText(itemTs, true)`).
-- `spec/`: the line links to `AppScreen`, `MainScreen`, `PreviewInEitherLayout` and `ChatLayoutRow` follow their shifted lines.
+- `relativeTimestampsNow`: one `Instant` state. While the preference is on, it is set in `MainScreen` every second to the current time truncated to the minute; its value changes once per minute, and within a second after the device wakes from sleep.
+- `chatTimestampText(t, shortFormat)`: the result of `getRelativeTimestampText` when the preference is on, of `getTimestampText` when it is off. Both states are read inside it, so a composition that shows a time is recomposed on each change of either state.
+- `getTimestampText` is replaced by `chatTimestampText` in `CIMeta.timestampText` (message and event times, and the space reserved for the time in a bubble) and in the chat-list rows (`ChatPreviewView`, `ContactRequestView`, `ContactConnectionView`).
+- In `getItemSeparation`, the clock times of adjacent items (`getTimestampText(itemTs, true)`) are compared.
+- `spec/`: the line links to `AppScreen`, `MainScreen`, `PreviewInEitherLayout` and `ChatLayoutRow` are updated to their shifted lines.
 
 ```mermaid
 flowchart LR
@@ -45,4 +45,4 @@ flowchart LR
 
 - Android and desktop (`apps/multiplatform`). iOS is unchanged.
 - Unchanged: date separators, the floating date, message info, share text, server statistics, badge pages, file expiry texts.
-- The preference is local to the device; it is absent from the exported app settings.
+- The preference is stored per device, outside the exported app settings.
