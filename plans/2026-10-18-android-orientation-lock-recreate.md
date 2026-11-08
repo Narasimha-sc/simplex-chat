@@ -16,11 +16,11 @@ On a display that is landscape at rotation 0 (Waydroid in a landscape window, la
 
 ## Fix
 
-`LockToCurrentOrientationUntilDispose()` requests `SCREEN_ORIENTATION_LOCKED`, which keeps the current rotation, so the lock never changes the orientation. The migration screens call it in place of `androidLockPortraitOrientation()`, which is removed from `PlatformInterface`, `SimplexApp`, `spec/architecture.md` and `product/README.md`. Each lock is released, as before, when its screen leaves the composition.
+`LockToCurrentOrientationUntilDispose()` requests `SCREEN_ORIENTATION_LOCKED`, which keeps the current rotation. The migration screens call it in place of `androidLockPortraitOrientation()`, which is removed from `PlatformInterface`, `SimplexApp`, `spec/architecture.md` and `product/README.md`. Each lock is released, as before, when its screen leaves the composition.
 
 ## Scope
 
 - Android only: the desktop `LockToCurrentOrientationUntilDispose()` is empty, and iOS migration and recording set no orientation.
-- Migration now keeps a landscape phone in landscape; the progress ring is sized for it in `2026-11-07-android-migration-progress-landscape.md`.
-- `android/build.gradle.kts` names the `androidx.test` instrumentation runner, so that `OrientationLockTest` runs.
+- Migration now keeps a landscape phone in landscape; the progress ring and the archive link QR code are sized for it in `2026-11-07-android-migration-progress-landscape.md`.
+- `android/build.gradle.kts` names the `androidx.test` instrumentation runner of `OrientationLockTest`.
 - Unchanged: a rotation or window resize during recording or migration still recreates the activity.
