@@ -254,10 +254,8 @@ fun DatabaseManagementView() {
                 DatabaseEncryptionView(chatModel, false)
               }
             } else {
-              confirmExportStorage(databaseExportDir, exportDataBytes()) {
-                stopChatRunBlockStartChat(stopped, chatLastStart, progressIndicator) {
-                  exportArchive(m, progressIndicator, chatArchiveFile, saveArchiveLauncher)
-                }
+              stopChatRunBlockStartChat(stopped, chatLastStart, progressIndicator) {
+                exportArchive(m, progressIndicator, chatArchiveFile, saveArchiveLauncher)
               }
             }
           },
@@ -604,33 +602,6 @@ fun deleteDatabaseBackups() {
   File(dataDir, "$chatDatabaseFileName.bak").delete()
   File(dataDir, "$agentDatabaseFileName.bak").delete()
 }
-
-fun confirmExportStorage(archiveDir: File, dataBytes: Long, onConfirm: () -> Unit) {
-  databaseExportDir.mkdirs()
-  archiveDir.mkdirs()
-  val shortfall = exportStorageShortfall(databaseExportDir.usableSpace, archiveDir.usableSpace, dataBytes)
-  if (shortfall == null) {
-    onConfirm()
-  } else {
-    val (requiredBytes, availableBytes) = shortfall
-    AlertManager.shared.showAlertDialog(
-      title = generalGetString(MR.strings.not_enough_storage_title),
-      text = String.format(generalGetString(MR.strings.not_enough_storage_desc), formatBytes(requiredBytes), formatBytes(availableBytes)),
-      confirmText = generalGetString(MR.strings.continue_to_next_step),
-      onConfirm = onConfirm,
-    )
-  }
-}
-
-fun exportStorageShortfall(exportFreeBytes: Long, archiveFreeBytes: Long, dataBytes: Long): Pair<Long, Long>? =
-  listOf(2L * dataBytes to archiveFreeBytes, dataBytes to exportFreeBytes)
-    .firstOrNull { (needed, free) -> free < needed }
-
-fun exportDataBytes(): Long =
-  directoryFileCountAndSize(appFilesDir.absolutePath).second +
-    directoryFileCountAndSize(wallpapersDir.absolutePath).second +
-    File(dataDir, chatDatabaseFileName).length() +
-    File(dataDir, agentDatabaseFileName).length()
 
 private suspend fun exportArchive(
   m: ChatModel,
