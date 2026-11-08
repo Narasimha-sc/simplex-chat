@@ -5,7 +5,7 @@
 On a display that is landscape at rotation 0 (Waydroid in a landscape window, landscape tablets, Chromebooks; Android 16 ignores portrait requests at sw600dp and above):
 
 - Tap-to-stop voice recording ends at once, and a 0:00 voice message is left in the compose field.
-- "Migrate to another device" and the onboarding "Migrate here" screen never open: the activity is recreated in a loop.
+- "Migrate to another device" never opens: the activity is recreated in a loop. On the new device, "Migrate here" reopened at app start after an interrupted migration is recreated in the same loop; opened from onboarding, it is not shown and the app stops responding.
 
 ## Cause
 

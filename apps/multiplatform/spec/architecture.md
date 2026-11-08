@@ -356,7 +356,7 @@ Examples from platform files:
 
 [`PlatformInterface`](../common/src/commonMain/kotlin/chat/simplex/common/platform/Platform.kt#L15) is an interface with default no-op implementations. It is assigned at runtime by each platform entry point:
 
-- **Android**: assigned in [`SimplexApp.initMultiplatform()`](../android/src/main/java/chat/simplex/app/SimplexApp.kt#L193)
+- **Android**: assigned in [`SimplexApp.initMultiplatform()`](../android/src/main/java/chat/simplex/app/SimplexApp.kt#L188)
 - **Desktop**: assigned in [`Main.kt initHaskell()`](../desktop/src/jvmMain/kotlin/chat/simplex/desktop/Main.kt#L59)
 
 The global variable is declared at [`Platform.kt line 50`](../common/src/commonMain/kotlin/chat/simplex/common/platform/Platform.kt#L50):
