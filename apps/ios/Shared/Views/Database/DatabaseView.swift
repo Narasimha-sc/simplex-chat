@@ -193,7 +193,6 @@ struct DatabaseView: View {
 
     private func databaseManagementView() -> some View {
         List {
-            let stopped = m.chatRunning == false
             Section {
                 let unencrypted = m.chatDbEncrypted == false
                 let color: Color = unencrypted ? .orange : theme.colors.secondary
@@ -216,8 +215,17 @@ struct DatabaseView: View {
                                 alert = .exportProhibited
                             }
                         } else {
-                            stopChatRunBlockStartChat(stopped, $progressIndicator) {
-                                await exportArchive()
+                            progressIndicator = true
+                            Task {
+                                let shortfall = exportStorageShortfall(await exportDataBytes())
+                                await MainActor.run {
+                                    progressIndicator = false
+                                    if let s = shortfall {
+                                        alert = .lowStorage(required: s.required, available: s.available)
+                                    } else {
+                                        stopChatAndExportArchive()
+                                    }
+                                }
                             }
                         }
                     }
@@ -309,9 +317,7 @@ struct DatabaseView: View {
                 }
             )
         case let .lowStorage(required, available):
-            return lowStorageAlert(required, available, onContinue: {
-                Task { await exportArchiveNow() }
-            }, onCancel: {})
+            return lowStorageAlert(required, available, onContinue: { stopChatAndExportArchive() }, onCancel: {})
         case .deleteChat:
             return Alert(
                 title: Text("Delete chat profile?"),
@@ -471,22 +477,13 @@ struct DatabaseView: View {
         }
     }
 
-    private func exportArchive() async -> Bool {
-        await MainActor.run {
-            progressIndicator = true
+    private func stopChatAndExportArchive() {
+        stopChatRunBlockStartChat(m.chatRunning == false, $progressIndicator) {
+            await exportArchive()
         }
-        if let s = exportStorageShortfall(await exportDataBytes()) {
-            await MainActor.run {
-                alert = .lowStorage(required: s.required, available: s.available)
-                progressIndicator = false
-            }
-        } else {
-            await exportArchiveNow()
-        }
-        return false
     }
 
-    private func exportArchiveNow() async {
+    private func exportArchive() async -> Bool {
         await MainActor.run {
             progressIndicator = true
         }
@@ -507,6 +504,7 @@ struct DatabaseView: View {
                 progressIndicator = false
             }
         }
+        return false
     }
 
     static func importArchive(

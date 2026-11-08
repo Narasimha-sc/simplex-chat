@@ -12,7 +12,7 @@ The core export copies both databases, the files and the wallpapers to a tempora
 
 - Before "Export database" and before archiving for migration, the data size (`exportDataBytes`) is compared with free space. If short, "You may not have enough storage" shows the space needed and the space available, with Continue and Cancel. On Continue the step proceeds as before; on Cancel it is not started (migration stays at or returns to "Archive and upload").
 - Android, desktop: with `exportStorageShortfall(exportFreeBytes, archiveFreeBytes, dataBytes)` in `DatabaseView.kt`, twice the data size is required free in the archive folder (the export folder, or `migration_temp_files` for migration) and the data size in the export folder. `confirmExportStorage` is called on the "Export database" click before the chat is stopped, and on the "Archive and upload" click before the state is set to "Archiving database".
-- iOS: with `exportStorageShortfall`, twice the data size is required in `volumeAvailableCapacityForImportantUsage` of the documents volume.
+- iOS: with `exportStorageShortfall`, twice the data size is required in `volumeAvailableCapacityForImportantUsage` of the documents volume. The check runs on the "Export database" tap before the chat is stopped, and in "Archiving database" before archiving.
 - Strings: `not_enough_storage_title`, `not_enough_storage_desc`.
 
 Android, desktop:
@@ -35,11 +35,11 @@ iOS:
 
 ```mermaid
 flowchart LR
-  E["Export database tap"] --> S["stop chat"] --> C1{"storage short?"}
-  C1 -- no --> X["export"]
+  E["Export database tap"] --> C1{"storage short?"}
+  C1 -- no --> X["stop chat, export"]
   C1 -- yes --> W1["You may not have enough storage"]
   W1 -- Continue --> X
-  W1 -- Cancel --> P["chat stays stopped"]
+  W1 -- Cancel --> P["chat keeps running"]
   A["Archiving database"] --> C2{"storage short?"}
   C2 -- no --> X2["archive and upload"]
   C2 -- yes --> W2["You may not have enough storage"]
