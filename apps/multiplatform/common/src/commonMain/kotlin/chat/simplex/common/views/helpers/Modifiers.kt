@@ -6,6 +6,8 @@ import androidx.compose.material.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.DefaultAlpha
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.painter.Painter
@@ -20,11 +22,24 @@ fun Painter.mirrorIfRtl(): Painter =
   if (LocalLayoutDirection.current == LayoutDirection.Rtl) remember(this) { MirroredPainter(this) } else this
 
 private class MirroredPainter(private val painter: Painter): Painter() {
+  private var alpha = DefaultAlpha
+  private var colorFilter: ColorFilter? = null
+
   override val intrinsicSize get() = painter.intrinsicSize
+
+  override fun applyAlpha(alpha: Float): Boolean {
+    this.alpha = alpha
+    return true
+  }
+
+  override fun applyColorFilter(colorFilter: ColorFilter?): Boolean {
+    this.colorFilter = colorFilter
+    return true
+  }
 
   override fun DrawScope.onDraw() {
     scale(scaleX = -1f, scaleY = 1f) {
-      with(painter) { draw(size) }
+      with(painter) { draw(size, alpha, colorFilter) }
     }
   }
 }
