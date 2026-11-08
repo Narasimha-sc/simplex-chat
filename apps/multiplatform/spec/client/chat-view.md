@@ -521,7 +521,7 @@ The selection checkbox (8dp start padding) and the full-row selection click over
 
 With the value true:
 
-- the preview draws two terminal rows ("alice", then "bob" in the own colour) without gutter, the gap between them by `terminalRowGap`, as in the chat; [`PreviewInEitherLayout`](../../common/src/commonMain/kotlin/chat/simplex/common/views/usersettings/Appearance.kt#L337) measures both layouts and shows the active one centred in the larger height, so a layout switch keeps the preview height;
+- the preview draws two terminal rows ("alice", then "bob" in the own colour) without gutter, the gap between them by `terminalRowGap`, as in the chat; [`PreviewInEitherLayout`](../../common/src/commonMain/kotlin/chat/simplex/common/views/usersettings/Appearance.kt#L350) measures both layouts and shows the active one centred in the larger height, so a layout switch keeps the preview height;
 - the preview and the preset tiles show the wallpaper colour without the image;
 - the custom image tile, the image scale, the scale slider and the wallpaper accent row are hidden.
 
@@ -530,5 +530,5 @@ Layout controls:
 | Control | Values | Stored in |
 |---|---|---|
 | Chat theme screen, first section ([`ChatLayoutSection`](../../common/src/commonMain/kotlin/chat/simplex/common/views/chat/ChatInfoView.kt#L1313)) | the chat default, "(chat)" when the chat layout is the default, otherwise "(default)"; the other layout | chat theme record, by [`setChatLayout`](../../common/src/commonMain/kotlin/chat/simplex/common/views/chat/ChatInfoView.kt#L1382) and `apiSetChatUIThemes` |
-| Appearance › Themes, app theme destination ([`ChatLayoutRow`](../../common/src/commonMain/kotlin/chat/simplex/common/views/usersettings/Appearance.kt#L950)) | Classic, Terminal; the selection is `profileChatLayout(null)` | `appPrefs.chatLayout` |
+| Appearance › Themes, app theme destination ([`ChatLayoutRow`](../../common/src/commonMain/kotlin/chat/simplex/common/views/usersettings/Appearance.kt#L963)) | Classic, Terminal; the selection is `profileChatLayout(null)` | `appPrefs.chatLayout` |
 | Appearance › Themes, profile destination | `profileChatLayout(null)` "(default)"; the other layout | profile theme record, by `saveThemeToDatabase` and `apiSetUserUIThemes` |

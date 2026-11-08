@@ -25,6 +25,7 @@ The app formats these times only with `getTimestampText`, which returns a clock 
 - `chatTimestampText(t, shortFormat)` reads the preference state and `relativeTimestampsNow`: an age when on, `getTimestampText` when off. A composition that shows a time is recomposed on each change of either state.
 - `chatTimestampText` replaces `getTimestampText` in `CIMeta.timestampText` (message and event times, and the space reserved for the time in a bubble) and in the chat-list rows (`ChatPreviewView`, `ContactRequestView`, `ContactConnectionView`).
 - `getItemSeparation` compares the clock times of adjacent items (`getTimestampText(itemTs, true)`).
+- `spec/`: the line links to `AppScreen`, `MainScreen`, `PreviewInEitherLayout` and `ChatLayoutRow` follow their shifted lines.
 
 ```mermaid
 flowchart LR
