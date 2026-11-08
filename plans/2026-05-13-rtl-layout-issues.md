@@ -27,6 +27,15 @@ Each of these is drawn with left/right coordinates instead of start/end ones:
 - Under right-to-left, `Painter.mirrorIfRtl()` (`Modifiers.kt`) returns a painter with the original drawn at horizontal scale -1, with the alpha and colour filter passed to the original; under left-to-right, the original painter is returned. The function is applied to `ic_arrow_back_ios_new` (`NavigationButtonBack`, onboarding cards' Back, the desktop full-screen video Back, What's new previous version, bot commands menu), `ic_arrow_forward_ios` (share profile, What's new next version), `ic_chevron_right` (bot commands submenu, the "Don't enable" button of `SetDeliveryReceiptsView`), `ic_arrow_forward` (sent via proxy in the message meta and in Info → Delivery, "Show message status" in `AdvancedNetworkSettings`, the go-to-forwarded-message button `GoToItemInnerButton`, whose `icon` parameter is now a `Painter`) and the four `ic_radiowaves_up_forward_*` icons (`SubscriptionStatusIcon`).
 - In Info → Delivery, the status icon is mirrored when it is `ic_chevron_right_2` (forwarded), the only directional icon among the results of `GroupSndStatus.statusIcon()`.
 
+```mermaid
+flowchart LR
+  D["layout direction"] --> T["chatItemShape: tail mirrored when sent != Rtl"]
+  D --> P["CenteredRowLayout navigation and buttons, PriorityLayout and DependentLayout rows, banner picture: placeRelative"]
+  D --> I{"Painter.mirrorIfRtl()"}
+  I -->|Rtl| M["MirroredPainter: original drawn at scale -1 with the alpha and colour filter"]
+  I -->|Ltr| O["original painter"]
+```
+
 ## Scope
 
 Android and desktop (common code; the full-screen video Back button is desktop only). iOS is unchanged.
