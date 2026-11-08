@@ -154,6 +154,7 @@ class SnapshotTest {
     val privacyMediaBlurRadius = appPrefs.privacyMediaBlurRadius.get()
     val appearanceBarsBlurRadius = appPrefs.appearanceBarsBlurRadius.get()
     val inAppBarsAlpha = appPrefs.inAppBarsAlpha.get()
+    val relativeTimestamps = appPrefs.relativeTimestamps.get()
     val appBarMaxHeightPx = AppBarHandler.appBarMaxHeightPx
     val index = mutableListOf<Snapshot>()
     val failures = mutableListOf<String>()
@@ -169,6 +170,7 @@ class SnapshotTest {
       appPrefs.privacyMediaBlurRadius.set(0)
       appPrefs.appearanceBarsBlurRadius.set(if (appPrefs.deviceSupportsBlur) 50 else 0)
       appPrefs.inAppBarsAlpha.set(appPrefs.inAppBarsDefaultAlpha)
+      appPrefs.relativeTimestamps.set(false)
       appPrefs.themeOverrides.set(listOf(ThemeOverrides(base = DefaultTheme.LIGHT), ThemeOverrides(base = DefaultTheme.DARK)))
       for (base in listOf(DefaultTheme.LIGHT, DefaultTheme.DARK)) {
         ThemeManager.applyTheme(base.themeName)
@@ -202,6 +204,7 @@ class SnapshotTest {
       appPrefs.privacyMediaBlurRadius.set(privacyMediaBlurRadius)
       appPrefs.appearanceBarsBlurRadius.set(appearanceBarsBlurRadius)
       appPrefs.inAppBarsAlpha.set(inAppBarsAlpha)
+      appPrefs.relativeTimestamps.set(relativeTimestamps)
       AppBarHandler.appBarMaxHeightPx = appBarMaxHeightPx
       ThemeManager.applyTheme(theme)
     }

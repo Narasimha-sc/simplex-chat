@@ -14,7 +14,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import chat.simplex.common.ui.theme.*
 import chat.simplex.common.model.ChatInfo
-import chat.simplex.common.model.getTimestampText
+import chat.simplex.common.model.chatTimestampText
 import chat.simplex.common.views.helpers.*
 import chat.simplex.res.*
 
@@ -48,7 +48,7 @@ fun ContactRequestView(contactRequest: ChatInfo.ContactRequest) {
         )
       )
     }
-    val ts = getTimestampText(contactRequest.contactRequest.updatedAt)
+    val ts = chatTimestampText(contactRequest.contactRequest.updatedAt)
     ChatListTimestampView(ts)
   }
 }

@@ -59,7 +59,7 @@ AppScreen (line 46)
 
 ## 2. AppScreen Composable
 
-**Location:** [`App.kt#L47`](../../common/src/commonMain/kotlin/chat/simplex/common/App.kt#L47)
+**Location:** [`App.kt#L49`](../../common/src/commonMain/kotlin/chat/simplex/common/App.kt#L49)
 
 ```kotlin
 @Composable
@@ -79,7 +79,7 @@ fun AppScreen()
 
 ## 3. MainScreen
 
-**Location:** [`App.kt#L84`](../../common/src/commonMain/kotlin/chat/simplex/common/App.kt#L84)
+**Location:** [`App.kt#L86`](../../common/src/commonMain/kotlin/chat/simplex/common/App.kt#L86)
 
 ```kotlin
 @Composable

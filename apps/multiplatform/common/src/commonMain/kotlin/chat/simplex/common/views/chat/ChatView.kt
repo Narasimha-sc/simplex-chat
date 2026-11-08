@@ -3812,7 +3812,7 @@ private fun getItemSeparation(chatItem: ChatItem, prevItem: ChatItem?): ItemSepa
   val largeGap = !sameMemberAndDirection || (abs(prevItem.meta.createdAt.epochSeconds - chatItem.meta.createdAt.epochSeconds) >= 60)
 
   return ItemSeparation(
-    timestamp = largeGap || prevItem.meta.timestampText != chatItem.meta.timestampText,
+    timestamp = largeGap || getTimestampText(prevItem.meta.itemTs, true) != getTimestampText(chatItem.meta.itemTs, true),
     largeGap = largeGap,
     date = if (getTimestampDateText(chatItem.meta.itemTs) == getTimestampDateText(prevItem.meta.itemTs)) null else prevItem.meta.itemTs
   )

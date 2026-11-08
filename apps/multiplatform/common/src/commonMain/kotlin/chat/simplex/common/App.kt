@@ -42,6 +42,8 @@ import dev.icerock.moko.resources.compose.painterResource
 import dev.icerock.moko.resources.compose.stringResource
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
+import kotlinx.datetime.Clock
+import kotlinx.datetime.Instant
 
 // Spec: spec/client/navigation.md#AppScreen
 @Composable
@@ -112,6 +114,13 @@ fun MainScreen() {
     if (chatModel.clearOverlays.value) {
       ModalManager.closeAllModalsEverywhere()
       chatModel.clearOverlays.value = false
+    }
+  }
+  val useRelativeTimestamps by remember { appPrefs.relativeTimestamps.state }
+  LaunchedEffect(useRelativeTimestamps) {
+    while (useRelativeTimestamps) {
+      relativeTimestampsNow.value = Instant.fromEpochSeconds(Clock.System.now().epochSeconds / 60 * 60)
+      delay(1_000)
     }
   }
 

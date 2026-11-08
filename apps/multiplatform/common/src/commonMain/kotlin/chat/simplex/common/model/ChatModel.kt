@@ -4041,7 +4041,7 @@ data class CIMeta (
   val showGroupAsSender: Boolean,
   val msgVerified: MsgVerified? = null
 ) {
-  val timestampText: String get() = getTimestampText(itemTs, true)
+  val timestampText: String get() = chatTimestampText(itemTs, true)
 
   val recent: Boolean get() = updatedAt + 10.toDuration(DurationUnit.SECONDS) > Clock.System.now()
   val isLive: Boolean get() = itemLive == true
@@ -4121,6 +4121,13 @@ fun getTimestampDateText(t: Instant): String {
   return "$weekday, $dayMonthYear"
 }
 
+val relativeTimestampsNow = mutableStateOf(Clock.System.now())
+
+fun chatTimestampText(t: Instant, shortFormat: Boolean = false): String {
+  val age = if (appPreferences.relativeTimestamps.state.value) getRelativeTimestampText(t, relativeTimestampsNow.value) else null
+  return age ?: getTimestampText(t, shortFormat)
+}
+
 fun getTimestampText(t: Instant, shortFormat: Boolean = false): String {
   val tz = TimeZone.currentSystemDefault()
   val now: LocalDateTime = Clock.System.now().toLocalDateTime(tz)
@@ -4150,6 +4157,19 @@ fun getTimestampText(t: Instant, shortFormat: Boolean = false): String {
 //      DateTimeFormatter.ofLocalizedDate(FormatStyle.SHORT)
     }
   return time.toJavaLocalDateTime().format(dateFormatter)
+}
+
+fun getRelativeTimestampText(t: Instant, now: Instant): String? {
+  val minutes = now.epochSeconds / 60 - t.epochSeconds / 60
+  val days = (minutes / (24 * 60)).toInt()
+  return when {
+    minutes < -1 -> null
+    minutes < 1 -> generalGetString(MR.strings.relative_time_less_than_minute)
+    minutes < 60 -> generalGetString(MR.strings.relative_time_minutes_ago).format(minutes.toInt())
+    days < 1 -> generalGetString(MR.strings.relative_time_hours_minutes_ago).format((minutes / 60).toInt(), (minutes % 60).toInt())
+    days < 365 -> generalGetString(MR.strings.relative_time_days_ago).format(days)
+    else -> generalGetString(MR.strings.relative_time_years_days_ago).format(days / 365, days % 365)
+  }
 }
 
 fun localTimestamp(t: Instant): String {

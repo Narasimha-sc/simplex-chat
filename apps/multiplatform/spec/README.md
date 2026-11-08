@@ -122,7 +122,7 @@ Common Module (commonMain)
 | Desktop Entry | [`Main.kt`](../desktop/src/jvmMain/kotlin/chat/simplex/desktop/Main.kt#L26) | `fun main(args: Array<String>)` | 26 |
 | Desktop App Window | [`DesktopApp.kt`](../common/src/desktopMain/kotlin/chat/simplex/common/DesktopApp.kt#L33) | `fun showApp()` | 33 |
 | Desktop Init | [`AppCommon.desktop.kt`](../common/src/desktopMain/kotlin/chat/simplex/common/platform/AppCommon.desktop.kt#L21) | `fun initApp()` | 21 |
-| Common App Screen | [`App.kt`](../common/src/commonMain/kotlin/chat/simplex/common/App.kt#L47) | `fun AppScreen()` | 47 |
+| Common App Screen | [`App.kt`](../common/src/commonMain/kotlin/chat/simplex/common/App.kt#L49) | `fun AppScreen()` | 49 |
 | JNI Bridge | [`Core.kt`](../common/src/commonMain/kotlin/chat/simplex/common/platform/Core.kt#L18) | `external fun initHS()` | 18 |
 | Chat Controller | [`SimpleXAPI.kt`](../common/src/commonMain/kotlin/chat/simplex/common/model/SimpleXAPI.kt#L525) | `object ChatController` | 525 |
 | Chat Model | [`ChatModel.kt`](../common/src/commonMain/kotlin/chat/simplex/common/model/ChatModel.kt#L86) | `object ChatModel` | 86 |

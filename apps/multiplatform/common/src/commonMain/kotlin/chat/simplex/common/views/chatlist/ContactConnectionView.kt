@@ -15,7 +15,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import chat.simplex.common.ui.theme.*
 import chat.simplex.common.model.PendingContactConnection
-import chat.simplex.common.model.getTimestampText
+import chat.simplex.common.model.chatTimestampText
 import chat.simplex.common.views.helpers.*
 import chat.simplex.res.*
 
@@ -53,7 +53,7 @@ fun ContactConnectionView(contactConnection: PendingContactConnection) {
     Box(
       contentAlignment = Alignment.TopEnd
     ) {
-      val ts = getTimestampText(contactConnection.updatedAt)
+      val ts = chatTimestampText(contactConnection.updatedAt)
       ChatListTimestampView(ts)
       Box(
         Modifier.padding(top = 50.sp.toDp()),

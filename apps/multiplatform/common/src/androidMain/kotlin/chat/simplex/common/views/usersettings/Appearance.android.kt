@@ -152,6 +152,9 @@ fun AppearanceScope.AppearanceLayout(
     }
 
     SectionDividerSpaced()
+    TimestampsSection()
+
+    SectionDividerSpaced()
     FontScaleSection()
 
     SectionBottomSpacer()
