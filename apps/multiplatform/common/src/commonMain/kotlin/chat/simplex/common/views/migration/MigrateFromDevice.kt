@@ -18,6 +18,7 @@ import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.foundation.background
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import chat.simplex.common.model.*
@@ -29,6 +30,7 @@ import chat.simplex.common.model.ChatCtrl
 import chat.simplex.common.model.ChatModel.controller
 import chat.simplex.common.platform.*
 import chat.simplex.common.ui.theme.*
+import chat.simplex.common.views.chat.topPaddingToContent
 import chat.simplex.common.views.database.*
 import chat.simplex.common.views.helpers.*
 import chat.simplex.common.views.newchat.LinkTextView
@@ -372,7 +374,12 @@ private fun MutableState<MigrationFromState>.LinkShownView(fileId: Long, link: S
   SectionTextFooter(annotatedStringResource(MR.strings.migrate_from_device_choose_migrate_from_another_device))
   SectionDividerSpaced()
   SectionView(stringResource(MR.strings.show_QR_code)) {
-    SimpleXLinkQRCode(link, onShare = {})
+    val qrMaxWidth = landscapeWindowBottomPx()?.let { bottomPx ->
+      with(LocalDensity.current) { (bottomPx - topPaddingToContent(false).toPx()).toDp() } - DEFAULT_PADDING_HALF * 2 + DEFAULT_PADDING * 4
+    } ?: Dp.Unspecified
+    Box(Modifier.fillMaxWidth().wrapContentWidth().widthIn(max = qrMaxWidth)) {
+      SimpleXLinkQRCode(link, onShare = {})
+    }
   }
   SectionDividerSpaced()
   SectionView(stringResource(MR.strings.migrate_from_device_or_share_this_file_link)) {
@@ -432,21 +439,15 @@ private fun ProgressView() {
 
 @Composable
 fun LargeProgressView(value: Float, title: String, description: String) {
-  val landscape = !appPlatform.isDesktop && windowWidth() > windowHeight()
+  val windowBottomPx = landscapeWindowBottomPx()
+  val landscape = windowBottomPx != null
   val scrollState = LocalAppBarHandler.current?.scrollState
   val density = LocalDensity.current
-  val windowPx = LocalWindowInfo.current.containerSize.height
-  val oneHandUI = remember { derivedStateOf { appPrefs.onboardingStage.state.value == OnboardingStage.OnboardingComplete && appPrefs.oneHandUI.state.value } }
-  val bottomBarsPx = if (oneHandUI.value) {
-    WindowInsets.navigationBars.getBottom(density) + with(density) { (AppBarHeight * fontSizeSqrtMultiplier).roundToPx() }
-  } else {
-    WindowInsets.systemBars.getBottom(density)
-  }
   var contentTopPx by remember { mutableStateOf<Float?>(null) }
   val size = when {
     appPlatform.isDesktop -> DEFAULT_START_MODAL_WIDTH * fontSizeSqrtMultiplier
-    landscape -> contentTopPx?.let { top ->
-      (with(density) { (windowPx - top - bottomBarsPx).toDp() } - DEFAULT_PADDING * 2).coerceAtLeast(120.dp)
+    windowBottomPx != null -> contentTopPx?.let { top ->
+      (with(density) { (windowBottomPx - top).toDp() } - DEFAULT_PADDING * 2).coerceAtLeast(120.dp)
     } ?: 120.dp
     else -> windowWidth() - DEFAULT_PADDING * 2
   }
@@ -465,13 +466,25 @@ fun LargeProgressView(value: Float, title: String, description: String) {
       strokeWidth = 25.dp
     )
     val textScale = if (landscape) (size / 300.dp).coerceIn(0.4f, 1f) else 1f
-    val descriptionStyle = MaterialTheme.typography.subtitle1.let { it.copy(fontSize = it.fontSize * textScale) }
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
       Text(description, style = LocalTextStyle.current.let { it.copy(fontSize = it.fontSize * textScale) }, color = Color.Transparent)
       Text(title, style = MaterialTheme.typography.h1.copy(fontSize = 50.sp * textScale, fontWeight = FontWeight.Bold), color = MaterialTheme.colors.primary)
-      Text(description, style = descriptionStyle)
+      Text(description, style = MaterialTheme.typography.subtitle1.let { it.copy(fontSize = it.fontSize * textScale) })
     }
   }
+}
+
+@Composable
+private fun landscapeWindowBottomPx(): Int? {
+  if (appPlatform.isDesktop || windowOrientation() != WindowOrientation.LANDSCAPE) return null
+  val density = LocalDensity.current
+  val oneHandUI = remember { derivedStateOf { appPrefs.onboardingStage.state.value == OnboardingStage.OnboardingComplete && appPrefs.oneHandUI.state.value } }
+  val bottomBarsPx = if (oneHandUI.value) {
+    WindowInsets.navigationBars.getBottom(density) + with(density) { (AppBarHeight * fontSizeSqrtMultiplier).roundToPx() }
+  } else {
+    WindowInsets.systemBars.getBottom(density)
+  }
+  return LocalWindowInfo.current.containerSize.height - bottomBarsPx
 }
 
 private fun MutableState<MigrationFromState>.stopChat() {
