@@ -27,8 +27,6 @@ flowchart LR
   Z -- no --> UP["upload"]
 ```
 
-Kotlin evaluates the first check on the "Archive and upload" click, Swift in the "Archiving database" state.
-
 ## Scope
 
 - Android, desktop: `MigrateFromDevice.kt`, `DatabaseView.kt` (`exportDataBytes`), `Utils.kt`, `strings.xml`.
