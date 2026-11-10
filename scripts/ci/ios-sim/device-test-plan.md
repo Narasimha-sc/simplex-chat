@@ -1,48 +1,52 @@
-# Device test plan: channel message signing, channel moderators and sending images
+# Device test plan: bans in groups, contact deletion and bans, chat list actions (PR 8073)
 
-The app as the scripted smoke test leaves it: the profile "citester", without conversations. The cases run in the order of the tables and build on each other: one channel, "ci signing", owned by citester, and two more profiles in this app, "cimod" and "cisub", that join it by its link. Do not reorder them: cisub must join only after cimod has become a moderator (B2), so that cimod learns about cisub.
+The app as the scripted smoke test leaves it: the profile "citester", without conversations. Every party is a profile in this app: "citester" owns the group "ci bans"; "cimem" and "cisib" join it by its link; "cicon" connects to citester's address; "cione" connects by a one-time link. The cases run in the order of the tables and build on each other.
 
 ## Setup
 
-- The channel uses the app's preset chat relays. Creating it and joining it wait for the relays: use `ui wait "<text>" 120` there, and take a shot if a wait fails.
-- **Sending a message:** in the chat, tap the message field at the bottom (find it in `ui tree`: the text view next to the send button; for the channel's owner its placeholder is "Broadcast"), `ui type "<text>"`, then tap the send button at the right end of the field. Check the message then shows in the chat.
-- **Channel info:** tap the channel name at the top of the chat (`ui find "ci signing"`, the element with the smallest y; tap it with `ui tap-xy`). Go back with the navigation back buttons; close a sheet by swiping it down.
-- **Message menu:** `ui long-press <x> <y>` on the message's text (centre from `ui find`) opens its menu ("Info", "Moderate", …). "Info" opens the message's details; close them by swiping down.
-- **Signatures are read as text, never from the seal icons:** a message's "Info" shows "Signed" (your own message), "Signed & verified" (someone else's, checked) or "Signature missing".
-- **Switching profile:** open the picker with your profile image (`Image "Account"`), then tap the other profile's name in the row at the top of the picker (`ui find <name>`, then `ui tap-xy`; the picker's elements are in the tree even while it is closed, so open it first). The chat list then shows that profile's chats; open "ci signing" from it.
-- **Adding a profile:** picker → "Your chat profiles" → "Add profile" → tap the field "Enter your name…" (`ui tap-value "Enter your name…"`), type the name, check the field's value in the tree (the keyboard may capitalize it: then fix it), tap "Create profile". The new profile becomes the active one; close "Your chat profiles" by swiping it down.
-- **Joining by the copied link** (from a profile without conversations): "Compose" → "Scan / Paste link" → "Tap to paste link". If iOS asks to allow pasting, tap "Allow Paste". An alert names the channel with "Open channel": tap it; the channel opens with "Tap Join channel" and a "Join channel" bar at the bottom: tap the bar, and wait up to 120 s until the chat shows "you are subscriber".
+- **Sending a message:** in the chat, tap the message field at the bottom (find it in `ui tree`: the text view next to the send button), `ui type "<text>"`, then tap the send button at the right end of the field. Check the message shows in the chat.
+- **Chat info:** tap the chat name at the top of the chat (`ui find "<name>"`, the element with the smallest y; tap it with `ui tap-xy`). Go back with the navigation back buttons; close a sheet by swiping it down.
+- **Member info:** chat info → the member's row in the members list.
+- **Switching profile:** open the picker with your profile image (`Image "Account"`), then tap the other profile's name in the row at the top of the picker (`ui find <name>`, then `ui tap-xy`; the picker's elements are in the tree even while it is closed, so open it first). The chat list then shows that profile's chats.
+- **Adding a profile:** picker → "Your chat profiles" → "Add profile" → `ui tap-value "Enter your name…"`, type the name, check the field's value in the tree (the keyboard may capitalize it: then fix it), tap "Create profile". The new profile becomes the active one; close "Your chat profiles" by swiping it down.
+- **Joining or connecting by a copied link:** "Compose" → "Scan / Paste link" → "Tap to paste link". If iOS asks to allow pasting, tap "Allow Paste". Follow the alert ("Join group", "Connect", "Open new chat", …). Wait up to 90 s for the result with `ui wait`.
+- **Copying a link:** on the link's screen tap "Share link" (or the share button) → in the share sheet tap "Copy" (`ui find Copy`; if absent, `ui tap-xy` at its position in a screenshot).
+- **Swipes on a chat list row:** `ui swipe <x1> <y1> <x2> <y2>` along the row's centre line: from right to left shows the trailing actions, from left to right the leading ones. Read the action labels from `ui tree` before tapping; swipe back or tap elsewhere to close them.
+- **Names:** the keyboard capitalizes and autocorrects typed names (an earlier run got "Citester", "Cimem", "Cisib"); a capitalized name is fine: do not spend turns renaming it, use the name as the app shows it. In G0 of this run, only `cimem` needs to join; skip `cisib`.
+- **Texts:** check titles and lines exactly as quoted. `<time>` is any date and time. Take `ui shot <ID>` at each Expect.
+- Report every UI defect you see, also outside the cases (clipped text, wrong label, a dialog that does not close).
+
+## Group bans
 
 | ID | Do | Expect |
 |----|----|--------|
-| S2 | "Compose" → "Create public channel" → `ui tap-value "Enter channel name…"`, type `ci signing` (check the value) → tap the "Create public channel" button (the list row, not the title; use `ui tap-xy` if the label is ambiguous) → wait up to 120 s for "Channel link"; if "%d/%d relays active" stays below the total for 120 s with at least 1 active, tap "Continue" and "Continue" in the alert → on "Channel link" tap "Continue" (top right) | The channel "ci signing" opens as its chat |
-| S3 | Send `before signing` | "before signing" shows in the chat as sent |
-| A1 | Channel info → "Channel preferences" | The first row is the switch "Sign messages", off; its footer says "Do not require signing messages." |
-| A2 | Turn "Sign messages" on | Alert "Sign messages?" with the message "Messages sent before will show "signature missing" to subscribers who join later." and the buttons "Enable" and "Cancel". Tap "Cancel": the switch is off again |
-| A3 | Turn "Sign messages" on again, tap "Enable", then "Save and notify subscribers"; go back to the chat | After "Enable" the switch stays on (footer "Require signing messages."); after saving and going back, the chat shows the event "Sign messages: on" |
-| A4 | Send `after signing`, then long-press it → "Info" | The message's info says "Signed" |
-| A5 | Channel info → "Channel preferences" | "Chat with admins" is still off (its footer says "Prohibit chats with admins."); saving in A3 did not turn it on |
-| J1 | Channel info → "Channel link" → "Share link" → in the share sheet tap "Copy" (`ui find Copy`; if it is not in the tree, `ui tap-xy` at its position in the screenshot) → close the sheet and go back to the chat list | The link is copied (the sheet closes or shows it was copied) |
-| J2 | Add the profile `cimod`; as cimod, join by the copied link | The chat "ci signing" shows "you are subscriber" |
-| A6 | As cimod in "ci signing": tap the message "before signing"; then long-press it → "Info"; then long-press "after signing" → "Info" | Tapping "before signing" shows the alert "Signature missing" with "The message was sent before the channel started signing messages, or it is fake."; its info says "Signature missing"; the info of "after signing" says "Signed & verified" |
-| B1 | Switch to citester → "ci signing" → channel info → "Subscribers" → "cimod" → tap the "Change role" row | The role menu lists exactly "subscriber", "contributor" and "moderator" (no admin, no owner) |
-| B2 | Choose "moderator" → "Change role?" → "Change"; go back to the chat | cimod's info shows the role moderator under the section header "Moderator" (any case); the chat shows "you changed role of cimod to moderator" |
-| B3 | Switch to cimod → "ci signing"; send `moderator post` | The chat shows "changed your role to moderator"; "moderator post" shows as sent |
-| J3 | Add the profile `cisub`; as cisub, join by the same link (it is still on the clipboard; if not, copy it again as citester as in J1) | cisub's chat "ci signing" shows "you are subscriber" |
-| J4 | Switch to citester → "ci signing" → channel info → "Subscribers" → "cisub" → "Change role" → "contributor" → "Change" | cisub's role shows contributor, under the section header "Contributor" |
-| J5 | Switch to cisub → "ci signing"; send `contributor post` | "contributor post" shows as sent |
-| B4 | Switch to cimod → "ci signing" → channel info | The info shows "Subscribers"; its list includes "cisub" |
-| B5 | Open "cisub" in that list | cisub's info offers "Block for all" (do not tap it yet) |
-| B6 | Back in the chat, long-press "contributor post" → "Moderate" → "Delete member message?" → "Delete" | The message shows "moderated by cimod" in its place |
-| B7 | Channel info → "Subscribers" → "cisub" → "Block for all" → "Block subscriber for all?" → "Block for all" | cisub's info now offers "Unblock for all"; the chat shows "you blocked cisub" |
+| G0 | As citester: "Compose" → "Create group", name `ci bans` (check the value), "Create group", "Skip" if shown. Chat info → "Group link" → create the link if asked → copy it. Add the profile `cimem`; as cimem join by the link; add the profile `cisib`; as cisib join by the link (copy the link again as citester if the clipboard lost it) | As citester, chat info of "ci bans" lists cimem and cisib as members |
+| G1 | As citester: member info of cimem | Offers "Ban member" and "Remove member"; no "Hide messages" |
+| G2 | Tap "Ban member" | A sheet "Ban member?" with "Ban for" showing "1 day" (options 1 day, 1 week, Forever), the buttons "Ban", "Ban and remove", "Ban, remove and delete messages" and "Cancel", and the lines "cimem won't be notified." and "Ban: messages from cimem will be hidden for all members until the ban ends." Tap "Cancel": member info is unchanged |
+| G3 | "Ban member" → keep 1 day → "Ban" | Member info shows "Banned until <time>" and "Lift ban"; the group chat shows "you banned cimem" |
+| G4 | Switch to cimem → "ci bans", send `banned msg`; switch to cisib → "ci bans" | cisib's chat has no "banned msg" and no "banned cimem" event; in cisib's members list cimem is labelled "banned" |
+| G5 | Switch to citester → member info of cimem → "Lift ban" | Alert "Lift ban?" with "Messages from cimem will be shown for all members."; after confirming, the chat shows "you lifted ban for cimem" |
+| G6 | Switch to cisib → member info of cimem | Offers "Hide messages", no "Ban member". Tap it: alert "Hide messages?" with "Hide"; confirm. Switch to cimem, send `after hide`; switch to cisib: the message shows as "hidden" |
+| G7 | As cisib: member info of cimem → "Show messages" | Alert "Show messages?" with "Show"; after it, cimem's next message `after show` (sent as cimem) shows normally to cisib |
+| G8 | Switch to citester → member info of cisib → "Ban member" → "Ban for" Forever | The lines change to "...until the ban is lifted." Tap "Ban and remove": "Remove forever?" with a text field and "Type yes to confirm."; "Remove" does nothing while the field is empty or holds `no`; type `yes`: "Remove" works; tap it. cisib is no longer in the members list |
+| G9 | Switch to cisib → "ci bans" and check it shows no removal message; leave the group, delete it from the chat list, join by the group's link again (copy it again as citester if needed) | No removal message before leaving; on joining, alert "Not allowed" with "Banned by the admins of this group." and "No IDs shared, see How it works.", no line "You can join again after", buttons "OK" and "How it works"; "OK" closes it and no group "ci bans" appears for cisib |
+| G10 | Switch to citester → member info of cimem → "Ban member" (1 day) → "Ban"; then "Remove member" | Alert or sheet "Remove member?" with "Ban for" (1 day) and the buttons "Remove", "Remove and delete messages", "Cancel"; tap "Remove" |
+| G11 | Switch to cimem → leave and delete "ci bans"; join by the link again | "Not allowed" with "Banned by the admins of this group.", "No IDs shared, see How it works." and "You can join again after <time>." |
 
-## Sending images
-
-These cases run after the channel cases: first switch to citester and go back to its chat list. The photo library has, besides the simulator's own photos, the images of these cases: a TV test card 1280×720 (JPEG: colour bars, a large circle, "1080" at the top and "TVB" at the bottom), the dark blue and turquoise SimpleX logo on a transparent background (PNG), and, when the runner could make it, the same test card turned by 90° to portrait (HEIC). In the photo picker, identify each by its thumbnail. The paperclip button left of the message field opens the "Attach" dialog; the send button is the arrow at the right end of the field; find their labels with `ui tree`.
+## Contacts and chat list
 
 | ID | Do | Expect |
 |----|----|--------|
-| I1 | Tap "Compose", then "Create group"; type `image notes` in the field "Enter group name…", check the value, tap "Create group", then "Skip" if it shows; open the group's chat if it is not open | The chat of "image notes", with the message field and the paperclip button enabled |
-| I2 | Tap the paperclip button, "Choose from library", the test card's thumbnail, then the picker's "Add" button; `ui shot I2-preview`; tap the send button; tap the sent image; `ui shot I2-full`; close the image | Before sending, the compose area shows the whole test card, upright and not stretched; after sending, the chat shows it; opened, it fills the screen width and "1080" and "TVB" are sharp and readable |
-| I3 | As I2, with the SimpleX logo | The preview and the sent image show the whole logo; the area around its letters shows the chat's background, not black or grey |
-| I4 | As I2, with the portrait test card; skipped when the library has no portrait test card | The preview and the sent image show the test card upright in portrait, as the picker's thumbnail does |
+| C1 | Switch to citester → Settings → "Privacy & security" (or "Your privacy") | A row "Contact deletion" with value "Notify"; its options are "Notify" and "Ask"; the footer "Ask: choose each time whether the contact is notified." |
+| C2 | As citester: create a SimpleX address (profile picker or Settings → "SimpleX address" → "Create SimpleX address"), copy it. Add the profile `cicon`; connect to the address; switch to citester and accept the contact request ("Accept"); wait until the chat with cicon is connected | citester's chat list shows "cicon" |
+| C3 | As citester: swipe the "cicon" row right, then left | Leading actions: read/unread, "List", mute; no "Favorite". Trailing: "Delete", "Ban", "More" |
+| C4 | Tap "List" (swipe right) | A sheet with a "Favorites" row first; tapping it marks the chat favorite (star) and closes the sheet |
+| C5 | Swipe left → "More" | A menu with "Clear" and "Archive" |
+| C6 | Tap "Archive" | Alert "Contact archived!" with "You can send messages to cicon from Archived contacts."; cicon leaves the chat list and is listed under Archived contacts (Compose → "Archived contacts") |
+| C7 | Open cicon from Archived contacts → chat info | Offers "Delete and ban" next to "Delete contact" |
+| C8 | Tap "Delete and ban" | "Delete and ban?" with "Ban for" (1 day) and the lines "cicon", "Contact will be deleted - this cannot be undone!" and "cicon won't be notified and won't be able to connect to you while banned."; buttons "Delete and ban", "Cancel". Tap "Delete and ban": a second step with "Keep conversation" (off) and "cicon won't be able to connect to you for 1 day."; tap "Delete and ban" |
+| C9 | Switch to cicon → delete the contact citester; connect to citester's address again (copy it again as citester) | Alert "Not allowed" with "Banned by this contact.", "No IDs shared, see How it works." and "You can connect again after <time>." |
+| C10 | As citester: create a one-time link ("Compose" → "Create 1-time link"), copy it. Add the profile `cione`; connect by the link; wait until connected. Switch to citester | The chat "cione" is connected |
+| C11 | As citester: chat info of cione | No "Delete and ban" (one-time link). Tap "Delete contact": "Delete contact?" with "Contact will be deleted - this cannot be undone!" and "You won't be able to reconnect unless cione sends you a new link.", buttons "Delete" and "Cancel". Tap "Delete": a second step with "Keep conversation", "cione will be notified." and "cione can connect to you again via your address."; tap "Cancel" |
+| C12 | Settings → Contact deletion → "Ask"; back to cione's info → "Delete contact"; tap "Delete silently", turn "Keep conversation" on, "Delete" | The first step has the buttons "Delete and notify", "Delete silently", "Cancel"; afterwards cione stays in the chat list, marked deleted |
+| C13 | As citester: create a group `ci keep` (as G0, no members needed); chat info → "Delete group" | The usual "Delete group?" confirmation, then a second step with "Keep conversation"; turn it on and confirm: "ci keep" stays in the chat list |
