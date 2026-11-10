@@ -159,9 +159,9 @@ This document specifies invariants enforced by the Android and Desktop (Kotlin/C
 
 ### RULE-13: Member Blocking Scope
 
-**Invariant:** Blocking a member (`ApiBlockMembersForAll`) MUST apply the block for all group members (not just the requester). The `blocked` flag is visible to all members. Only roles >= Moderator can block.
+**Invariant:** Banning a member (`ApiBlockMembersForAll`) MUST apply the ban for all group members (not just the requester), for the chosen duration or until lifted. Only roles >= Moderator can ban. Only moderators and above see the ban event and placeholders.
 
-**Enforcement:** `CC.ApiBlockMembersForAll(groupId, memberIds, blocked)` sends the block/unblock to the core, which propagates it to all group members.
+**Enforcement:** `CC.ApiBlockMembersForAll(groupId, memberIds, blocked, ttl)` sends the ban or its lifting to the core, which propagates it to all group members.
 
 **Location:** `SimpleXAPI.kt` -- `CC.ApiBlockMembersForAll`; `ChatModel.kt` -- `GroupMember.blockedByAdmin`
 
