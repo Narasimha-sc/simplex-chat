@@ -26,8 +26,6 @@ data NotificationPreviewMode = NPMHidden | NPMContact | NPMMessage deriving (Sho
 
 data LockScreenCalls = LSCDisable | LSCShow | LSCAccept deriving (Show)
 
-data ContactDeletion = CDNotify | CDAsk deriving (Show)
-
 data AppSettings = AppSettings
   { appPlatform :: Maybe AppPlatform,
     networkConfig :: Maybe NetworkConfig,
@@ -41,7 +39,6 @@ data AppSettings = AppSettings
     privacySaveLastDraft :: Maybe Bool,
     privacyProtectScreen :: Maybe Bool,
     privacyMediaBlurRadius :: Maybe Int,
-    privacyContactDeletion :: Maybe ContactDeletion,
     notificationMode :: Maybe NotificationMode,
     notificationPreviewMode :: Maybe NotificationPreviewMode,
     webrtcPolicyRelay :: Maybe Bool,
@@ -94,7 +91,6 @@ defaultAppSettings =
       privacySaveLastDraft = Just True,
       privacyProtectScreen = Just False,
       privacyMediaBlurRadius = Just 0,
-      privacyContactDeletion = Just CDAsk,
       notificationMode = Just NMInstant,
       notificationPreviewMode = Just NPMMessage,
       webrtcPolicyRelay = Just True,
@@ -134,7 +130,6 @@ defaultParseAppSettings =
       privacySaveLastDraft = Nothing,
       privacyProtectScreen = Nothing,
       privacyMediaBlurRadius = Nothing,
-      privacyContactDeletion = Nothing,
       notificationMode = Nothing,
       notificationPreviewMode = Nothing,
       webrtcPolicyRelay = Nothing,
@@ -174,7 +169,6 @@ combineAppSettings platformDefaults storedSettings =
       privacySaveLastDraft = p privacySaveLastDraft,
       privacyProtectScreen = p privacyProtectScreen,
       privacyMediaBlurRadius = p privacyMediaBlurRadius,
-      privacyContactDeletion = p privacyContactDeletion,
       notificationMode = p notificationMode,
       notificationPreviewMode = p notificationPreviewMode,
       webrtcPolicyRelay = p webrtcPolicyRelay,
@@ -210,8 +204,6 @@ $(JQ.deriveJSON (enumJSON $ dropPrefix "NPM") ''NotificationPreviewMode)
 
 $(JQ.deriveJSON (enumJSON $ dropPrefix "LSC") ''LockScreenCalls)
 
-$(JQ.deriveJSON (enumJSON $ dropPrefix "CD") ''ContactDeletion)
-
 $(JQ.deriveJSON (enumJSON $ dropPrefix "NPA") ''NetworkProxyAuth)
 
 $(JQ.deriveJSON defaultJSON ''NetworkProxy)
@@ -232,7 +224,6 @@ instance FromJSON AppSettings where
     privacySaveLastDraft <- p "privacySaveLastDraft"
     privacyProtectScreen <- p "privacyProtectScreen"
     privacyMediaBlurRadius <- p "privacyMediaBlurRadius"
-    privacyContactDeletion <- p "privacyContactDeletion"
     notificationMode <- p "notificationMode"
     notificationPreviewMode <- p "notificationPreviewMode"
     webrtcPolicyRelay <- p "webrtcPolicyRelay"
@@ -269,7 +260,6 @@ instance FromJSON AppSettings where
           privacySaveLastDraft,
           privacyProtectScreen,
           privacyMediaBlurRadius,
-          privacyContactDeletion,
           notificationMode,
           notificationPreviewMode,
           webrtcPolicyRelay,

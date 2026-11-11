@@ -240,7 +240,6 @@ subscribers.
   history stays on your device. After that, tap **Delete channel** to delete it
   for you.
 - The owner can delete the channel for all subscribers with **Delete channel**.
-  This cannot be undone. Turn on **Keep conversation** in the next dialog to
-  keep the channel's messages on your device.
+  This cannot be undone.
 
 See also [Leaving a group](./secret-groups.md#leaving-a-group).

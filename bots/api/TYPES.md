@@ -140,7 +140,6 @@ This file is generated automatically.
 - [InvitedBy](#invitedby)
 - [KeepAliveOpts](#keepaliveopts)
 - [LinkContent](#linkcontent)
-- [LinkNotice](#linknotice)
 - [LinkOwnerSig](#linkownersig)
 - [LinkPreview](#linkpreview)
 - [ListEntry](#listentry)
@@ -1215,21 +1214,18 @@ Entity:
 Messages:
 - type: "messages"
 
-Archive:
-- type: "archive"
-
 **Syntax**:
 
 ```
-full|entity|messages|archive[ notify=off]
+full|entity|messages[ notify=off]
 ```
 
 ```javascript
-type + (type == 'messages' ? '' : type == 'archive' ? '' : (!notify ? ' notify=off' : '')) // JavaScript
+type + (type == 'messages' ? '' : (!notify ? ' notify=off' : '')) // JavaScript
 ```
 
 ```python
-str(type) + ('' if str(type) == 'messages' else '' if str(type) == 'archive' else (' notify=off' if not notify else '')) # Python
+str(type) + ('' if str(type) == 'messages' else (' notify=off' if not notify else '')) # Python
 ```
 
 
@@ -1348,10 +1344,6 @@ UnsupportedConnReq:
 
 ConnReqMessageProhibited:
 - type: "connReqMessageProhibited"
-
-LinkNotice:
-- type: "linkNotice"
-- expiresAt: UTCTime?
 
 ContactNotReady:
 - type: "contactNotReady"
@@ -2161,11 +2153,6 @@ ContactViaAddress:
 - type: "contactViaAddress"
 - contact: [Contact](#contact)
 
-LinkNotice:
-- type: "linkNotice"
-- expiresAt: UTCTime?
-- contactSLinkData_: [ContactShortLinkData](#contactshortlinkdata)?
-
 
 ---
 
@@ -2795,10 +2782,6 @@ UpdateRequired:
 - type: "updateRequired"
 - groupSLinkData_: [GroupShortLinkData](#groupshortlinkdata)?
 
-LinkNotice:
-- type: "linkNotice"
-- expiresAt: UTCTime?
-
 
 ---
 
@@ -2814,7 +2797,6 @@ LinkNotice:
 - memberStatus: [GroupMemberStatus](#groupmemberstatus)
 - memberSettings: [GroupMemberSettings](#groupmembersettings)
 - blockedByAdmin: bool
-- blockedUntil: UTCTime?
 - invitedBy: [InvitedBy](#invitedby)
 - invitedByGroupMemberId: int64?
 - localDisplayName: string
@@ -3169,14 +3151,6 @@ Unknown:
 - type: "unknown"
 - tag: string
 - json: JSONObject
-
-
----
-
-## LinkNotice
-
-**Record type**:
-- ttl: int64?
 
 
 ---

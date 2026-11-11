@@ -23,7 +23,7 @@ struct GroupMemberInfoView: View {
     var groupRelay: GroupRelay? = nil
     @State private var connectionStats: ConnectionStats? = nil
     @State private var connectionCode: String? = nil
-    @State var connectionLoaded: Bool = false
+    @State private var connectionLoaded: Bool = false
     @State private var knownContactChat: Chat? = nil
     @State private var knownContact: Contact? = nil
     @State private var knownContactConnectionStats: ConnectionStats? = nil
@@ -58,6 +58,7 @@ struct GroupMemberInfoView: View {
     enum GroupMemberInfoViewAlert: Identifiable {
         case blockMemberAlert(mem: GroupMember)
         case unblockMemberAlert(mem: GroupMember)
+        case blockForAllAlert(mem: GroupMember)
         case unblockForAllAlert(mem: GroupMember)
         case changeMemberRoleAlert(mem: GroupMember, role: GroupMemberRole)
         case switchAddressAlert
@@ -71,6 +72,7 @@ struct GroupMemberInfoView: View {
             switch self {
             case let .blockMemberAlert(mem): return "blockMemberAlert \(mem.groupMemberId)"
             case let .unblockMemberAlert(mem): return "unblockMemberAlert \(mem.groupMemberId)"
+            case let .blockForAllAlert(mem): return "blockForAllAlert \(mem.groupMemberId)"
             case let .unblockForAllAlert(mem): return "unblockForAllAlert \(mem.groupMemberId)"
             case let .changeMemberRoleAlert(mem, role): return "changeMemberRoleAlert \(mem.groupMemberId) \(role.rawValue)"
             case .switchAddressAlert: return "switchAddressAlert"
@@ -337,6 +339,7 @@ struct GroupMemberInfoView: View {
                 switch(alertItem) {
                 case let .blockMemberAlert(mem): return blockMemberAlert(groupInfo, mem)
                 case let .unblockMemberAlert(mem): return unblockMemberAlert(groupInfo, mem)
+                case let .blockForAllAlert(mem): return blockForAllAlert(groupInfo, mem)
                 case let .unblockForAllAlert(mem): return unblockForAllAlert(groupInfo, mem)
                 case let .changeMemberRoleAlert(mem, _): return changeMemberRoleAlert(mem)
                 case .switchAddressAlert: return switchAddressAlert(switchMemberAddress)
@@ -630,8 +633,6 @@ struct GroupMemberInfoView: View {
             Section {
                 if canBlockForAll {
                     if mem.blockedByAdmin {
-                        Label(bannedText(mem), systemImage: "hand.raised")
-                            .foregroundColor(theme.colors.secondary)
                         unblockForAllButton(mem)
                     } else {
                         blockForAllButton(mem)
@@ -651,7 +652,7 @@ struct GroupMemberInfoView: View {
     private func nonAdminBlockSection(_ mem: GroupMember) -> some View {
         Section {
             if mem.blockedByAdmin {
-                Label("Banned", systemImage: "hand.raised")
+                Label("Blocked by admin", systemImage: "hand.raised")
                     .foregroundColor(theme.colors.secondary)
             } else if mem.memberSettings.showMessages {
                 blockMemberButton(mem)
@@ -661,19 +662,11 @@ struct GroupMemberInfoView: View {
         }
     }
 
-    private func bannedText(_ mem: GroupMember) -> String {
-        if let blockedUntil = mem.blockedUntil {
-            String.localizedStringWithFormat(NSLocalizedString("Banned until %@", comment: "member info"), blockedUntil.formatted(date: .abbreviated, time: .shortened))
-        } else {
-            NSLocalizedString("Banned", comment: "member info")
-        }
-    }
-
     private func blockForAllButton(_ mem: GroupMember) -> some View {
         Button(role: .destructive) {
-            showBanMemberSheet(groupInfo, mem, dismiss: dismiss)
+            alert = .blockForAllAlert(mem: mem)
         } label: {
-            Label("Ban member", systemImage: "hand.raised")
+            Label("Block for all", systemImage: "hand.raised")
                 .foregroundColor(.red)
         }
     }
@@ -682,7 +675,7 @@ struct GroupMemberInfoView: View {
         Button {
             alert = .unblockForAllAlert(mem: mem)
         } label: {
-            Label("Lift ban", systemImage: "hand.raised.slash")
+            Label("Unblock for all", systemImage: "hand.raised.slash")
         }
     }
 
@@ -690,7 +683,7 @@ struct GroupMemberInfoView: View {
         Button(role: .destructive) {
             alert = .blockMemberAlert(mem: mem)
         } label: {
-            Label("Hide messages", systemImage: "eye.slash")
+            Label("Block member", systemImage: "hand.raised")
                 .foregroundColor(.red)
         }
     }
@@ -699,7 +692,7 @@ struct GroupMemberInfoView: View {
         Button {
             alert = .unblockMemberAlert(mem: mem)
         } label: {
-            Label("Show messages", systemImage: "eye")
+            Label("Unblock member", systemImage: "hand.raised.slash")
         }
     }
 
@@ -847,9 +840,9 @@ func MemberProfileImage(
 
 func blockMemberAlert(_ gInfo: GroupInfo, _ mem: GroupMember) -> Alert {
     Alert(
-        title: Text("Hide messages?"),
+        title: Text("Block member?"),
         message: Text("All new messages from \(mem.chatViewName) will be hidden!"),
-        primaryButton: .destructive(Text("Hide")) {
+        primaryButton: .destructive(Text("Block")) {
             toggleShowMemberMessages(gInfo, mem, false)
         },
         secondaryButton: .cancel()
@@ -858,9 +851,9 @@ func blockMemberAlert(_ gInfo: GroupInfo, _ mem: GroupMember) -> Alert {
 
 func unblockMemberAlert(_ gInfo: GroupInfo, _ mem: GroupMember) -> Alert {
     Alert(
-        title: Text("Show messages?"),
+        title: Text("Unblock member?"),
         message: Text("Messages from \(mem.chatViewName) will be shown!"),
-        primaryButton: .default(Text("Show")) {
+        primaryButton: .default(Text("Unblock")) {
             toggleShowMemberMessages(gInfo, mem, true)
         },
         secondaryButton: .cancel()
@@ -888,193 +881,32 @@ func updateMemberSettings(_ gInfo: GroupInfo, _ member: GroupMember, _ memberSet
     }
 }
 
+func blockForAllAlert(_ gInfo: GroupInfo, _ mem: GroupMember) -> Alert {
+    Alert(
+        title: Text(gInfo.useRelays ? "Block subscriber for all?" : "Block member for all?"),
+        message: Text("All new messages from \(mem.chatViewName) will be hidden!"),
+        primaryButton: .destructive(Text("Block for all")) {
+            blockMemberForAll(gInfo, mem, true)
+        },
+        secondaryButton: .cancel()
+    )
+}
+
 func unblockForAllAlert(_ gInfo: GroupInfo, _ mem: GroupMember) -> Alert {
     Alert(
-        title: Text("Lift ban?"),
-        message: gInfo.useRelays
-            ? Text("Messages from \(mem.chatViewName) will be shown for all subscribers.")
-            : Text("Messages from \(mem.chatViewName) will be shown for all members."),
-        primaryButton: .default(Text("Lift ban")) {
+        title: Text(gInfo.useRelays ? "Unblock subscriber for all?" : "Unblock member for all?"),
+        message: Text("Messages from \(mem.chatViewName) will be shown!"),
+        primaryButton: .default(Text("Unblock for all")) {
             blockMemberForAll(gInfo, mem, false)
         },
         secondaryButton: .cancel()
     )
 }
 
-struct BanDialogAction {
-    var title: String
-    var action: (BanDuration) -> Void
-}
-
-struct BanDialog: View {
-    @EnvironmentObject var theme: AppTheme
-    var title: String
-    var actions: [BanDialogAction]
-    var footer: (BanDuration) -> String
-    var close: CloseSheet
-    @State var duration: BanDuration = .day
-
-    var body: some View {
-        NavigationView {
-            List {
-                Section {
-                    WrappedPicker("Ban for", selection: $duration) {
-                        ForEach(BanDuration.allCases) { Text($0.text) }
-                    }
-                    ForEach(actions.indices, id: \.self) { i in
-                        Button(actions[i].title, role: .destructive) {
-                            let action = actions[i].action
-                            let selected = duration
-                            close { action(selected) }
-                        }
-                    }
-                    Button("Cancel", role: .cancel) { close {} }
-                } footer: {
-                    Text(footer(duration)).foregroundColor(theme.colors.secondary)
-                }
-            }
-            .navigationTitle(title)
-            .navigationBarTitleDisplayMode(.inline)
-            .modifier(ThemedBackground(grouped: true))
-        }
-    }
-}
-
-func showBanMemberSheet(_ gInfo: GroupInfo, _ mem: GroupMember, dismiss: DismissAction? = nil) {
-    showClosableAppSheet { close in
-        banMemberDialog(gInfo, mem, dismiss: dismiss, close: close)
-    }
-}
-
-private func banMemberDialog(_ gInfo: GroupInfo, _ mem: GroupMember, dismiss: DismissAction?, duration: BanDuration = .day, close: @escaping CloseSheet) -> BanDialog {
-    let canRemove = mem.canBanAndRemove(groupInfo: gInfo)
-    var actions = [
-        BanDialogAction(title: NSLocalizedString("Ban", comment: "ban dialog action")) { duration in
-            blockMemberForAll(gInfo, mem, true, ttl: duration.ttl)
-        }
-    ]
-    if canRemove {
-        actions += [
-            BanDialogAction(title: NSLocalizedString("Ban and remove", comment: "ban dialog action")) { duration in
-                removeBannedMember(gInfo, mem, duration, withMessages: false, dismiss: dismiss)
-            },
-            BanDialogAction(title: NSLocalizedString("Ban, remove and delete messages", comment: "ban dialog action")) { duration in
-                removeBannedMember(gInfo, mem, duration, withMessages: true, dismiss: dismiss)
-            }
-        ]
-    }
-    return BanDialog(
-        title: gInfo.useRelays
-            ? NSLocalizedString("Ban subscriber?", comment: "ban dialog title")
-            : NSLocalizedString("Ban member?", comment: "ban dialog title"),
-        actions: actions,
-        footer: { duration in banMemberText(gInfo, mem, duration, canRemove: canRemove) },
-        close: close,
-        duration: duration
-    )
-}
-
-private func banMemberText(_ gInfo: GroupInfo, _ mem: GroupMember, _ duration: BanDuration, canRemove: Bool) -> String {
-    let name = mem.chatViewName
-    let notNotified = String.localizedStringWithFormat(NSLocalizedString("%@ won't be notified.", comment: "ban dialog"), name)
-    let channel = gInfo.useRelays
-    let forever = duration == .forever
-    let lines: [String] =
-        if canRemove {
-            [
-                channel
-                ? (forever
-                   ? NSLocalizedString("Ban: messages from %@ will be hidden for all subscribers until the ban is lifted.", comment: "ban dialog")
-                   : NSLocalizedString("Ban: messages from %@ will be hidden for all subscribers until the ban ends.", comment: "ban dialog"))
-                : (forever
-                   ? NSLocalizedString("Ban: messages from %@ will be hidden for all members until the ban is lifted.", comment: "ban dialog")
-                   : NSLocalizedString("Ban: messages from %@ will be hidden for all members until the ban ends.", comment: "ban dialog")),
-                channel
-                ? (forever
-                   ? NSLocalizedString("Ban and remove: %@ is also removed and can't rejoin via the channel link.", comment: "ban dialog")
-                   : NSLocalizedString("Ban and remove: %@ is also removed and can't rejoin via the channel link until the ban ends.", comment: "ban dialog"))
-                : (forever
-                   ? NSLocalizedString("Ban and remove: %@ is also removed and can't rejoin via the group link.", comment: "ban dialog")
-                   : NSLocalizedString("Ban and remove: %@ is also removed and can't rejoin via the group link until the ban ends.", comment: "ban dialog"))
-            ]
-        } else {
-            [
-                channel
-                ? (forever
-                   ? NSLocalizedString("Messages from %@ will be hidden for all subscribers until the ban is lifted.", comment: "ban dialog")
-                   : NSLocalizedString("Messages from %@ will be hidden for all subscribers until the ban ends.", comment: "ban dialog"))
-                : (forever
-                   ? NSLocalizedString("Messages from %@ will be hidden for all members until the ban is lifted.", comment: "ban dialog")
-                   : NSLocalizedString("Messages from %@ will be hidden for all members until the ban ends.", comment: "ban dialog"))
-            ]
-        }
-    return ([notNotified] + lines.map { String.localizedStringWithFormat($0, name) }).joined(separator: "\n")
-}
-
-func showRemoveBannedMemberSheet(_ gInfo: GroupInfo, _ mem: GroupMember, dismiss: DismissAction? = nil) {
-    showClosableAppSheet { close in
-        removeBannedMemberDialog(gInfo, mem, dismiss: dismiss, close: close)
-    }
-}
-
-private func removeBannedMemberDialog(_ gInfo: GroupInfo, _ mem: GroupMember, dismiss: DismissAction?, duration: BanDuration = .day, close: @escaping CloseSheet) -> BanDialog {
-    BanDialog(
-        title: gInfo.useRelays
-            ? NSLocalizedString("Remove subscriber?", comment: "alert title")
-            : NSLocalizedString("Remove member?", comment: "alert title"),
-        actions: [
-            BanDialogAction(title: NSLocalizedString("Remove", comment: "alert action")) { duration in
-                removeBannedMember(gInfo, mem, duration, withMessages: false, dismiss: dismiss)
-            },
-            BanDialogAction(title: NSLocalizedString("Remove and delete messages", comment: "alert action")) { duration in
-                removeBannedMember(gInfo, mem, duration, withMessages: true, dismiss: dismiss)
-            }
-        ],
-        footer: { duration in
-            let format =
-                gInfo.useRelays
-                ? (duration == .forever
-                   ? NSLocalizedString("%@ will be removed without notification and won't be able to rejoin via the channel link.", comment: "remove dialog")
-                   : NSLocalizedString("%@ will be removed without notification and won't be able to rejoin via the channel link until the ban ends.", comment: "remove dialog"))
-                : (duration == .forever
-                   ? NSLocalizedString("%@ will be removed without notification and won't be able to rejoin via the group link.", comment: "remove dialog")
-                   : NSLocalizedString("%@ will be removed without notification and won't be able to rejoin via the group link until the ban ends.", comment: "remove dialog"))
-            return String.localizedStringWithFormat(format, mem.chatViewName)
-        },
-        close: close,
-        duration: duration
-    )
-}
-
-let foreverConfirmationWord = "yes"
-
-func removeBannedMember(_ gInfo: GroupInfo, _ mem: GroupMember, _ duration: BanDuration, withMessages: Bool, dismiss: DismissAction?) {
-    if duration == .forever {
-        getTopViewController()?.present(removeForeverAlert(gInfo, mem, withMessages: withMessages, dismiss: dismiss), animated: true)
-    } else {
-        removeMember(gInfo, mem, withMessages: withMessages, notice: duration.notice, dismiss: dismiss)
-    }
-}
-
-func removeForeverAlert(_ gInfo: GroupInfo, _ mem: GroupMember, withMessages: Bool, dismiss: DismissAction?) -> UIAlertController {
-    let name = mem.chatViewName
-    let format = gInfo.useRelays
-        ? NSLocalizedString("%1$@ will be removed without notification and won't be able to rejoin via the channel link from this app, with no end time. You can't lift this block.\nThe block is stored only in %1$@'s app: %1$@ can still join from another device, or after reinstalling the app.\n\nType %2$@ to confirm.", comment: "remove forever alert")
-        : NSLocalizedString("%1$@ will be removed without notification and won't be able to rejoin via the group link from this app, with no end time. You can't lift this block.\nThe block is stored only in %1$@'s app: %1$@ can still join from another device, or after reinstalling the app.\n\nType %2$@ to confirm.", comment: "remove forever alert")
-    return typedConfirmationAlert(
-        NSLocalizedString("Remove forever?", comment: "alert title"),
-        message: String.localizedStringWithFormat(format, name, foreverConfirmationWord),
-        word: foreverConfirmationWord,
-        confirmTitle: NSLocalizedString("Remove", comment: "alert action")
-    ) {
-        removeMember(gInfo, mem, withMessages: withMessages, notice: BanDuration.forever.notice, dismiss: dismiss)
-    }
-}
-
-func blockMemberForAll(_ gInfo: GroupInfo, _ member: GroupMember, _ blocked: Bool, ttl: Int64? = nil) {
+func blockMemberForAll(_ gInfo: GroupInfo, _ member: GroupMember, _ blocked: Bool) {
     Task {
         do {
-            let updatedMembers = try await apiBlockMembersForAll(gInfo.groupId, [member.groupMemberId], blocked, ttl: ttl)
+            let updatedMembers = try await apiBlockMembersForAll(gInfo.groupId, [member.groupMemberId], blocked)
             await MainActor.run {
                 updatedMembers.forEach { updatedMember in
                     _ = ChatModel.shared.upsertGroupMember(gInfo, updatedMember)
@@ -1092,96 +924,7 @@ struct GroupMemberInfoView_Previews: PreviewProvider {
             groupInfo: GroupInfo.sampleData,
             chat: Chat.sampleData,
             groupMember: GMember.sampleData,
-            scrollToItemId: Binding.constant(nil),
-            connectionLoaded: true
+            scrollToItemId: Binding.constant(nil)
         )
-    }
-}
-
-func previewBannableMember() -> GroupMember {
-    var member = GroupMember.sampleData
-    member.memberRole = .member
-    member.activeConn?.peerChatVRange = VersionRange(1, LINK_NOTICE_VERSION)
-    return member
-}
-
-struct BanMemberDialog_Owner_Previews: PreviewProvider {
-    static var previews: some View {
-        banMemberDialog(previewGroup(.owner), previewBannableMember(), dismiss: nil, close: { _ in })
-    }
-}
-
-struct BanMemberDialog_Moderator_Previews: PreviewProvider {
-    static var previews: some View {
-        banMemberDialog(previewGroup(.moderator), previewBannableMember(), dismiss: nil, close: { _ in })
-    }
-}
-
-struct BanMemberForeverDialog_Owner_Previews: PreviewProvider {
-    static var previews: some View {
-        banMemberDialog(previewGroup(.owner), previewBannableMember(), dismiss: nil, duration: .forever, close: { _ in })
-    }
-}
-
-struct BanMemberForeverDialog_Moderator_Previews: PreviewProvider {
-    static var previews: some View {
-        banMemberDialog(previewGroup(.moderator), previewBannableMember(), dismiss: nil, duration: .forever, close: { _ in })
-    }
-}
-
-struct BanSubscriberDialog_Owner_Previews: PreviewProvider {
-    static var previews: some View {
-        banMemberDialog(previewGroup(.owner, channel: true), previewBannableMember(), dismiss: nil, close: { _ in })
-    }
-}
-
-struct BanSubscriberDialog_Moderator_Previews: PreviewProvider {
-    static var previews: some View {
-        banMemberDialog(previewGroup(.moderator, channel: true), previewBannableMember(), dismiss: nil, close: { _ in })
-    }
-}
-
-struct RemoveBannedMemberDialog_Previews: PreviewProvider {
-    static var previews: some View {
-        removeBannedMemberDialog(previewGroup(.owner), previewBannableMember(), dismiss: nil, close: { _ in })
-        removeBannedMemberDialog(previewGroup(.owner), previewBannableMember(), dismiss: nil, duration: .forever, close: { _ in })
-    }
-}
-
-struct RemoveBannedSubscriberDialog_Previews: PreviewProvider {
-    static var previews: some View {
-        removeBannedMemberDialog(previewGroup(.owner, channel: true), previewBannableMember(), dismiss: nil, close: { _ in })
-    }
-}
-
-struct LiftBanAlert_Previews: PreviewProvider {
-    static var previews: some View {
-        Color.clear.alert(isPresented: .constant(true)) {
-            unblockForAllAlert(previewGroup(.moderator), previewBannableMember())
-        }
-    }
-}
-
-struct LiftBanSubscriberAlert_Previews: PreviewProvider {
-    static var previews: some View {
-        Color.clear.alert(isPresented: .constant(true)) {
-            unblockForAllAlert(previewGroup(.owner, channel: true), previewBannableMember())
-        }
-    }
-}
-
-struct HideMessagesAlert_Previews: PreviewProvider {
-    static var previews: some View {
-        Color.clear.alert(isPresented: .constant(true)) {
-            blockMemberAlert(previewGroup(.member), previewBannableMember())
-        }
-    }
-}
-
-struct ShowMessagesAlert_Previews: PreviewProvider {
-    static var previews: some View {
-        Color.clear.alert(isPresented: .constant(true)) {
-            unblockMemberAlert(previewGroup(.member), previewBannableMember())
-        }
     }
 }

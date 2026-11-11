@@ -296,11 +296,10 @@ class APIBlockMembersForAll(TypedDict):
     groupId: int  # int64
     groupMemberIds: list[int]  # int64, non-empty
     blocked: bool
-    ttl: NotRequired[int]  # int
 
 
 def APIBlockMembersForAll_cmd_string(self: APIBlockMembersForAll) -> str:
-    return '/_block #' + str(self['groupId']) + ' ' + ','.join(map(str, self['groupMemberIds'])) + ' blocked=' + ('on' if self['blocked'] else 'off') + ((' ttl=' + str(self.get('ttl'))) if self.get('ttl') is not None else '')
+    return '/_block #' + str(self['groupId']) + ' ' + ','.join(map(str, self['groupMemberIds'])) + ' blocked=' + ('on' if self['blocked'] else 'off')
 
 APIBlockMembersForAll_Response = CR.MembersBlockedForAllUser | CR.ChatCmdError
 
@@ -311,11 +310,10 @@ class APIRemoveMembers(TypedDict):
     groupId: int  # int64
     groupMemberIds: list[int]  # int64, non-empty
     withMessages: bool
-    notice: NotRequired["T.LinkNotice"]
 
 
 def APIRemoveMembers_cmd_string(self: APIRemoveMembers) -> str:
-    return '/_remove #' + str(self['groupId']) + ' ' + ','.join(map(str, self['groupMemberIds'])) + (' messages=on' if self['withMessages'] else '') + ((' notice=' + json.dumps(self.get('notice'))) if self.get('notice') is not None else '')
+    return '/_remove #' + str(self['groupId']) + ' ' + ','.join(map(str, self['groupMemberIds'])) + (' messages=on' if self['withMessages'] else '')
 
 APIRemoveMembers_Response = CR.UserDeletedMembers | CR.ChatCmdError
 
@@ -782,11 +780,10 @@ APIGetChatItemInfo_Response = CR.ChatItemInfo | CR.ChatCmdError
 class APIDeleteChat(TypedDict):
     chatRef: "T.ChatRef"
     chatDeleteMode: "T.ChatDeleteMode"
-    notice: NotRequired["T.LinkNotice"]
 
 
 def APIDeleteChat_cmd_string(self: APIDeleteChat) -> str:
-    return '/_delete ' + T.ChatRef_cmd_string(self['chatRef']) + ' ' + T.ChatDeleteMode_cmd_string(self['chatDeleteMode']) + ((' notice=' + json.dumps(self.get('notice'))) if self.get('notice') is not None else '')
+    return '/_delete ' + T.ChatRef_cmd_string(self['chatRef']) + ' ' + T.ChatDeleteMode_cmd_string(self['chatDeleteMode'])
 
 APIDeleteChat_Response = CR.ContactDeleted | CR.ContactConnectionDeleted | CR.GroupDeletedUser | CR.ChatCmdError
 

@@ -1076,15 +1076,13 @@ func apiConnect(incognito: Bool, connLink: CreatedConnLink) async -> (ConnReqTyp
         return nil
     default: ()
     }
-    if let r { await apiConnectResponseAlert(r, noticeTarget: LinkNoticeTarget(connLink)) }
+    if let r { await apiConnectResponseAlert(r) }
     return nil
 }
 
-private func apiConnectResponseAlert<R>(_ r: APIResult<R>, noticeTarget: LinkNoticeTarget = .contact) async {
+private func apiConnectResponseAlert<R>(_ r: APIResult<R>) async {
     await MainActor.run {
         switch r.unexpected {
-        case let .error(.linkNotice(expiresAt)):
-            showLinkNoticeAlert(noticeTarget, expiresAt: expiresAt)
         case .error(.invalidConnReq):
             showAlert(
                 NSLocalizedString("Invalid connection link", comment: ""),
@@ -1239,14 +1237,14 @@ func apiChangePreparedGroupUser(groupId: Int64, newUserId: Int64) async throws -
 func apiConnectPreparedContact(contactId: Int64, incognito: Bool, msg: MsgContent?) async -> Contact? {
     let r: APIResult<ChatResponse1>? = await chatApiSendCmdWithRetry(.apiConnectPreparedContact(contactId: contactId, incognito: incognito, msg: msg))
     if case let .result(.startedConnectionToContact(_, contact)) = r { return contact }
-    if let r { await apiConnectResponseAlert(r, noticeTarget: .contact) }
+    if let r { await apiConnectResponseAlert(r) }
     return nil
 }
 
-func apiConnectPreparedGroup(groupId: Int64, noticeTarget: LinkNoticeTarget, incognito: Bool, msg: MsgContent?) async -> (GroupInfo, [RelayConnectionResult])? {
+func apiConnectPreparedGroup(groupId: Int64, incognito: Bool, msg: MsgContent?) async -> (GroupInfo, [RelayConnectionResult])? {
     let r: APIResult<ChatResponse1>? = await chatApiSendCmdWithRetry(.apiConnectPreparedGroup(groupId: groupId, incognito: incognito, msg: msg))
     if case let .result(.startedConnectionToGroup(_, groupInfo, relayResults)) = r { return (groupInfo, relayResults) }
-    if let r { await apiConnectResponseAlert(r, noticeTarget: noticeTarget) }
+    if let r { await apiConnectResponseAlert(r) }
     return nil
 }
 
@@ -1259,30 +1257,23 @@ func apiConnectContactViaAddress(incognito: Bool, contactId: Int64) async -> Con
     if case let .result(.sentInvitationToContact(_, contact, _)) = r { return contact }
     if let r {
         logger.error("apiConnectContactViaAddress error: \(responseError(r.unexpected))")
-        await MainActor.run {
-            if case let .error(.linkNotice(expiresAt)) = r.unexpected {
-                showLinkNoticeAlert(.contact, expiresAt: expiresAt)
-            } else {
-                showAlert(connectionErrorAlert(r))
-            }
-        }
+        await MainActor.run { showAlert(connectionErrorAlert(r)) }
     }
     return nil
 }
 
-@discardableResult
-func apiDeleteChat(type: ChatType, id: Int64, chatDeleteMode: ChatDeleteMode = .full(notify: true), notice: LinkNotice? = nil) async throws -> GroupInfo? {
+func apiDeleteChat(type: ChatType, id: Int64, chatDeleteMode: ChatDeleteMode = .full(notify: true)) async throws {
     let chatId = type.rawValue + id.description
     DispatchQueue.main.async { ChatModel.shared.deletedChats.insert(chatId) }
     defer { DispatchQueue.main.async { ChatModel.shared.deletedChats.remove(chatId) } }
-    let r: ChatResponse1 = try await chatSendCmd(.apiDeleteChat(type: type, id: id, chatDeleteMode: chatDeleteMode, notice: notice), bgTask: false)
-    if case .direct = type, case .contactDeleted = r { return nil }
-    if case .contactConnection = type, case .contactConnectionDeleted = r { return nil }
-    if case .group = type, case let .groupDeletedUser(_, groupInfo) = r { return groupInfo }
+    let r: ChatResponse1 = try await chatSendCmd(.apiDeleteChat(type: type, id: id, chatDeleteMode: chatDeleteMode), bgTask: false)
+    if case .direct = type, case .contactDeleted = r { return }
+    if case .contactConnection = type, case .contactConnectionDeleted = r { return }
+    if case .group = type, case .groupDeletedUser = r { return }
     throw r.unexpected
 }
 
-func apiDeleteContact(id: Int64, chatDeleteMode: ChatDeleteMode = .full(notify: true), notice: LinkNotice? = nil) async throws -> Contact {
+func apiDeleteContact(id: Int64, chatDeleteMode: ChatDeleteMode = .full(notify: true)) async throws -> Contact {
     let type: ChatType = .direct
     let chatId = type.rawValue + id.description
     if case .full = chatDeleteMode {
@@ -1293,46 +1284,45 @@ func apiDeleteContact(id: Int64, chatDeleteMode: ChatDeleteMode = .full(notify: 
             DispatchQueue.main.async { ChatModel.shared.deletedChats.remove(chatId) }
         }
     }
-    let r: ChatResponse1 = try await chatSendCmd(.apiDeleteChat(type: type, id: id, chatDeleteMode: chatDeleteMode, notice: notice), bgTask: false)
+    let r: ChatResponse1 = try await chatSendCmd(.apiDeleteChat(type: type, id: id, chatDeleteMode: chatDeleteMode), bgTask: false)
     if case let .contactDeleted(_, contact) = r { return contact }
     throw r.unexpected
 }
 
-@discardableResult
-func deleteChat(_ chat: Chat, chatDeleteMode: ChatDeleteMode = .full(notify: true), notice: LinkNotice? = nil) async -> Bool {
+func deleteChat(_ chat: Chat, chatDeleteMode: ChatDeleteMode = .full(notify: true)) async {
     do {
         let cInfo = chat.chatInfo
-        let groupInfo = try await apiDeleteChat(type: cInfo.chatType, id: cInfo.apiId, chatDeleteMode: chatDeleteMode, notice: notice)
-        await MainActor.run {
-            if chatDeleteMode.isEntity, let groupInfo {
-                ChatModel.shared.updateGroup(groupInfo)
-            } else {
-                ChatModel.shared.removeChat(cInfo.id)
-            }
-        }
-        return true
+        try await apiDeleteChat(type: cInfo.chatType, id: cInfo.apiId, chatDeleteMode: chatDeleteMode)
+        await MainActor.run { ChatModel.shared.removeChat(cInfo.id) }
     } catch let error {
         logger.error("deleteChat apiDeleteChat error: \(responseError(error))")
         AlertManager.shared.showAlertMsg(
             title: "Error deleting chat!",
             message: "Error: \(responseError(error))"
         )
-        return false
     }
 }
 
-func deleteContactChat(_ chat: Chat, chatDeleteMode: ChatDeleteMode = .full(notify: true), notice: LinkNotice? = nil) async -> Alert? {
+func deleteContactChat(_ chat: Chat, chatDeleteMode: ChatDeleteMode = .full(notify: true)) async -> Alert? {
     do {
         let cInfo = chat.chatInfo
-        let ct = try await apiDeleteContact(id: cInfo.apiId, chatDeleteMode: chatDeleteMode, notice: notice)
+        let ct = try await apiDeleteContact(id: cInfo.apiId, chatDeleteMode: chatDeleteMode)
         await MainActor.run {
             switch chatDeleteMode {
             case .full:
                 ChatModel.shared.removeChat(cInfo.id)
-            case .entity, .archive:
-                ChatModel.shared.updateContact(ct)
-                ChatTagsModel.shared.addPresetChatTags(.direct(contact: ct), chat.chatStats)
-                ChatTagsModel.shared.removePresetChatTags(cInfo, chat.chatStats)
+            case .entity:
+                ChatModel.shared.removeChat(cInfo.id)
+                ChatModel.shared.addChat(Chat(
+                    chatInfo: .direct(contact: ct),
+                    chatItems: chat.chatItems
+                ))
+            case .messages:
+                ChatModel.shared.removeChat(cInfo.id)
+                ChatModel.shared.addChat(Chat(
+                    chatInfo: .direct(contact: ct),
+                    chatItems: []
+                ))
             }
         }
     } catch let error {
@@ -2042,8 +2032,8 @@ func apiDeleteMemberSupportChat(_ groupId: Int64, _ groupMemberId: Int64) async 
     throw r.unexpected
 }
 
-func apiRemoveMembers(_ groupId: Int64, _ memberIds: [Int64], _ withMessages: Bool, notice: LinkNotice? = nil) async throws -> (GroupInfo, [GroupMember]) {
-    let r: ChatResponse2 = try await chatSendCmd(.apiRemoveMembers(groupId: groupId, memberIds: memberIds, withMessages: withMessages, notice: notice), bgTask: false)
+func apiRemoveMembers(_ groupId: Int64, _ memberIds: [Int64], _ withMessages: Bool) async throws -> (GroupInfo, [GroupMember]) {
+    let r: ChatResponse2 = try await chatSendCmd(.apiRemoveMembers(groupId: groupId, memberIds: memberIds, withMessages: withMessages), bgTask: false)
     if case let .userDeletedMembers(_, updatedGroupInfo, members, _withMessages) = r { return (updatedGroupInfo, members) }
     throw r.unexpected
 }
@@ -2054,8 +2044,8 @@ func apiMembersRole(_ groupId: Int64, _ memberIds: [Int64], _ memberRole: GroupM
     throw r.unexpected
 }
 
-func apiBlockMembersForAll(_ groupId: Int64, _ memberIds: [Int64], _ blocked: Bool, ttl: Int64? = nil) async throws -> [GroupMember] {
-    let r: ChatResponse2 = try await chatSendCmd(.apiBlockMembersForAll(groupId: groupId, memberIds: memberIds, blocked: blocked, ttl: ttl), bgTask: false)
+func apiBlockMembersForAll(_ groupId: Int64, _ memberIds: [Int64], _ blocked: Bool) async throws -> [GroupMember] {
+    let r: ChatResponse2 = try await chatSendCmd(.apiBlockMembersForAll(groupId: groupId, memberIds: memberIds, blocked: blocked), bgTask: false)
     if case let .membersBlockedForAllUser(_, _, members, _) = r { return members }
     throw r.unexpected
 }

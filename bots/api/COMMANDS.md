@@ -955,20 +955,19 @@ Block members. Requires Moderator role.
 - groupId: int64
 - groupMemberIds: [int64]
 - blocked: bool
-- ttl: int?
 
 **Syntax**:
 
 ```
-/_block #<groupId> <groupMemberIds[0]>[,<groupMemberIds[1]>...] blocked=on|off[ ttl=<ttl>]
+/_block #<groupId> <groupMemberIds[0]>[,<groupMemberIds[1]>...] blocked=on|off
 ```
 
 ```javascript
-'/_block #' + groupId + ' ' + groupMemberIds.join(',') + ' blocked=' + (blocked ? 'on' : 'off') + (ttl ? ' ttl=' + ttl : '') // JavaScript
+'/_block #' + groupId + ' ' + groupMemberIds.join(',') + ' blocked=' + (blocked ? 'on' : 'off') // JavaScript
 ```
 
 ```python
-'/_block #' + str(groupId) + ' ' + ','.join(map(str, groupMemberIds)) + ' blocked=' + ('on' if blocked else 'off') + ((' ttl=' + str(ttl)) if ttl is not None else '') # Python
+'/_block #' + str(groupId) + ' ' + ','.join(map(str, groupMemberIds)) + ' blocked=' + ('on' if blocked else 'off') # Python
 ```
 
 **Responses**:
@@ -998,20 +997,19 @@ Remove members. Requires Admin role.
 - groupId: int64
 - groupMemberIds: [int64]
 - withMessages: bool
-- notice: [LinkNotice](./TYPES.md#linknotice)?
 
 **Syntax**:
 
 ```
-/_remove #<groupId> <groupMemberIds[0]>[,<groupMemberIds[1]>...][ messages=on][ notice=<json(notice)>]
+/_remove #<groupId> <groupMemberIds[0]>[,<groupMemberIds[1]>...][ messages=on]
 ```
 
 ```javascript
-'/_remove #' + groupId + ' ' + groupMemberIds.join(',') + (withMessages ? ' messages=on' : '') + (notice ? ' notice=' + JSON.stringify(notice) : '') // JavaScript
+'/_remove #' + groupId + ' ' + groupMemberIds.join(',') + (withMessages ? ' messages=on' : '') // JavaScript
 ```
 
 ```python
-'/_remove #' + str(groupId) + ' ' + ','.join(map(str, groupMemberIds)) + (' messages=on' if withMessages else '') + ((' notice=' + json.dumps(notice)) if notice is not None else '') # Python
+'/_remove #' + str(groupId) + ' ' + ','.join(map(str, groupMemberIds)) + (' messages=on' if withMessages else '') # Python
 ```
 
 **Responses**:
@@ -2420,20 +2418,19 @@ Delete chat.
 **Parameters**:
 - chatRef: [ChatRef](./TYPES.md#chatref)
 - chatDeleteMode: [ChatDeleteMode](./TYPES.md#chatdeletemode)
-- notice: [LinkNotice](./TYPES.md#linknotice)?
 
 **Syntax**:
 
 ```
-/_delete <str(chatRef)> <str(chatDeleteMode)>[ notice=<json(notice)>]
+/_delete <str(chatRef)> <str(chatDeleteMode)>
 ```
 
 ```javascript
-'/_delete ' + ChatRef.cmdString(chatRef) + ' ' + ChatDeleteMode.cmdString(chatDeleteMode) + (notice ? ' notice=' + JSON.stringify(notice) : '') // JavaScript
+'/_delete ' + ChatRef.cmdString(chatRef) + ' ' + ChatDeleteMode.cmdString(chatDeleteMode) // JavaScript
 ```
 
 ```python
-'/_delete ' + ChatRef_cmd_string(chatRef) + ' ' + ChatDeleteMode_cmd_string(chatDeleteMode) + ((' notice=' + json.dumps(notice)) if notice is not None else '') # Python
+'/_delete ' + ChatRef_cmd_string(chatRef) + ' ' + ChatDeleteMode_cmd_string(chatDeleteMode) # Python
 ```
 
 **Responses**:

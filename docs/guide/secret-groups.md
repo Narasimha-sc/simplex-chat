@@ -56,8 +56,7 @@ You can also leave the group from the group page:
 
 After you leave, the group stays in the list of the conversations. To delete it
 from your device, tap "Delete group" on the group page. Owners can tap "Delete
-group" without leaving, to delete the group for all members, and turn on "Keep
-conversation" in the next dialog to keep its messages on their device.
+group" without leaving, to delete the group for all members.
 
 ## Member permissions
 
@@ -76,16 +75,6 @@ Open a group and tap on group's name to view members list, there you can tap on 
 
 Moderators, admins and owners can act only on members with the same or a lower
 role.
-
-## Bans
-
-Moderators, admins and owners can ban a member for a set time or forever. Other members do not see the messages of a banned member, and moderators, admins and owners see them hidden. The banned member is not told.
-
-Admins and owners can also ban and remove a member. The member's app does not show the removal, and it does not allow joining the group via the same link until the ban ends. Contacts and businesses can delete a contact or a chat with a ban, with the same effect for their address.
-
-When you try to join or connect via a link you are banned from, the app shows "Not allowed" with the time when the ban ends.
-
-No IDs are shared to apply a ban: it is sent only to the banned member's app, which stores it for the link this member used. You can still join the same group or connect to the same contact via another link or an invitation.
 
 ## Link to join group
 

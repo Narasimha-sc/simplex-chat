@@ -335,14 +335,13 @@ export interface APIBlockMembersForAll {
   groupId: number // int64
   groupMemberIds: number[] // int64, non-empty
   blocked: boolean
-  ttl?: number // int
 }
 
 export namespace APIBlockMembersForAll {
   export type Response = CR.MembersBlockedForAllUser | CR.ChatCmdError
 
   export function cmdString(self: APIBlockMembersForAll): string {
-    return '/_block #' + self.groupId + ' ' + self.groupMemberIds.join(',') + ' blocked=' + (self.blocked ? 'on' : 'off') + (self.ttl ? ' ttl=' + self.ttl : '')
+    return '/_block #' + self.groupId + ' ' + self.groupMemberIds.join(',') + ' blocked=' + (self.blocked ? 'on' : 'off')
   }
 }
 
@@ -352,14 +351,13 @@ export interface APIRemoveMembers {
   groupId: number // int64
   groupMemberIds: number[] // int64, non-empty
   withMessages: boolean
-  notice?: T.LinkNotice
 }
 
 export namespace APIRemoveMembers {
   export type Response = CR.UserDeletedMembers | CR.ChatCmdError
 
   export function cmdString(self: APIRemoveMembers): string {
-    return '/_remove #' + self.groupId + ' ' + self.groupMemberIds.join(',') + (self.withMessages ? ' messages=on' : '') + (self.notice ? ' notice=' + JSON.stringify(self.notice) : '')
+    return '/_remove #' + self.groupId + ' ' + self.groupMemberIds.join(',') + (self.withMessages ? ' messages=on' : '')
   }
 }
 
@@ -890,14 +888,13 @@ export namespace APIGetChatItemInfo {
 export interface APIDeleteChat {
   chatRef: T.ChatRef
   chatDeleteMode: T.ChatDeleteMode
-  notice?: T.LinkNotice
 }
 
 export namespace APIDeleteChat {
   export type Response = CR.ContactDeleted | CR.ContactConnectionDeleted | CR.GroupDeletedUser | CR.ChatCmdError
 
   export function cmdString(self: APIDeleteChat): string {
-    return '/_delete ' + T.ChatRef.cmdString(self.chatRef) + ' ' + T.ChatDeleteMode.cmdString(self.chatDeleteMode) + (self.notice ? ' notice=' + JSON.stringify(self.notice) : '')
+    return '/_delete ' + T.ChatRef.cmdString(self.chatRef) + ' ' + T.ChatDeleteMode.cmdString(self.chatDeleteMode)
   }
 }
 

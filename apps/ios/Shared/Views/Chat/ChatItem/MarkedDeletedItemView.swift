@@ -63,9 +63,9 @@ struct MarkedDeletedItemView: View {
             : total == moderated
             ? "\(total) messages moderated by \(moderatedBy.joined(separator: ", "))"
             : total == blockedByAdmin
-            ? "\(total) messages banned by admin"
+            ? "\(total) messages blocked by admin"
             : total == blocked + blockedByAdmin
-            ? "\(total) messages hidden"
+            ? "\(total) messages blocked"
             : "\(total) messages marked deleted"
         } else {
             return markedDeletedText
@@ -80,8 +80,8 @@ struct MarkedDeletedItemView: View {
         } else {
             switch chatItem.meta.itemDeleted {
             case let .moderated(_, byGroupMember): "moderated by \(byGroupMember.displayName)"
-            case .blocked: "hidden"
-            case .blockedByAdmin: "banned by admin"
+            case .blocked: "blocked"
+            case .blockedByAdmin: "blocked by admin"
             case .deleted, nil: "marked deleted"
             }
         }

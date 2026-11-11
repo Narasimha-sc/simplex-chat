@@ -64,37 +64,10 @@ func showAlert(
     actions: () -> [UIAlertAction] = { [okAlertAction] }
 ) {
     if let topController = getTopViewController() {
-        topController.present(alertController(title, message: message, actions: actions()), animated: true)
+        let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
+        for action in actions() { alert.addAction(action) }
+        topController.present(alert, animated: true)
     }
-}
-
-func alertController(_ title: String, message: String?, actions: [UIAlertAction]) -> UIAlertController {
-    let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
-    for action in actions { alert.addAction(action) }
-    return alert
-}
-
-func typedConfirmationAlert(
-    _ title: String,
-    message: String,
-    word: String,
-    confirmTitle: String,
-    confirm: @escaping () -> Void
-) -> UIAlertController {
-    let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
-    let confirmAction = UIAlertAction(title: confirmTitle, style: .destructive) { _ in confirm() }
-    confirmAction.isEnabled = false
-    alert.addTextField { field in
-        field.placeholder = word
-        field.autocapitalizationType = .none
-        field.autocorrectionType = .no
-        field.addAction(UIAction { [weak field] _ in
-            confirmAction.isEnabled = field?.text?.trimmingCharacters(in: .whitespaces).lowercased() == word
-        }, for: .editingChanged)
-    }
-    alert.addAction(cancelAlertAction)
-    alert.addAction(confirmAction)
-    return alert
 }
 
 func showSheet(
