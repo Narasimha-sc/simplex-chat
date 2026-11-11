@@ -19,16 +19,17 @@ import java.io.IOException
 import java.nio.file.*
 import java.nio.file.attribute.BasicFileAttributes
 
-private class EntryUsage(val name: String, val bytes: Long, val dir: Path?)
+internal class EntryUsage(val name: String, val bytes: Long, val dir: Path?)
 
-private class RootUsage(val dir: Path, val entries: List<EntryUsage>) {
+internal class RootUsage(val dir: Path, val entries: List<EntryUsage>) {
   val bytes: Long = entries.sumOf { it.bytes }
 }
 
 @Composable
-fun StorageView(dirs: List<Path> = storageRoots()) {
-  val usage by produceState<List<RootUsage>?>(initialValue = null) {
-    value = withContext(Dispatchers.IO) { dirs.map(::rootUsage) }
+fun ModalData.StorageView(dirs: List<Path> = storageRoots()) {
+  var usage by remember { stateGetOrPutNullable<List<RootUsage>>("usage") { null } }
+  LaunchedEffect(Unit) {
+    if (usage == null) usage = withContext(Dispatchers.IO) { dirs.map(::rootUsage) }
   }
   ColumnWithScrollBar {
     AppBarTitle(stringResource(MR.strings.storage))
@@ -64,13 +65,16 @@ private fun storageRoots(): List<Path> {
   return dirs.filter { dir -> dirs.none { it != dir && dir.startsWith(it) } }.map { it.toPath() }
 }
 
-private fun rootUsage(root: Path): RootUsage =
+internal fun rootUsage(root: Path, closedDirs: List<Path> = listOf(appFilesDir, tmpDir, remoteHostsDir, databaseExportDir).map { it.toPath() }): RootUsage =
   RootUsage(
     root,
     rootEntries(root)
-      .map { path -> EntryUsage(path.fileName.toString(), treeSize(path), path.takeIf { Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS) }) }
+      .map { path -> EntryUsage(path.fileName.toString(), treeSize(path), path.takeIf { opensAsFolder(path, closedDirs) }) }
       .sortedByDescending { it.bytes }
   )
+
+private fun opensAsFolder(path: Path, closedDirs: List<Path>): Boolean =
+  Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS) && closedDirs.none { it.toAbsolutePath().normalize() == path.toAbsolutePath().normalize() }
 
 private fun rootEntries(root: Path): List<Path> =
   try {
