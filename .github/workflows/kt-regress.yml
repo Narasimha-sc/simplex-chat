@@ -11,6 +11,7 @@ on:
       ref: {description: PR branch or full sha (code + tests), type: string}
       base: {description: 'full sha whose app sources are "without the fix"; empty = skip the base half', type: string, default: ''}
       tests: {description: 'gradle --tests filters, space-separated (e.g. chat.simplex.app.DialogStateTest)', type: string}
+      base_paths: {description: 'further paths taken from base in the base half, space-separated (e.g. apps/multiplatform/build.gradle.kts)', type: string, default: ''}
 permissions: {contents: read}
 jobs:
   regress:
@@ -36,12 +37,12 @@ jobs:
           SH
       - name: Base (PR tests, app sources from base) - expected to FAIL
         if: inputs.base != ''
-        env: {TESTS: '${{ inputs.tests }}'}
+        env: {TESTS: '${{ inputs.tests }}', BASE_PATHS: '${{ inputs.base_paths }}'}
         run: |
-          echo "BASE sources = ${{ inputs.base }}, tests = ${{ inputs.ref }}" >> /tmp/summary
-          git checkout ${{ inputs.base }} -- apps/multiplatform/common/src/commonMain apps/multiplatform/common/src/desktopMain apps/multiplatform/common/src/androidMain
+          echo "BASE sources = ${{ inputs.base }}, tests = ${{ inputs.ref }}, base paths = $BASE_PATHS" >> /tmp/summary
+          git checkout ${{ inputs.base }} -- apps/multiplatform/common/src/commonMain apps/multiplatform/common/src/desktopMain apps/multiplatform/common/src/androidMain $BASE_PATHS
           bash -c 'source /tmp/run.sh base'
-          git checkout HEAD -- apps/multiplatform/common/src
+          git checkout HEAD -- apps/multiplatform/common/src $BASE_PATHS
       - name: Fix (ref as is) - expected to PASS
         env: {TESTS: '${{ inputs.tests }}'}
         run: |
