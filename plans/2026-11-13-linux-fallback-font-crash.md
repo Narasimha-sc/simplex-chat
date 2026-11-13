@@ -13,6 +13,8 @@ Compose 1.8.2 uses Skiko 0.9.4.2, built with Skia m132. Its fontconfig font mana
 
 Skiko's FreeType has only the TrueType, CFF, Type 1 and CID drivers, so `fProxy` is null for the formats above, and the first forwarded call reads address 0.
 
+Fontconfig lists such a font only from a cache written by another program, such as `fc-cache`: a cache that the app writes omits it.
+
 ## Fix
 
 On Linux build hosts, `apps/multiplatform/build.gradle.kts` resolves every `org.jetbrains.skiko` module requested at 0.9.4.2 to 0.9.37.3 (Skia m138), where:
@@ -23,4 +25,4 @@ On Linux build hosts, `apps/multiplatform/build.gradle.kts` resolves every `org.
 
 - Linux desktop builds (x64 and arm64); macOS, Windows and Android builds resolve the same versions as before.
 - The rule applies only to 0.9.4.2, so a Compose update that brings another Skiko version is not overridden.
-- Test: `FallbackFontTest` lays out U+2603 in a child JVM whose fontconfig lists one BDF font.
+- Test: `FallbackFontTest` indexes one BDF font with `fc-cache` and lays out U+2603 in a child JVM that uses this fontconfig.

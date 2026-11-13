@@ -8,6 +8,7 @@ import org.jetbrains.skia.paragraph.TextStyle
 import org.junit.Assume.assumeTrue
 import java.io.File
 import java.nio.file.Files
+import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -45,17 +46,23 @@ class FallbackFontTest {
   @Test
   fun textIsLaidOutWhenTheOnlyFallbackFontIsBitmap() = withTempDir { dir ->
     assumeTrue("fontconfig selects fallback fonts only on Linux", System.getProperty("os.name") == "Linux")
-    Files.writeString(dir.resolve("snowman.bdf"), SNOWMAN_BDF)
-    Files.writeString(dir.resolve("fonts.conf"), "<fontconfig><dir>$dir</dir><cachedir>$dir</cachedir></fontconfig>")
+    val fontsConf = dir.resolve("fonts.conf")
+    Files.createDirectory(dir.resolve("fonts"))
+    Files.writeString(dir.resolve("fonts/snowman.bdf"), SNOWMAN_BDF)
+    Files.writeString(fontsConf, "<fontconfig><dir>$dir/fonts</dir><cachedir>$dir/cache</cachedir></fontconfig>")
+    val fcCache = runCatching { startWithFonts(fontsConf, "fc-cache").waitFor() }.getOrNull()
+    assumeTrue("fc-cache indexes the font, as it does for installed fonts", fcCache == 0)
     val java = File(System.getProperty("java.home"), "bin/java").path
-    val layout = ProcessBuilder(java, "-cp", System.getProperty("java.class.path"), "-XX:ErrorFile=$dir/hs_err.log", LayOutSnowman::class.java.name)
-      .directory(dir.toFile())
-      .redirectErrorStream(true)
-      .apply { environment()["FONTCONFIG_FILE"] = dir.resolve("fonts.conf").toString() }
-      .start()
+    val layout = startWithFonts(fontsConf, java, "-cp", System.getProperty("java.class.path"), "-XX:ErrorFile=$dir/hs_err.log", LayOutSnowman::class.java.name)
     val output = layout.inputStream.bufferedReader().readText()
     assertEquals(0, layout.waitFor(), output)
   }
+
+  private fun startWithFonts(fontsConf: Path, vararg command: String): Process =
+    ProcessBuilder(*command)
+      .redirectErrorStream(true)
+      .apply { environment()["FONTCONFIG_FILE"] = fontsConf.toString() }
+      .start()
 }
 
 object LayOutSnowman {
