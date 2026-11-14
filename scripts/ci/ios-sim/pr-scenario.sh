@@ -287,46 +287,74 @@ bob 120 "/_send @$ct json $msgs" || fail "Bob could not send the files"
 texts=$(jq -cn --arg a "$l1_link" --arg b "$l2_link" '[{msgContent: {type: "text", text: $a}}, {msgContent: {type: "text", text: $b}}]')
 bob 30 "/_send @$ct json $texts" || fail "Bob could not send the links"
 
-# F1, F2: the file items
+# F1, F2: the file items; message texts have empty labels in the tree, so the names are judged on the shots
 close_sheet
 open_chat Bob || fail "no chat with Bob"
-wait_match 'doc\.exe' 120 || echo "F: not all file items shown in 120 s"
-"$ui" shot F-files-bottom
+sleep 20
 "$ui" swipe 201 300 201 700
 "$ui" shot F-files-top
-t=$("$ui" tree)
-f1=""
-for marker in 'invoice\[U\+202E\]fdp\.exe' 'a\.txt\[U\+000A\]b\.pdf' 'report\[U\+2066\]x\[U\+2069\]\.pdf'; do
-  if grep -qE -- "$marker" <<< "$t"; then f1="$f1 shown:$marker"; else f1="$f1 missing:$marker"; fi
-done
-grep -E 'invoice|report|a\.txt' <<< "$t" || true
-result F1 "${f1# }" "(pr: every marker shown; base: none)"
+"$ui" swipe 201 650 201 250
+"$ui" shot F-files-bottom
+result F1 "see shots F-files-top, F-files-bottom" "(pr: invoice_fdp.exe, a.txt_b.pdf, report_x_.pdf; base: raw characters)"
 result F2 "see shots F-files-top, F-files-bottom" "(pr: .exe after the truncated names)"
 
-# L1: the long host link
-"$ui" swipe 201 650 201 250
-line=$("$ui" tree | grep -F "login.bank.example.com" | tail -n 1) || true
-[ -n "$line" ] || fail "no L1 message in the chat"
-tap_line "$line"
-if wait_match '"Open link\?"' 15; then
-  "$ui" shot L1-alert
-  t=$("$ui" tree)
-  if grep -qF "$long_host…" <<< "$t" || grep -qF "$long_host/" <<< "$t"; then l1="whole host shown"; else l1="host cut"; fi
-  grep -F 'login.bank' <<< "$t" | cut -c1-400 || true
-  tap_match '^Button "Cancel" ' || "$ui" tap Cancel 5 || true
+# the StaticText elements on screen whose height is in the range, as tree lines
+text_blocks() {
+  "$ui" tree | grep -E '^StaticText ' | while IFS= read -r l; do
+    read -r _ y _ h < <(sed -E 's/.* at (-?[0-9]+),(-?[0-9]+) size ([0-9]+)x([0-9]+).*/\1 \2 \3 \4/' <<< "$l")
+    if [ "$h" -ge "$1" ] && [ "$h" -le "$2" ] && [ "$y" -ge 90 ] && [ "$y" -le 780 ]; then
+      echo "$l"
+    fi
+  done
+}
+
+# scrolls toward older messages, then toward newer ones, until a text block in the height range is on screen
+find_block() {
+  local found
+  for dir in none older older older older newer newer newer newer newer newer newer newer newer; do
+    case $dir in
+      older) "$ui" swipe 201 250 201 650 ;;
+      newer) "$ui" swipe 201 650 201 250 ;;
+    esac
+    found=$(text_blocks "$1" "$2" | tail -n 1) || true
+    if [ -n "$found" ]; then
+      echo "$found"
+      return 0
+    fi
+  done
+  return 1
+}
+
+# L1: the long host link, a text block 120-400 points high
+line=$(find_block 120 400) || line=""
+if [ -z "$line" ]; then
+  "$ui" shot L1-no-message
+  l1="no message found"
 else
-  "$ui" shot L1-no-alert
-  l1="no alert"
+  echo "L1 tap: $line"
+  tap_line "$line"
+  if wait_match '"Open link\?"' 15; then
+    "$ui" shot L1-alert
+    t=$("$ui" tree)
+    if grep -qF "$long_host…" <<< "$t" || grep -qF "$long_host/" <<< "$t"; then l1="whole host shown"; else l1="host cut"; fi
+    grep -F 'login.bank' <<< "$t" | cut -c1-400 || true
+    tap_match '^Button "Cancel" ' || "$ui" tap Cancel 5 || true
+  else
+    "$ui" shot L1-no-alert
+    l1="no alert"
+  fi
 fi
 result L1 "$l1" "(pr: whole host shown; base: host cut)"
 
-# L2: the 3000-character user name
-line=$("$ui" tree | grep -F "uuuuuuuuuu" | tail -n 1) || true
+# L2: the 3000-character user name, a text block over 600 points high; its top part is tapped
+line=$(find_block 600 100000) || line=""
 if [ -z "$line" ]; then
   "$ui" shot L2-no-message
-  result L2 "no message" ""
+  result L2 "no message found" ""
 else
-  tap_line "$line"
+  read -r lx ly lw _ < <(sed -E 's/.* at (-?[0-9]+),(-?[0-9]+) size ([0-9]+)x([0-9]+).*/\1 \2 \3 \4/' <<< "$line")
+  echo "L2 tap: $line"
+  "$ui" tap-xy $((lx + lw / 2)) $((ly + 40))
   if wait_match '"Open link\?"' 15; then
     "$ui" shot L2-alert
     if "$ui" tree | grep -qE '^Button "Cancel" '; then
