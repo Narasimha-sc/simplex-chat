@@ -336,7 +336,7 @@ else
   if wait_match '"Open link\?"' 15; then
     "$ui" shot L1-alert
     t=$("$ui" tree)
-    if grep -qF "$long_host…" <<< "$t" || grep -qF "$long_host/" <<< "$t"; then l1="whole host shown"; else l1="host cut"; fi
+    if grep -qF "${long_host}…" <<< "$t" || grep -qF "$long_host/" <<< "$t"; then l1="whole host shown"; else l1="host cut"; fi
     grep -F 'login.bank' <<< "$t" | cut -c1-400 || true
     tap_match '^Button "Cancel" ' || "$ui" tap Cancel 5 || true
   else
@@ -442,3 +442,4 @@ else
   result W2 "$w2" "(pr: Invalid link alert; base: no alert)"
 fi
 echo "scenario finished"
+to_list
