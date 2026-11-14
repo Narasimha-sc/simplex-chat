@@ -265,7 +265,10 @@ wait_match '"Open new chat"|"Connect"' 90 || fail "no \"Open new chat\" after pa
 wait_match '"Connect"' 30 || fail "no \"Connect\" button"
 tap_match '^Button "Connect" ' || "$ui" tap Connect || fail "could not tap \"Connect\""
 deadline=$((SECONDS + 300))
-until grep -q 'contact is connected' "$work/bob-online.log" 2> /dev/null; do
+bob_ready() {
+  [ "$(sqlite3 "$work/bob_chat.db" "SELECT count(*) FROM connections WHERE conn_status = 'ready' AND contact_id IS NOT NULL" 2> /dev/null)" -gt 0 ] 2> /dev/null
+}
+until bob_ready; do
   [ "$SECONDS" -lt "$deadline" ] || fail "Bob did not connect in 300 s"
   sleep 3
 done
