@@ -4,7 +4,6 @@ import {localhostHostValidation, localhostOriginValidation, toNodeHandler} from 
 import {McpServerFactory, createMcpHandler} from "@modelcontextprotocol/server"
 import {logError} from "./log"
 
-// spec: spec/architecture.md#http-httpoptions
 export interface HttpOptions {
   port: number
   token: string
@@ -12,7 +11,6 @@ export interface HttpOptions {
   ready: () => boolean
 }
 
-// spec: spec/architecture.md#http-starthttp
 export function startHttp({port, token, factory, ready}: HttpOptions): Promise<Server> {
   const expectedAuthorization = Buffer.from(`Bearer ${token}`)
   const validHost = localhostHostValidation()
@@ -33,7 +31,6 @@ export function startHttp({port, token, factory, ready}: HttpOptions): Promise<S
   server.keepAliveTimeout = 5_000
   server.timeout = 0
 
-  // spec: spec/architecture.md#http-authorized
   function authorized(authorization: string | undefined): boolean {
     const given = Buffer.from(authorization ?? "")
     return given.length === expectedAuthorization.length && timingSafeEqual(given, expectedAuthorization)
@@ -48,7 +45,6 @@ export function startHttp({port, token, factory, ready}: HttpOptions): Promise<S
   })
 }
 
-// spec: spec/architecture.md#http-stophttp
 export function stopHttp(server: Server): Promise<void> {
   const closed = new Promise<void>(resolve => server.close(() => resolve()))
   server.closeAllConnections()

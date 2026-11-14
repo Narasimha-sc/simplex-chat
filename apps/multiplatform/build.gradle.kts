@@ -107,16 +107,6 @@ configure(subprojects) {
             if (jvmVersion.isPresent) jvmTarget = jvmVersion.get()
         }
     }
-
-    if (System.getProperty("os.name") == "Linux") {
-        configurations.configureEach {
-            resolutionStrategy.eachDependency {
-                if (requested.group == "org.jetbrains.skiko" && requested.version == "0.9.4.2") {
-                    useVersion("0.9.37.3")
-                }
-            }
-        }
-    }
 }
 
 tasks.register("clean", Delete::class) {

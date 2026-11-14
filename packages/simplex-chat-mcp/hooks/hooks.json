@@ -1,9 +1,7 @@
 {
   "hooks": {
     "SessionStart": [{"hooks": [{"type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/dist/cli.js\" hook session-start", "timeout": 600}]}],
-    "PreToolUse": [{"matcher": "mcp__plugin_simplex_simplex__.*", "hooks": [{"type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/plugin/allow.js\""}]}, {"matcher": "*", "hooks": [{"type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/dist/cli.js\" hook turn", "async": true}]}],
-    "PostToolUse": [{"matcher": "*", "hooks": [{"type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/dist/cli.js\" hook turn", "async": true}]}],
-    "PostToolUseFailure": [{"matcher": "*", "hooks": [{"type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/dist/cli.js\" hook turn", "async": true}]}],
+    "PreToolUse": [{"matcher": "mcp__plugin_simplex_simplex__.*", "hooks": [{"type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/plugin/allow.js\""}]}],
     "UserPromptSubmit": [{"hooks": [{"type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/dist/cli.js\" hook turn", "async": true}]}],
     "Stop": [{"hooks": [{"type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/dist/cli.js\" hook turn", "async": true}]}],
     "PostModelSwitch": [{"hooks": [{"type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/dist/cli.js\" hook turn", "async": true}]}]

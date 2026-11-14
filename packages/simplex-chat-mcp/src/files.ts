@@ -8,7 +8,6 @@ const sessionIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a
 const maxSocketPath = 103
 const maxLogBytes = 10 * 1_048_576
 
-// spec: spec/architecture.md#files-sessionfile
 export interface SessionFile {
   number: number
   name: string
@@ -29,13 +28,11 @@ export interface ServerFile {
 
 export class LockedError extends ExitError {}
 
-// spec: spec/architecture.md#files-dataroot
 export function dataRoot(env: NodeJS.ProcessEnv = process.env, home: string = homedir()): string {
   const given = env.SIMPLEX_MCP_HOME
   return given ? resolve(given) : join(home, ".simplex-mcp")
 }
 
-// spec: spec/architecture.md#files-dataroot
 export function hubFolder(root: string): string {
   return join(root, "_hub")
 }
@@ -44,13 +41,11 @@ export function isSessionId(id: string): boolean {
   return sessionIdPattern.test(id)
 }
 
-// spec: spec/architecture.md#files-dataroot
 export function sessionFolder(root: string, id: string): string {
   if (!isSessionId(id)) throw new ExitError(`Not a Claude Code session ID: ${id}`, 2)
   return join(sessionsFolder(root), id.toLowerCase())
 }
 
-// spec: spec/architecture.md#files-sessionfile
 export function readSessionFile(folder: string): SessionFile | undefined {
   const file = join(folder, "session.json")
   try {
@@ -61,14 +56,12 @@ export function readSessionFile(folder: string): SessionFile | undefined {
   }
 }
 
-// spec: spec/architecture.md#files-sessionfile
 export function writeSessionFile(folder: string, session: SessionFile): void {
   const file = join(folder, "session.json")
   writePrivateFile(`${file}.tmp`, `${JSON.stringify(session)}\n`)
   renameSync(`${file}.tmp`, file)
 }
 
-// spec: spec/architecture.md#files-sessionfile
 export function storedSessions(root: string): {id: string; session: SessionFile}[] {
   const folder = sessionsFolder(root)
   if (!existsSync(folder)) return []
@@ -78,7 +71,6 @@ export function storedSessions(root: string): {id: string; session: SessionFile}
   })
 }
 
-// spec: spec/architecture.md#files-socketpath
 export function socketPath(root: string, platform: NodeJS.Platform = process.platform): string {
   const hash = createHash("sha256").update(root).digest("hex").slice(0, 16)
   if (platform === "win32") return `\\\\.\\pipe\\simplex-mcp-${hash}`
@@ -86,26 +78,21 @@ export function socketPath(root: string, platform: NodeJS.Platform = process.pla
   return Buffer.byteLength(path) <= maxSocketPath ? path : join(tmpdir(), `simplex-mcp-${hash}.sock`)
 }
 
-// spec: spec/architecture.md#files-logfile
 export function logFile(root: string): string {
   return join(root, "service.log")
 }
 
-// spec: spec/architecture.md#files-servicelock
 export const serviceLock = "service.lock"
 
-// spec: spec/architecture.md#files-servicelock
 export function serviceToken(root: string): string {
   return serverToken(root, false, "service.token")
 }
 
-// spec: spec/architecture.md#files-logfile
 export function trimLog(root: string): void {
   const file = logFile(root)
   if ((statSync(file, {throwIfNoEntry: false})?.size ?? 0) > maxLogBytes) truncateSync(file)
 }
 
-// spec: spec/architecture.md#files-logfile
 export function openLog(root: string): number {
   trimLog(root)
   const fd = openSync(logFile(root), "a", 0o600)
@@ -113,13 +100,11 @@ export function openLog(root: string): number {
   return fd
 }
 
-// spec: spec/architecture.md#files-createdatafolder
 export function createDataFolder(dir: string): void {
   mkdirSync(dir, {recursive: true, mode: 0o700})
   if (process.platform !== "win32") chmodSync(dir, 0o700)
 }
 
-// spec: spec/architecture.md#files-acquirelock
 export function acquireLock(dir: string, user = "server", name = "lock"): void {
   const file = join(dir, name)
   if (createLock(file)) return
@@ -128,7 +113,6 @@ export function acquireLock(dir: string, user = "server", name = "lock"): void {
   if (!takeOver(file, pid)) throw lockedError(dir, file, pid, user)
 }
 
-// spec: spec/architecture.md#files-acquirelock
 export function releaseLock(dir: string, name = "lock"): void {
   try {
     unlinkSync(join(dir, name))
@@ -137,7 +121,6 @@ export function releaseLock(dir: string, name = "lock"): void {
   }
 }
 
-// spec: spec/architecture.md#files-servertoken
 export function serverToken(dir: string, renew = false, name = "token"): string {
   const file = join(dir, name)
   const token = randomBytes(32).toString("base64url")
@@ -154,28 +137,23 @@ export function headersFile(dir: string): string {
   return join(dir, "headers.json")
 }
 
-// spec: spec/architecture.md#files-writeheadersfile
 export function writeHeadersFile(dir: string, token: string): void {
   writePrivateFile(headersFile(dir), `${JSON.stringify({Authorization: `Bearer ${token}`})}\n`)
 }
 
-// spec: spec/architecture.md#files-writeserverfile
 export function writeServerFile(dir: string, server: ServerFile): void {
   writePrivateFile(join(dir, "server.json"), `${JSON.stringify(server)}\n`)
 }
 
-// spec: spec/architecture.md#files-writeserverfile
 export function readServerFile(dir: string): ServerFile | undefined {
   const file = join(dir, "server.json")
   return existsSync(file) ? JSON.parse(readFileSync(file, "utf8")) : undefined
 }
 
-// spec: spec/architecture.md#files-saveheldtitles
 export function saveHeldTitles(root: string, titles: object[]): void {
   writePrivateFile(join(root, "titles.json"), `${JSON.stringify(titles)}\n`)
 }
 
-// spec: spec/architecture.md#files-saveheldtitles
 export function takeHeldTitles(root: string): unknown[] {
   const file = join(root, "titles.json")
   try {
@@ -197,12 +175,10 @@ function writePrivateFile(file: string, text: string): void {
   if (process.platform !== "win32") chmodSync(file, 0o600)
 }
 
-// spec: spec/api.md#exit-codes
 function lockedError(dir: string, file: string, pid: number | undefined, user: string): ExitError {
   return new LockedError(`Another ${user} uses ${dir} (PID ${pid}). If no ${user} runs, remove ${file}.`, 1)
 }
 
-// spec: spec/architecture.md#files-createlock
 function createLock(file: string, text = `${process.pid}\n`): boolean {
   const temp = `${file}.${process.pid}.${randomBytes(6).toString("hex")}.tmp`
   try {
@@ -217,7 +193,6 @@ function createLock(file: string, text = `${process.pid}\n`): boolean {
   }
 }
 
-// spec: spec/architecture.md#files-createlock
 function createExclusive(file: string, text: string): boolean {
   try {
     writeFileSync(file, text, {flag: "wx", mode: 0o600})
@@ -228,7 +203,6 @@ function createExclusive(file: string, text: string): boolean {
   }
 }
 
-// spec: spec/architecture.md#files-takeover
 function takeOver(file: string, pid: number | undefined): boolean {
   const claim = `${file}.${pid}.claim`
   try {

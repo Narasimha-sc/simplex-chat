@@ -106,10 +106,8 @@ fun SimpleXInfoLayout(
   onboardingStage: SharedPreference<OnboardingStage>?
 ) {
   val topBar = onboardingStage == null && !appPrefs.oneHandUI.state.value
-  val bottomBar = onboardingStage == null && appPrefs.oneHandUI.state.value
-  val barHeight = AppBarHeight * fontSizeSqrtMultiplier
   val modifier = Modifier.fillMaxSize().systemBarsPadding().padding(horizontal = DEFAULT_ONBOARDING_HORIZONTAL_PADDING)
-  Column(modifier.padding(top = if (topBar) barHeight else 0.dp, bottom = if (bottomBar) barHeight else 0.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+  Column(if (topBar) modifier.padding(top = AppBarHeight * fontSizeSqrtMultiplier) else modifier, horizontalAlignment = Alignment.CenterHorizontally) {
     Box(Modifier.padding(top = DEFAULT_PADDING * 2).widthIn(max = if (appPlatform.isAndroid) 185.dp else 160.dp), contentAlignment = Alignment.Center) {
       SimpleXLogo()
     }
@@ -153,13 +151,15 @@ fun SimpleXInfoLayout(
       }
     },
     button = {
-      Column(Modifier.widthIn(max = if (appPlatform.isAndroid) 450.dp else 1000.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        if (onboardingStage != null) {
+      if (onboardingStage != null) {
+        Column(Modifier.widthIn(max = if (appPlatform.isAndroid) 450.dp else 1000.dp), horizontalAlignment = Alignment.CenterHorizontally) {
           OnboardingActionButton(user, onboardingStage)
+          TextButtonBelowOnboardingButton(stringResource(MR.strings.why_simplex_is_built), icon = painterResource(MR.images.ic_info), onClick = {
+            ModalManager.fullscreen.showModal { HowItWorks(user, onboardingStage) }
+          })
         }
-        TextButtonBelowOnboardingButton(stringResource(MR.strings.why_simplex_is_built), icon = painterResource(MR.images.ic_info), onClick = {
-          ModalManager.fullscreen.showModal { HowItWorks(user, onboardingStage) }
-        })
+      } else {
+        Spacer(Modifier)
       }
     }
   )
