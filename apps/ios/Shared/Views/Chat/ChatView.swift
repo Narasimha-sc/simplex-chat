@@ -369,6 +369,11 @@ struct ChatView: View {
             revealedItems = Set()
             stopAudioPlayer()
             if let cId {
+                if im.secondaryIMFilter == nil {
+                    chatModel.groupMembers = []
+                    chatModel.groupMembersIndexes.removeAll()
+                    chatModel.membersLoaded = false
+                }
                 if let c = chatModel.getChat(cId) {
                     chat = c
                 }
@@ -2966,6 +2971,7 @@ struct ChatView: View {
                                     m.decreaseGroupReportsCounter(chat.chatInfo.id)
                                 }
                                 m.updateChatInfo(itemDeletion.deletedChatItem.chatInfo)
+                                m.upsertSupportChatMember(itemDeletion.deletedChatItem.chatInfo)
                             }
                         }
                     }
@@ -2981,7 +2987,7 @@ struct ChatView: View {
         @ViewBuilder private func contactReactionMenu(_ contact: Contact, _ r: CIReactionCount) -> some View {
             if !r.userReacted || r.totalReacted > 1 {
                 Button { showChatInfoSheet = true } label: {
-                    profileMenuItem(Text(contact.displayName), contact.image, radius: profileRadius)
+                    profileMenuItem(Text(contact.displayName), contact.image, peerType: contact.profile.peerType, radius: profileRadius)
                 }
             }
             if r.userReacted {
@@ -3170,6 +3176,7 @@ private func deleteMessages(_ chat: Chat, _ deletingItems: [Int64], _ mode: CIDe
                     }
                     if let updatedChatInfo = deletedItems.last?.deletedChatItem.chatInfo {
                         ChatModel.shared.updateChatInfo(updatedChatInfo)
+                        ChatModel.shared.upsertSupportChatMember(updatedChatInfo)
                     }
                 }
                 await onSuccess()
@@ -3275,7 +3282,7 @@ struct ReactionContextMenu: View {
                         selectedMember = member
                     }
                 } label: {
-                    profileMenuItem(Text(mem.displayName), mem.image, radius: profileRadius)
+                    profileMenuItem(Text(mem.displayName), mem.image, peerType: mem.memberProfile.peerType, radius: profileRadius)
                 }
                 .disabled(userMember)
             }
@@ -3298,13 +3305,13 @@ struct ReactionContextMenu: View {
     }
 }
 
-func profileMenuItem(_ nameText: Text, _ image: String?, radius: CGFloat) -> some View {
+func profileMenuItem(_ nameText: Text, _ image: String?, peerType: ChatPeerType? = nil, radius: CGFloat) -> some View {
     HStack {
         nameText
         if let image, let img = imageFromBase64(image) {
             Image(uiImage: maskToCustomShape(img, size: 30, radius: radius))
         } else {
-            Image(systemName: "person.crop.circle")
+            peerTypeIcon(peerType, person: Image(systemName: "person.crop.circle"))
         }
     }
 }
@@ -3365,6 +3372,7 @@ func toggleChatFavorite(_ chat: Chat, favorite: Bool) {
 }
 
 func updateChatSettings(_ chat: Chat, chatSettings: ChatSettings) {
+    let chatInfoBefore = ChatModel.shared.getChat(chat.id)?.chatInfo ?? chat.chatInfo
     Task {
         do {
             try await apiSetChatSettings(type: chat.chatInfo.chatType, id: chat.chatInfo.apiId, chatSettings: chatSettings)
@@ -3372,6 +3380,7 @@ func updateChatSettings(_ chat: Chat, chatSettings: ChatSettings) {
                 let wasFavorite = chat.chatInfo.chatSettings?.favorite ?? false
                 ChatTagsModel.shared.updateChatFavorite(favorite: chatSettings.favorite, wasFavorite: wasFavorite)
                 let wasUnread = chat.unreadTag
+                let userUnreadBefore = ChatModel.shared.getChat(chat.id)?.copy(chatInfo: chatInfoBefore).userUnreadCount ?? 0
                 switch chat.chatInfo {
                 case var .direct(contact):
                     contact.chatSettings = chatSettings
@@ -3382,6 +3391,7 @@ func updateChatSettings(_ chat: Chat, chatSettings: ChatSettings) {
                 default: ()
                 }
                 ChatTagsModel.shared.updateChatTagRead(chat, wasUnread: wasUnread)
+                ChatModel.shared.changeUserUnreadCounter(before: userUnreadBefore, after: ChatModel.shared.getChat(chat.id)?.userUnreadCount ?? 0)
             }
         } catch let error {
             logger.error("apiSetChatSettings error \(responseError(error))")

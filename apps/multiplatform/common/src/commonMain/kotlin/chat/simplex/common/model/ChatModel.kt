@@ -396,6 +396,18 @@ object ChatModel {
   fun getContactChat(contactId: Long): Chat? = chats.value.firstOrNull { it.chatInfo is ChatInfo.Direct && it.chatInfo.apiId == contactId }
   fun getGroupChat(groupId: Long): Chat? = chats.value.firstOrNull { it.chatInfo is ChatInfo.Group && it.chatInfo.apiId == groupId }
 
+  suspend fun upsertSupportChatMember(rhId: Long?, cInfo: ChatInfo) {
+    if (cInfo !is ChatInfo.Group || remoteHostId() != rhId) return
+    val member = (cInfo.groupChatScope as? GroupChatScopeInfo.MemberSupport)?.groupMember_ ?: return
+    val current = getGroupMember(member.groupMemberId)
+    chatsContext.upsertGroupMember(rhId, cInfo.groupInfo, current?.copy(supportChat = member.supportChat, memberProfile = member.memberProfile) ?: member)
+  }
+
+  fun withLoadedSupportChat(member: GroupMember): GroupMember {
+    val supportChat = getGroupMember(member.groupMemberId)?.supportChat
+    return if (supportChat != null) member.copy(supportChat = supportChat) else member
+  }
+
   fun populateGroupMembersIndexes() {
     groupMembersIndexes.value = emptyMap()
     val gmIndexes = groupMembersIndexes.value.toMutableMap()
@@ -613,15 +625,16 @@ object ChatModel {
             else -> cItem
           }
           val wasUnread = chat.unreadTag
+          val userUnreadBefore = chat.userUnreadCount
           chats[i] = chat.copy(
             chatItems = arrayListOf(newPreviewItem),
             chatStats =
-            if (cItem.meta.itemStatus is CIStatus.RcvNew && secondaryContextFilter == null) {
-              increaseUnreadCounter(rhId, currentUser.value!!)
+            if (cItem.meta.itemStatus is CIStatus.RcvNew && secondaryContextFilter == null)
               chat.chatStats.copy(unreadCount = chat.chatStats.unreadCount + 1, unreadMentions = if (cItem.meta.userMention) chat.chatStats.unreadMentions + 1 else chat.chatStats.unreadMentions)
-            } else
+            else
               chat.chatStats
           )
+          changeUserUnreadCounter(rhId, userUnreadBefore, chats[i].userUnreadCount)
           updateChatTagReadInPrimaryContext(chats[i], wasUnread)
         }
         // pop chat
@@ -681,7 +694,7 @@ object ChatModel {
             chats[i] = chat.copy(chatItems = arrayListOf(cItem))
             if (pItem.isRcvNew && !cItem.isRcvNew) {
               // status changed from New to Read, update counter
-              decreaseCounterInPrimaryContext(rhId, cInfo.id)
+              decreaseCounterInPrimaryContext(rhId, cInfo.id, cItem.meta.userMention)
             }
           }
         } else {
@@ -731,7 +744,7 @@ object ChatModel {
       // update chat list
       if (cInfo.groupChatScope() == null) {
         if (cItem.isRcvNew) {
-          decreaseCounterInPrimaryContext(rhId, cInfo.id)
+          decreaseCounterInPrimaryContext(rhId, cInfo.id, cItem.meta.userMention)
         }
         // update preview
         val i = getChatIndex(rhId, cInfo.id)
@@ -783,7 +796,7 @@ object ChatModel {
           for (item in chatItems.value) {
             if (isRemovedMemberItem(item)) {
               if (item.isRcvNew) {
-                decreaseCounterInPrimaryContext(rhId, groupInfo.id)
+                decreaseCounterInPrimaryContext(rhId, groupInfo.id, item.meta.userMention)
               }
               if (item.isActiveReport) {
                 decreaseGroupReportsCounter(rhId, groupInfo.id)
@@ -828,9 +841,9 @@ object ChatModel {
       // clear preview
       val i = getChatIndex(rhId, cInfo.id)
       if (i >= 0) {
-        decreaseUnreadCounter(rhId, currentUser.value!!, chats[i].chatStats.unreadCount)
         val chatBefore = chats[i]
         chats[i] = chats[i].copy(chatItems = arrayListOf(), chatStats = Chat.ChatStats(), chatInfo = cInfo)
+        changeUserUnreadCounter(rhId, chatBefore.userUnreadCount, chats[i].userUnreadCount)
         markChatTagRead(chatBefore)
       }
       // clear current chat
@@ -901,10 +914,10 @@ object ChatModel {
           val wasUnread = chat.unreadTag
           val unreadCount = if (itemIds != null) chat.chatStats.unreadCount - markedRead else 0
           val unreadMentions = if (itemIds != null) chat.chatStats.unreadMentions - mentionsMarkedRead else 0
-          decreaseUnreadCounter(remoteHostId, currentUser.value!!, chat.chatStats.unreadCount - unreadCount)
           chats[chatIdx] = chat.copy(
             chatStats = chat.chatStats.copy(unreadCount = unreadCount, unreadMentions = unreadMentions)
           )
+          changeUserUnreadCounter(remoteHostId, chat.userUnreadCount, chats[chatIdx].userUnreadCount)
           updateChatTagReadInPrimaryContext(chats[chatIdx], wasUnread)
         }
       }
@@ -946,7 +959,7 @@ object ChatModel {
       return markedRead to mentionsMarkedRead
     }
 
-    private fun decreaseCounterInPrimaryContext(rhId: Long?, chatId: ChatId) {
+    private fun decreaseCounterInPrimaryContext(rhId: Long?, chatId: ChatId, userMention: Boolean) {
       // updates anything only in main ChatView, not GroupReportsView or anything else from the future
       if (secondaryContextFilter != null) return
 
@@ -955,13 +968,15 @@ object ChatModel {
 
       val chat = chats[chatIndex]
       val unreadCount = kotlin.math.max(chat.chatStats.unreadCount - 1, 0)
+      val unreadMentions = if (userMention) kotlin.math.max(chat.chatStats.unreadMentions - 1, 0) else chat.chatStats.unreadMentions
       val wasUnread = chat.unreadTag
-      decreaseUnreadCounter(rhId, currentUser.value!!, chat.chatStats.unreadCount - unreadCount)
       chats[chatIndex] = chat.copy(
         chatStats = chat.chatStats.copy(
           unreadCount = unreadCount,
+          unreadMentions = unreadMentions,
         )
       )
+      changeUserUnreadCounter(rhId, chat.userUnreadCount, chats[chatIndex].userUnreadCount)
       updateChatTagReadInPrimaryContext(chats[chatIndex], wasUnread)
     }
 
@@ -971,6 +986,7 @@ object ChatModel {
       if (i != -1) {
         val chat = chats.removeAt(i)
         groupId = (chat.chatInfo as? ChatInfo.Group)?.groupInfo?.groupId
+        changeUserUnreadCounter(rhId, chat.userUnreadCount, 0)
         removePresetChatTags(chat.chatInfo, chat.chatStats)
         removeWallpaperFilesFromChat(chat)
       }
@@ -996,6 +1012,9 @@ object ChatModel {
           // stale data, should be cleared at that point, otherwise, duplicated items will be here which will produce crashes in LazyColumn
           groupMembers.value = emptyList()
           groupMembersIndexes.value = emptyMap()
+          if (chatId.value == groupInfo.id) {
+            membersLoaded.value = false
+          }
         }
         val memberIndex = groupMembersIndexes.value[member.groupMemberId]
         val updated = chatItems.value.map {
@@ -1044,8 +1063,15 @@ object ChatModel {
       changeUnreadCounterInPrimaryContext(rhId, user, 1)
     }
 
-    fun decreaseUnreadCounter(rhId: Long?, user: UserLike, by: Int = 1) {
-      changeUnreadCounterInPrimaryContext(rhId, user, -by)
+    fun changeUserUnreadCounter(rhId: Long?, before: Int, after: Int) {
+      val user = currentUser.value
+      if (user != null && before != after) {
+        changeUnreadCounterInPrimaryContext(rhId, user, after - before)
+      }
+    }
+
+    fun decreaseUnreadCounter(rhId: Long?, user: UserLike) {
+      changeUnreadCounterInPrimaryContext(rhId, user, -1)
     }
 
     private fun changeUnreadCounterInPrimaryContext(rhId: Long?, user: UserLike, by: Int) {
@@ -1488,6 +1514,12 @@ data class Chat(
     else -> chatStats.unreadChat
   }
 
+  val userUnreadCount: Int get() = when (chatInfo.chatSettings?.enableNtfs) {
+    All -> chatStats.unreadCount
+    Mentions -> chatStats.unreadMentions
+    else -> 0
+  }
+
   val id: String get() = chatInfo.id
 
   val supportUnreadCount: Int get() = when (chatInfo) {
@@ -1499,6 +1531,8 @@ data class Chat(
       }
     else -> 0
   }
+
+  val hasUnread: Boolean get() = unreadTag || (chatInfo.chatSettings?.enableNtfs != None && supportUnreadCount > 0)
 
   fun groupFeatureEnabled(feature: GroupFeature): Boolean =
     if (chatInfo is ChatInfo.Group) {
@@ -2257,11 +2291,11 @@ private val ChatLayoutMode?.known: ChatLayoutMode? get() = if (this is ChatLayou
 fun profileChatLayout(user: User?): ChatLayoutMode =
   user?.uiThemes?.chatLayout.known ?: ChatController.appPrefs.chatLayout.state.value.known ?: ChatLayoutMode.Classic
 
-fun peerTypeIcon(peerType: ChatPeerType?): ImageResource =
+fun peerTypeIcon(peerType: ChatPeerType?, person: ImageResource = MR.images.ic_account_circle_filled): ImageResource =
   when (peerType) {
     ChatPeerType.Bot -> MR.images.ic_cube
     ChatPeerType.Agent -> MR.images.ic_agent
-    else -> MR.images.ic_account_circle_filled
+    else -> person
   }
 
 // Supporter badge. The credential/proof bytes stay core-side; the UI only sees the disclosed type + status.
@@ -5269,15 +5303,15 @@ sealed class MsgChatLink {
   val iconRes: ImageResource
     get() = when (this) {
       is Group -> if (groupProfile.isChannel) MR.images.ic_bigtop_updates_circle_filled else MR.images.ic_supervised_user_circle_filled
-      is Contact -> if (business) MR.images.ic_work_filled_padded else MR.images.ic_account_circle_filled
-      is Invitation -> MR.images.ic_account_circle_filled
+      is Contact -> if (business) MR.images.ic_work_filled_padded else peerTypeIcon(profile.peerType)
+      is Invitation -> peerTypeIcon(profile.peerType)
     }
 
   val smallIconRes: ImageResource
     get() = when (this) {
       is Group -> if (groupProfile.isChannel) MR.images.ic_bigtop_updates else MR.images.ic_group
-      is Contact -> if (business) MR.images.ic_work else MR.images.ic_person
-      is Invitation -> MR.images.ic_person
+      is Contact -> if (business) MR.images.ic_work else peerTypeIcon(profile.peerType, MR.images.ic_person)
+      is Invitation -> peerTypeIcon(profile.peerType, MR.images.ic_person)
     }
 
   fun infoLine(signed: Boolean): String {

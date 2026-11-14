@@ -33,6 +33,7 @@ The toolbar supports two layout modes:
 - When active, `searchMode = true` hides the navigation bar and shows inline search
 - Filters chat list in real-time by contact/group name and message content
 - Detects pasted SimpleX links (`searchShowingSimplexLink`) and offers to connect
+- Unread filter toggle button at the trailing edge while search is unfocused and the list is non-empty; highlighted while the current profile's unread count is above zero
 
 ### Chat Filter Tabs (Tags)
 
@@ -41,7 +42,7 @@ Managed by `ChatTagsModel` and `TagListView`:
 | Filter | PresetTag | Description |
 |---|---|---|
 | All | (none) | No filter, shows all chats |
-| Unread | `.unread` | Chats with unread messages |
+| Unread | `.unread` | Chats with unread messages, or support chats that need attention (as flagged on the row: unread messages or mentions, or, for moderators, members pending, with unread messages nobody has answered, or with unread mentions) unless muted to "mute all" |
 | Favorites | `.favorites` | User-favorited chats |
 | Groups | `.groups` | Group conversations only |
 | Contacts | `.contacts` | Direct contacts only |

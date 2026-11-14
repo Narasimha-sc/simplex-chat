@@ -44,7 +44,7 @@ The toolbar supports two layout modes controlled by `appPrefs.oneHandUI`:
 |---|---|
 | Search icon | Magnifying glass icon at leading edge |
 | Text field | `SearchTextField` with placeholder "Search or paste SimpleX link" |
-| Filter button | `ToggleFilterEnabledButton` (filter icon) toggles unread-only filter; shown when search text is empty |
+| Filter button | `ToggleFilterEnabledButton` (filter icon) toggles unread-only filter, highlighted while the current profile's unread count is above zero; shown when search text is empty |
 | Clear button | Appears when text is entered; `BackHandler` clears search on back |
 
 Behavior:
@@ -65,7 +65,7 @@ Managed by `chatModel.userTags`, `chatModel.presetTags`, and `chatModel.activeCh
 | Business | `BUSINESS` | Work | Business chat conversations |
 | Notes | `NOTES` | Folder | Notes to self |
 | Custom tags | `UserTag(ChatTag)` | Label/emoji | User-created tags with custom emoji and name |
-| Unread | `ActiveFilter.Unread` | Filter list icon | Chats with unread messages (toggle via filter button) |
+| Unread | `ActiveFilter.Unread` | Filter list icon | Chats with unread messages, or support chats that need attention (as flagged on the row: unread messages or mentions, or, for moderators, members pending, with unread messages nobody has answered, or with unread mentions) unless muted to "mute all" (toggle via filter button) |
 
 Display logic:
 - When collapsible preset tags exceed 3 total (with user tags), they collapse into a `CollapsedTagsFilterView` dropdown menu

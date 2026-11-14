@@ -159,7 +159,12 @@ struct SimpleXApp: App {
     private func updateChats() async {
         do {
             let chats = try await apiGetChatsAsync()
-            await MainActor.run { chatModel.updateChats(chats) }
+            let users = try? await listUsersAsync()
+            await MainActor.run {
+                if let users { chatModel.users = users }
+                chatModel.updateChats(chats)
+                chatModel.membersLoaded = false
+            }
             if let id = chatModel.chatId,
                let chat = chatModel.getChat(id),
                !NtfManager.shared.navigatingToChat {

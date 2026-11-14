@@ -997,7 +997,7 @@ private fun GroupChatInfoHeader(cInfo: ChatInfo, groupInfo: GroupInfo) {
         color = MaterialTheme.colors.primary,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
-        modifier = Modifier.clickable { openBrowserAlert(webPage, uriHandler) }
+        modifier = Modifier.clickable { uriHandler.openUriCatching(webPage) }
       )
     }
     if (groupInfo.useRelays) {
