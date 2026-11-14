@@ -6,11 +6,14 @@ import org.jetbrains.skia.paragraph.ParagraphBuilder
 import org.jetbrains.skia.paragraph.ParagraphStyle
 import org.jetbrains.skia.paragraph.TextStyle
 import org.junit.Assume.assumeTrue
-import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.concurrent.TimeUnit
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
+
+private const val LAYOUT_WAIT_SECONDS = 60L
 
 private const val SNOWMAN_BDF = """STARTFONT 2.1
 FONT -misc-snowman-medium-r-normal--8-80-75-75-c-80-iso10646-1
@@ -46,22 +49,25 @@ class FallbackFontTest {
   @Test
   fun textIsLaidOutWhenTheOnlyFallbackFontIsBitmap() = withTempDir { dir ->
     assumeTrue("fontconfig selects fallback fonts only on Linux", System.getProperty("os.name") == "Linux")
-    val fontsConf = dir.resolve("fonts.conf")
     Files.createDirectory(dir.resolve("fonts"))
     Files.writeString(dir.resolve("fonts/snowman.bdf"), SNOWMAN_BDF)
-    Files.writeString(fontsConf, "<fontconfig><dir>$dir/fonts</dir><cachedir>$dir/cache</cachedir></fontconfig>")
-    val fcCache = runCatching { startWithFonts(fontsConf, "fc-cache").waitFor() }.getOrNull()
+    Files.writeString(dir.resolve("fonts.conf"), "<fontconfig><dir>$dir/fonts</dir><cachedir>$dir/cache</cachedir></fontconfig>")
+    val fcCache = runCatching { startWithFonts(dir, "fc-cache").waitFor() }.getOrNull()
     assumeTrue("fc-cache indexes the font, as it does for installed fonts", fcCache == 0)
-    val java = File(System.getProperty("java.home"), "bin/java").path
-    val layout = startWithFonts(fontsConf, java, "-cp", System.getProperty("java.class.path"), "-XX:ErrorFile=$dir/hs_err.log", LayOutSnowman::class.java.name)
-    val output = layout.inputStream.bufferedReader().readText()
-    assertEquals(0, layout.waitFor(), output)
+    val java = Path.of(System.getProperty("java.home"), "bin", "java").toString()
+    val layout = startWithFonts(dir, java, "-cp", System.getProperty("java.class.path"), LayOutSnowman::class.java.name)
+    val finished = layout.waitFor(LAYOUT_WAIT_SECONDS, TimeUnit.SECONDS)
+    if (!finished) layout.destroyForcibly()
+    assertTrue(finished, "layout must end within $LAYOUT_WAIT_SECONDS s")
+    assertEquals(0, layout.exitValue(), Files.readString(dir.resolve("output.log")))
   }
 
-  private fun startWithFonts(fontsConf: Path, vararg command: String): Process =
+  private fun startWithFonts(dir: Path, vararg command: String): Process =
     ProcessBuilder(*command)
+      .directory(dir.toFile())
       .redirectErrorStream(true)
-      .apply { environment()["FONTCONFIG_FILE"] = fontsConf.toString() }
+      .redirectOutput(dir.resolve("output.log").toFile())
+      .apply { environment()["FONTCONFIG_FILE"] = dir.resolve("fonts.conf").toString() }
       .start()
 }
 

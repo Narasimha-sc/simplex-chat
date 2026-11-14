@@ -112,7 +112,7 @@ configure(subprojects) {
         configurations.configureEach {
             resolutionStrategy.eachDependency {
                 if (requested.group == "org.jetbrains.skiko" && requested.version == "0.9.4.2") {
-                    useVersion("0.9.37.3")
+                    useVersion("0.9.24")
                 }
             }
         }

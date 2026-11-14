@@ -17,12 +17,15 @@ Fontconfig lists such a font only from a cache written with the system FreeType,
 
 ## Fix
 
-On Linux build hosts, `apps/multiplatform/build.gradle.kts` resolves every `org.jetbrains.skiko` module requested at 0.9.4.2 to 0.9.37.3 (Skia m138), where:
+On Linux build hosts, `apps/multiplatform/build.gradle.kts` resolves every `org.jetbrains.skiko` module requested at 0.9.4.2 to 0.9.24 (Skia m138), where:
 - `FontAccessible` also requires that the font scanner loads the file;
 - `SkTypeface_fontconfig::Make` returns null when it does not.
 
+0.9.24 keeps the `SkiaLayerProperties` constructor that Compose 1.8.2 calls for every window; 0.9.37.3 removes it.
+
 ## Scope
 
-- Linux desktop builds (x64 and arm64); macOS, Windows and Android builds resolve the same versions as before.
+- Linux desktop builds (x64 and arm64) use Skia m138; macOS and Windows builds and Android APKs are unchanged.
 - The rule applies only to 0.9.4.2, so a Compose update that brings another Skiko version is not overridden.
 - Test: `FallbackFontTest` builds a fontconfig cache for one BDF font with `fc-cache`, then lays out U+2603 in a child JVM.
+- `Dockerfile.build` installs `fontconfig`, which provides `fc-cache` to the test in CI.
