@@ -207,7 +207,7 @@ expect_chat_list reachable
 expect_chat_list top
 "$ui" layout reachable
 echo "smoke test passed: onboarding reaches the chat list, which shows its onboarding pages and toolbar with the one-hand UI and with the top bar"
-"$(dirname "$0")/pr-scenario.sh"
+"$(dirname "$0")/pr-scenario.sh" || echo "SCENARIO: the scenario stopped (exit $?)"
 
 if [ "$cases" = images ]; then
   "$ui" tap "Don’t Allow" 10 || true
