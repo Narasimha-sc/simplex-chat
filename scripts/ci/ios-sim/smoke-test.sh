@@ -209,6 +209,11 @@ expect_chat_list top
 echo "smoke test passed: onboarding reaches the chat list, which shows its onboarding pages and toolbar with the one-hand UI and with the top bar"
 "$(dirname "$0")/pr-scenario.sh"
 
+products=$(dirname "$app")
+if [[ "$products" == */Build/Products/Debug-iphonesimulator ]]; then
+  "$(dirname "$0")/snapshots.sh" "${products%/Build/Products/Debug-iphonesimulator}" "$UI_OUT/snapshots"
+fi
+
 if [ "$cases" = images ]; then
   "$ui" tap "Don’t Allow" 10 || true
   disable_file_encryption
