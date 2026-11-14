@@ -208,6 +208,7 @@ expect_chat_list top
 "$ui" layout reachable
 echo "smoke test passed: onboarding reaches the chat list, which shows its onboarding pages and toolbar with the one-hand UI and with the top bar"
 "$(dirname "$0")/pr-scenario.sh" || echo "SCENARIO: the scenario stopped (exit $?)"
+cases=""
 
 products=$(dirname "$app")
 if [[ "$products" == */Build/Products/Debug-iphonesimulator ]]; then
