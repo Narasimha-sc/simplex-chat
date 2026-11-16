@@ -160,7 +160,7 @@ fun ModalData.WhatsNewView(updatedConditions: Boolean = false, viaSettings: Bool
               .clickable { currentVersion.value = prev }
               .padding(8.dp)
           ) {
-            Icon(painterResource(MR.images.ic_arrow_back_ios_new), "previous", tint = MaterialTheme.colors.primary)
+            Icon(painterResource(MR.images.ic_arrow_back_ios_new).mirrorIfRtl(), "previous", tint = MaterialTheme.colors.primary)
             Text(versionDescriptions[prev].version, color = MaterialTheme.colors.primary)
           }
         }
@@ -177,7 +177,7 @@ fun ModalData.WhatsNewView(updatedConditions: Boolean = false, viaSettings: Bool
               .padding(8.dp)
           ) {
             Text(versionDescriptions[next].version, color = MaterialTheme.colors.primary)
-            Icon(painterResource(MR.images.ic_arrow_forward_ios), "next", tint = MaterialTheme.colors.primary)
+            Icon(painterResource(MR.images.ic_arrow_forward_ios).mirrorIfRtl(), "next", tint = MaterialTheme.colors.primary)
           }
         }
       }
