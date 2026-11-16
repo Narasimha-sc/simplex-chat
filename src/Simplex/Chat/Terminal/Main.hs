@@ -4,22 +4,25 @@
 
 module Simplex.Chat.Terminal.Main where
 
-import Control.Concurrent (forkIO, threadDelay)
+import Control.Concurrent (forkIO, newMVar, threadDelay, withMVar)
 import Control.Concurrent.STM
 import Control.Monad
 import Data.Maybe (fromMaybe)
+import Data.Time.Clock (getCurrentTime)
+import Data.Time.LocalTime (getCurrentTimeZone)
 import Network.Socket
-import Simplex.Chat.Controller (ChatConfig (..), ChatController (..), ChatError, ChatEvent (..), PresetServers (..), SimpleNetCfg (..), currentRemoteHost, versionNumber, versionString)
+import Simplex.Chat.Controller (ChatConfig (..), ChatController (..), ChatError, ChatEvent (..), ChatHooks (..), PresetServers (..), SimpleNetCfg (..), currentRemoteHost, logEventToFile, versionNumber, versionString)
 import Simplex.Chat.Core
 import Simplex.Chat.Options
 import Simplex.Chat.Options.DB
 import Simplex.Chat.Terminal
-import Simplex.Chat.View (ChatResponseEvent, smpProxyModeStr)
+import Simplex.Chat.View (ChatResponseEvent, serializeChatError, serializeChatResponse, smpProxyModeStr)
 import Simplex.Messaging.Client (NetworkConfig (..), SocksMode (..))
 import System.Directory (getAppUserDataDirectory)
 import System.Exit (exitFailure)
 import System.IO (BufferMode (..), hSetBuffering, stdout)
 import System.Terminal (withTerminal)
+import UnliftIO.Exception (catchAny)
 
 simplexChatCLI :: ChatConfig -> Maybe (ServiceName -> ChatConfig -> ChatOpts -> IO ()) -> IO ()
 simplexChatCLI cfg server_ = do
@@ -28,11 +31,13 @@ simplexChatCLI cfg server_ = do
   simplexChatCLI' cfg opts server_
 
 simplexChatCLI' :: ChatConfig -> ChatOpts -> Maybe (ServiceName -> ChatConfig -> ChatOpts -> IO ()) -> IO ()
-simplexChatCLI' cfg opts@ChatOpts {chatCmd, chatCmdLog, chatCmdDelay, chatServerPort, coreOptions = CoreChatOpts {headless}} server_ = do
+simplexChatCLI' cfg opts@ChatOpts {chatCmd, chatCmdLog, chatCmdDelay, chatServerPort, coreOptions = CoreChatOpts {headless, logFile}} server_ = do
   if null chatCmd
     then case chatServerPort of
       Just chatPort -> case server_ of
-        Just server -> server chatPort cfg opts
+        Just server -> do
+          cfg' <- maybe (pure cfg) (addLogFileHook cfg) logFile
+          server chatPort cfg' opts
         Nothing -> putStrLn "Not allowed to run as a WebSockets server" >> exitFailure
       _
         | headless -> do
@@ -64,6 +69,22 @@ simplexChatCLI' cfg opts@ChatOpts {chatCmd, chatCmdLog, chatCmdDelay, chatServer
         printResponse r = do
           rh <- readTVarIO $ currentRemoteHost cc
           printResponseEvent (rh, Just user) cfg r
+
+addLogFileHook :: ChatConfig -> FilePath -> IO ChatConfig
+addLogFileHook cfg@ChatConfig {chatHooks} path = do
+  logLock <- newMVar ()
+  pure cfg {chatHooks = chatHooks {eventHook = Just $ \cc r -> cfgHook cc r >>= logEvent logLock cc}}
+  where
+    cfgHook = fromMaybe (const pure) $ eventHook chatHooks
+    logEvent logLock cc r = do
+      when (either (const True) logEventToFile r) $
+        withMVar logLock (\_ -> appendEvent cc r) `catchAny` \e -> putStrLn ("log-file write error: " <> show e)
+      pure r
+    appendEvent cc r = do
+      u_ <- readTVarIO $ currentUser cc
+      ts <- getCurrentTime
+      tz <- getCurrentTimeZone
+      appendFile path $ either (serializeChatError False $ config cc) (serializeChatResponse (Nothing, u_) (config cc) ts tz Nothing) r
 
 welcome :: ChatConfig -> ChatOpts -> IO ()
 welcome ChatConfig {presetServers = PresetServers {netCfg}} ChatOpts {coreOptions = CoreChatOpts {dbOptions, simpleNetCfg = SimpleNetCfg {socksProxy, socksMode, smpProxyMode_, smpProxyFallback_}}} =
