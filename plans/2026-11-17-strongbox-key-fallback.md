@@ -2,7 +2,7 @@
 
 ## Problem
 
-On a reported Android 12+ device, the alert "View crashed" with a stack trace is shown at the first start. Each start fails before the chat database is created.
+On an Android 12+ device, the alert "View crashed" with a stack trace is shown at the first start, before the chat database is created. The alias is still absent after the failure, so the StrongBox attempt is repeated at the next start.
 
 Error:
 
@@ -49,11 +49,11 @@ flowchart TD
 - Android only: Cryptor.android.kt.
 - Existing keys are unchanged.
 - An error from the default keystore is still propagated, as before #7637.
-- After one StrongBox failure, the key of that alias stays in the default keystore until the alias is removed. For the database passphrase, its storage level is shown in the Database passphrase footer while the passphrase is stored.
-- The fallback is now logged at warning level, which is printed with developer tools off; before, it was logged at info level.
+- After one StrongBox failure, the key of that alias is kept in the default keystore until the alias is removed. For the database passphrase, its storage level is shown in the Database passphrase footer while the passphrase is stored.
+- The fallback is now logged at warning level, which is printed with developer tools off; before, it was logged at info level, which is printed only with developer tools on.
 
 ## Verification
 
 - In AndroidKeyStoreKeyGeneratorSpi.java (android-36 sources), `KM_ERROR_HARDWARE_TYPE_UNAVAILABLE` is mapped to `StrongBoxUnavailableException` at line 413, and every other keystore error to `ProviderException` at line 415. The trace frame `AndroidKeyStoreKeyGeneratorSpi.java:415` is the second case.
 - On a device without StrongBox, `StrongBoxUnavailableException` is expected by the mapping at line 413; it is also caught on master.
-- The fault was reported from one device; a test of the fix requires a device with the same StrongBox fault.
+- The fault was reported from one device; the fix can be tested only on a device with the same StrongBox fault.
