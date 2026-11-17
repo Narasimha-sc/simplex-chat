@@ -2,7 +2,7 @@
 
 ## Problem
 
-On a reported Android 12+ device, the app fails at the first start and shows "App crashed". Each start fails before the chat database is created.
+On a reported Android 12+ device, the alert "View crashed" with a stack trace is shown at the first start. Each start fails before the chat database is created.
 
 Error:
 
@@ -14,7 +14,7 @@ Caused by: android.security.KeyStoreException: Unknown error (internal Keystore 
 
 ## Cause
 
-A StrongBox key is requested first in `Cryptor.createSecretKey` (#7637). The default keystore is used only after `StrongBoxUnavailableException`. On the reported device, StrongBox key generation for AES-GCM failed with `ProviderException`, caused by KeyMint `UNKNOWN_ERROR` (public code 10, `ERROR_KEYMINT_FAILURE`). That exception is propagated through `initChatController` (Core.kt, `try`/`finally` without `catch`) to the coroutine of `withLongRunningApi`, which has no exception handler.
+A StrongBox key is requested first in `Cryptor.createSecretKey` (#7637). The default keystore is used only after `StrongBoxUnavailableException`. On the reported device, StrongBox key generation for AES-GCM failed with `ProviderException`, caused by KeyMint `UNKNOWN_ERROR` (public code 10, `ERROR_KEYMINT_FAILURE`). The trace frame `Cryptor.android.kt:96` is the StrongBox call. That exception is propagated through `initChatController` (Core.kt, `try`/`finally`) and the coroutine of `withLongRunningApi` to `GlobalExceptionsHandler` (UI.android.kt), which shows the alert.
 
 Callers of `createSecretKey`, through `KeyStoreItem.set`:
 
@@ -49,6 +49,7 @@ flowchart TD
 - Android only: Cryptor.android.kt.
 - Existing keys are unchanged.
 - An error from the default keystore is still propagated, as before #7637.
+- After one StrongBox failure, the key of that alias stays in the default keystore; its storage level is shown in the Database passphrase footer.
 - The fallback is now logged at warning level, which is printed with developer tools off; before, it was logged at info level.
 
 ## Verification
