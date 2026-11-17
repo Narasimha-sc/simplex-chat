@@ -14,7 +14,7 @@ Caused by: android.security.KeyStoreException: Unknown error (internal Keystore 
 
 ## Cause
 
-A StrongBox key is requested first in `Cryptor.createSecretKey` (#7637). The default keystore is used only after `StrongBoxUnavailableException`. On the reported device, StrongBox key generation for AES-GCM failed with `ProviderException`, caused by KeyMint `UNKNOWN_ERROR` (public code 10, `ERROR_KEYMINT_FAILURE`). The trace frame `Cryptor.android.kt:96` is the StrongBox call. That exception is propagated through `initChatController` (Core.kt, `try`/`finally`) and the coroutine of `withLongRunningApi` to `GlobalExceptionsHandler` (UI.android.kt), which shows the alert.
+A StrongBox key is requested first in `Cryptor.createSecretKey` (#7637). The default keystore is used only after `StrongBoxUnavailableException`. On the reported device, StrongBox key generation for AES-GCM failed with `ProviderException`, caused by KeyMint `UNKNOWN_ERROR` (public code 10, `ERROR_KEYMINT_FAILURE`). The trace frame `Cryptor.android.kt:96` is the StrongBox call. That exception is propagated through `initChatController` (Core.kt, `try`/`finally`) and the coroutine of `withLongRunningApi` to `GlobalExceptionsHandler` (UI.android.kt), where the alert is shown.
 
 Callers of `createSecretKey`, through `KeyStoreItem.set`:
 
@@ -55,5 +55,5 @@ flowchart TD
 ## Verification
 
 - In AndroidKeyStoreKeyGeneratorSpi.java (android-36 sources), `KM_ERROR_HARDWARE_TYPE_UNAVAILABLE` is mapped to `StrongBoxUnavailableException` at line 413, and every other keystore error to `ProviderException` at line 415. The trace frame `AndroidKeyStoreKeyGeneratorSpi.java:415` is the second case.
-- A device without StrongBox is expected to raise `StrongBoxUnavailableException` by the mapping at line 413, which master also catches. A test on such a device shows only that the existing fallback still works.
-- The reported StrongBox fault can be reproduced only on the affected device model.
+- A device without StrongBox is expected to raise `StrongBoxUnavailableException` by the mapping at line 413, which master also catches.
+- The fault was reported from one device; a test of the fix requires a device with the same StrongBox fault.
