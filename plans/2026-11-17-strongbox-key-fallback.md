@@ -2,7 +2,7 @@
 
 ## Problem
 
-On some Android 12+ devices, the app fails at the first start and shows "App crashed". The chat database is never created, and each start repeats the failure.
+On a reported Android 12+ device, the app fails at the first start and shows "App crashed". Each start fails before the chat database is created.
 
 Error:
 
@@ -14,7 +14,7 @@ Caused by: android.security.KeyStoreException: Unknown error (internal Keystore 
 
 ## Cause
 
-`Cryptor.createSecretKey` requests a StrongBox key first (#7637). The default keystore is used only after `StrongBoxUnavailableException`. On the reported device, StrongBox key generation for AES-GCM failed with `ProviderException` (keystore `UNKNOWN_ERROR`), not with `StrongBoxUnavailableException`. That exception reaches `initChatController`, whose body is wrapped in `try`/`finally` only.
+A StrongBox key is requested first in `Cryptor.createSecretKey` (#7637). The default keystore is used only after `StrongBoxUnavailableException`. On the reported device, StrongBox key generation for AES-GCM failed with `ProviderException`, caused by KeyMint `UNKNOWN_ERROR` (public code 10, `ERROR_KEYMINT_FAILURE`). That exception is propagated through `initChatController` (Core.kt, `try`/`finally` without `catch`) to the coroutine of `withLongRunningApi`, which has no exception handler.
 
 Callers of `createSecretKey`, through `KeyStoreItem.set`:
 
@@ -29,27 +29,30 @@ Callers of `createSecretKey`, through `KeyStoreItem.set`:
 
 ## Change
 
-`createSecretKey` catches `ProviderException` around the StrongBox attempt. `StrongBoxUnavailableException` is a subclass of it. The key is then generated in the default keystore. The log records the full exception.
+`ProviderException` is caught around the StrongBox attempt in `createSecretKey`. `StrongBoxUnavailableException` is a subclass of it. The key is then generated in the default keystore. The full exception is logged as a warning.
 
 ```mermaid
 flowchart TD
   A[createSecretKey] --> B{alias exists}
   B -- yes --> C[existing key]
   B -- no --> D{API 31+}
-  D -- no --> F[default keystore key]
-  D -- yes --> E[StrongBox key]
+  D -- no --> F[default keystore key generation]
+  D -- yes --> E[StrongBox key generation]
   E -- ProviderException --> F
   E -- success --> G[StrongBox key returned]
+  F -- success --> H[default keystore key returned]
+  F -- exception --> X[exception propagated to caller]
 ```
 
 ## Scope
 
 - Android only: Cryptor.android.kt.
 - Existing keys are unchanged.
-- An error from the default keystore still propagates, as before #7637.
+- An error from the default keystore is still propagated, as before #7637.
+- The fallback is now logged at warning level, which is printed with developer tools off; before, it was logged at info level.
 
 ## Verification
 
-- AndroidKeyStoreKeyGeneratorSpi.java (android-36 sources, lines 413 and 415) maps `KM_ERROR_HARDWARE_TYPE_UNAVAILABLE` to `StrongBoxUnavailableException` and every other keystore error to `ProviderException`. The trace frame `AndroidKeyStoreKeyGeneratorSpi.java:415` is the second case.
-- An API 31+ emulator without StrongBox raises `StrongBoxUnavailableException`, which master also catches; it confirms only that the existing fallback still works.
-- The reported StrongBox fault needs the affected device model.
+- In AndroidKeyStoreKeyGeneratorSpi.java (android-36 sources), `KM_ERROR_HARDWARE_TYPE_UNAVAILABLE` is mapped to `StrongBoxUnavailableException` at line 413, and every other keystore error to `ProviderException` at line 415. The trace frame `AndroidKeyStoreKeyGeneratorSpi.java:415` is the second case.
+- A device without StrongBox is expected to raise `StrongBoxUnavailableException` by the mapping at line 413, which master also catches. A test on such a device shows only that the existing fallback still works.
+- The reported StrongBox fault can be reproduced only on the affected device model.
