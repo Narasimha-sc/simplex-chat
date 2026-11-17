@@ -49,7 +49,7 @@ flowchart TD
 - Android only: Cryptor.android.kt.
 - Existing keys are unchanged.
 - An error from the default keystore is still propagated, as before #7637.
-- After one StrongBox failure, the key of that alias stays in the default keystore; its storage level is shown in the Database passphrase footer.
+- After one StrongBox failure, the key of that alias stays in the default keystore. For the database passphrase, its storage level is shown in the Database passphrase footer while the passphrase is stored.
 - The fallback is now logged at warning level, which is printed with developer tools off; before, it was logged at info level.
 
 ## Verification
