@@ -14,7 +14,7 @@ Caused by: android.security.KeyStoreException: Unknown error (internal Keystore 
 
 ## Cause
 
-A StrongBox key is requested first in `Cryptor.createSecretKey` (#7637). The default keystore is used only after `StrongBoxUnavailableException`. On the reported device, StrongBox key generation for AES-GCM failed with `ProviderException`, caused by KeyMint `UNKNOWN_ERROR` (public code 10, `ERROR_KEYMINT_FAILURE`). The trace frame `Cryptor.android.kt:96` is the StrongBox call. That exception is propagated through `initChatController` (Core.kt, `try`/`finally`) and the coroutine of `withLongRunningApi` to `GlobalExceptionsHandler` (UI.android.kt), where the alert is shown.
+A StrongBox key is requested first in `Cryptor.createSecretKey` (#7637). The default keystore is used only after `StrongBoxUnavailableException`. On the reported device, `ProviderException` was thrown by StrongBox key generation for AES-GCM, caused by KeyMint `UNKNOWN_ERROR` (public code 10, `ERROR_KEYMINT_FAILURE`). The trace frame `Cryptor.android.kt:96` is the StrongBox call. That exception is propagated through `initChatController` (Core.kt, `try`/`finally`) and the coroutine of `withLongRunningApi` to `GlobalExceptionsHandler` (UI.android.kt), where the alert is shown.
 
 Callers of `createSecretKey`, through `KeyStoreItem.set`:
 
@@ -49,11 +49,11 @@ flowchart TD
 - Android only: Cryptor.android.kt.
 - Existing keys are unchanged.
 - An error from the default keystore is still propagated, as before #7637.
-- After one StrongBox failure, the key of that alias stays in the default keystore. For the database passphrase, its storage level is shown in the Database passphrase footer while the passphrase is stored.
+- After one StrongBox failure, the key of that alias stays in the default keystore until the alias is removed. For the database passphrase, its storage level is shown in the Database passphrase footer while the passphrase is stored.
 - The fallback is now logged at warning level, which is printed with developer tools off; before, it was logged at info level.
 
 ## Verification
 
 - In AndroidKeyStoreKeyGeneratorSpi.java (android-36 sources), `KM_ERROR_HARDWARE_TYPE_UNAVAILABLE` is mapped to `StrongBoxUnavailableException` at line 413, and every other keystore error to `ProviderException` at line 415. The trace frame `AndroidKeyStoreKeyGeneratorSpi.java:415` is the second case.
-- A device without StrongBox is expected to raise `StrongBoxUnavailableException` by the mapping at line 413, which master also catches.
+- On a device without StrongBox, `StrongBoxUnavailableException` is expected by the mapping at line 413; it is also caught on master.
 - The fault was reported from one device; a test of the fix requires a device with the same StrongBox fault.
