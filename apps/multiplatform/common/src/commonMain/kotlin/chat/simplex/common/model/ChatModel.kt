@@ -421,6 +421,13 @@ object ChatModel {
     }
   }
 
+  suspend fun upsertSentChatItem(activeCtx: ChatsContext, rhId: Long?, cInfo: ChatInfo, cItem: ChatItem) {
+    activeCtx.upsertChatItem(rhId, cInfo, cItem)
+    if (activeCtx.secondaryContextFilter != null && cInfo.inMainChatList) {
+      chatsContext.upsertChatItem(rhId, cInfo, cItem)
+    }
+  }
+
   // Spec: spec/state.md#ChatsContext
   class ChatsContext(val secondaryContextFilter: SecondaryContextFilter?) {
     val chats = mutableStateOf(SnapshotStateList<Chat>())
@@ -596,22 +603,7 @@ object ChatModel {
         chat = chats[i]
         // update preview (for chat from main scope to show new items for invitee in pending status)
         if (cInfo.inMainChatList) {
-          val newPreviewItem = when (cInfo) {
-            is ChatInfo.Group -> {
-              val currentPreviewItem = chat.chatItems.firstOrNull()
-              if (currentPreviewItem != null) {
-                if (cItem.meta.itemTs >= currentPreviewItem.meta.itemTs) {
-                  cItem
-                } else {
-                  currentPreviewItem
-                }
-              } else {
-                cItem
-              }
-            }
-
-            else -> cItem
-          }
+          val newPreviewItem = previewItem(cInfo, chat.chatItems.firstOrNull(), cItem)
           val wasUnread = chat.unreadTag
           chats[i] = chat.copy(
             chatItems = arrayListOf(newPreviewItem),
@@ -652,6 +644,23 @@ object ChatModel {
       }
     }
 
+    private fun previewItem(cInfo: ChatInfo, currentItem: ChatItem?, newItem: ChatItem): ChatItem {
+      if (cInfo !is ChatInfo.Group || currentItem == null) return newItem
+      if (cInfo.groupInfo.membership.memberPending) {
+        if (isOnboardingEvent(newItem) && currentItem.content.msgContent != null) return currentItem
+        if (isOnboardingEvent(currentItem) && newItem.content.msgContent != null) return newItem
+      }
+      return if (newItem.meta.itemTs < currentItem.meta.itemTs) currentItem else newItem
+    }
+
+    private fun isOnboardingEvent(item: ChatItem): Boolean =
+      when (val c = item.content) {
+        is CIContent.SndGroupEventContent -> c.sndGroupEvent is SndGroupEvent.UserPendingReview
+        is CIContent.RcvGroupEventContent -> c.rcvGroupEvent is RcvGroupEvent.MemberConnected
+        is CIContent.RcvGroupE2EEInfo -> true
+        else -> false
+      }
+
     private fun chatItemBelongsToScope(cInfo: ChatInfo, cItem: ChatItem): Boolean =
       when (secondaryContextFilter) {
         null ->
@@ -671,7 +680,7 @@ object ChatModel {
     suspend fun upsertChatItem(rhId: Long?, cInfo: ChatInfo, cItem: ChatItem): Boolean {
       var itemAdded = false
       // update chat list
-      if (cInfo.groupChatScope() == null) {
+      if (cInfo.inMainChatList) {
         val i = getChatIndex(rhId, cInfo.id)
         val chat: Chat
         if (i >= 0) {
@@ -684,7 +693,7 @@ object ChatModel {
               decreaseCounterInPrimaryContext(rhId, cInfo.id)
             }
           }
-        } else {
+        } else if (cInfo.groupChatScope() == null) {
           addChat(Chat(remoteHostId = rhId, chatInfo = cInfo, chatItems = arrayListOf(cItem)))
           itemAdded = true
         }
@@ -729,7 +738,7 @@ object ChatModel {
 
     fun removeChatItem(rhId: Long?, cInfo: ChatInfo, cItem: ChatItem) {
       // update chat list
-      if (cInfo.groupChatScope() == null) {
+      if (cInfo.inMainChatList) {
         if (cItem.isRcvNew) {
           decreaseCounterInPrimaryContext(rhId, cInfo.id)
         }
