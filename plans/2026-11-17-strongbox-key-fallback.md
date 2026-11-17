@@ -14,7 +14,7 @@ Caused by: android.security.KeyStoreException: Unknown error (internal Keystore 
 
 ## Cause
 
-`Cryptor.createSecretKey` requests a StrongBox key first (#7637). The default keystore is used only after `StrongBoxUnavailableException`. On the reported device, StrongBox key generation for AES-GCM failed with `ProviderException` (keystore `UNKNOWN_ERROR`), not with `StrongBoxUnavailableException`. That exception reaches `initChatController`, which has no `catch`.
+`Cryptor.createSecretKey` requests a StrongBox key first (#7637). The default keystore is used only after `StrongBoxUnavailableException`. On the reported device, StrongBox key generation for AES-GCM failed with `ProviderException` (keystore `UNKNOWN_ERROR`), not with `StrongBoxUnavailableException`. That exception reaches `initChatController`, whose body is wrapped in `try`/`finally` only.
 
 Callers of `createSecretKey`, through `KeyStoreItem.set`:
 
@@ -50,5 +50,6 @@ flowchart TD
 
 ## Verification
 
-- An API 31+ emulator without StrongBox follows the same `catch`: first start creates the database, and the Database passphrase footer shows the TEE or software storage level.
+- AndroidKeyStoreKeyGeneratorSpi.java (android-36 sources, lines 413 and 415) maps `KM_ERROR_HARDWARE_TYPE_UNAVAILABLE` to `StrongBoxUnavailableException` and every other keystore error to `ProviderException`. The trace frame `AndroidKeyStoreKeyGeneratorSpi.java:415` is the second case.
+- An API 31+ emulator without StrongBox raises `StrongBoxUnavailableException`, which master also catches; it confirms only that the existing fallback still works.
 - The reported StrongBox fault needs the affected device model.
