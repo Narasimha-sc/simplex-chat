@@ -260,7 +260,7 @@ private fun MutableState<MigrationFromState>.UploadConfirmationView() {
       icon = painterResource(MR.images.ic_ios_share),
       text = stringResource(MR.strings.migrate_from_device_archive_and_upload),
       textColor = MaterialTheme.colors.primary,
-      click = { state = MigrationFromState.Archiving }
+      click = { confirmArchiving() }
     ){}
     SectionTextFooter(stringResource(MR.strings.migrate_from_device_all_data_will_be_uploaded))
   }
@@ -479,12 +479,33 @@ private suspend fun MutableState<MigrationFromState>.verifyDatabasePassphrase(db
   }
 }
 
+private fun showDatabaseTooLargeAlert(bytes: Long) {
+  AlertManager.shared.showAlertMsg(
+    generalGetString(MR.strings.migrate_from_device_database_too_large_title),
+    String.format(generalGetString(MR.strings.migrate_from_device_database_too_large_desc), formatBytes(bytes), formatBytes(MAX_FILE_SIZE_XFTP_HARD))
+  )
+}
+
+private fun MutableState<MigrationFromState>.confirmArchiving() {
+  val dataBytes = exportDataBytes()
+  if (exceedsXftpUploadLimit(dataBytes)) {
+    showDatabaseTooLargeAlert(dataBytes)
+  } else {
+    confirmExportStorage(getMigrationTempFilesDirectory(), dataBytes) { state = MigrationFromState.Archiving }
+  }
+}
+
 private fun MutableState<MigrationFromState>.exportArchive() {
   withLongRunningApi {
     try {
       getMigrationTempFilesDirectory().mkdir()
       val (archivePath, archiveErrors) = exportChatArchive(chatModel, getMigrationTempFilesDirectory(), mutableStateOf(""))
-      if (archiveErrors.isEmpty()) {
+      val archiveBytes = File(archivePath).length()
+      if (exceedsXftpUploadLimit(archiveBytes)) {
+        File(archivePath).delete()
+        showDatabaseTooLargeAlert(archiveBytes)
+        state = MigrationFromState.UploadConfirmation
+      } else if (archiveErrors.isEmpty()) {
         uploadArchive(archivePath)
       } else {
         showArchiveExportedWithErrorsAlert(generalGetString(MR.strings.chat_database_exported_migrate), archiveErrors) {
