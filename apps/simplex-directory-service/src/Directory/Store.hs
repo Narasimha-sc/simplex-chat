@@ -51,6 +51,7 @@ module Directory.Store
     strongJoinFilter,
     newGroupJoinFilter,
     groupDBError,
+    getMemberStatus,
   )
 where
 
@@ -280,6 +281,12 @@ groupDBError :: StoreError -> String
 groupDBError = \case
   SEGroupNotFound _ -> "group not found"
   e -> show e
+
+getMemberStatus :: ChatController -> User -> GroupId -> GroupMemberId -> IO (Either String GroupMemberStatus)
+getMemberStatus cc User {userId} gId gmId =
+  withDB "getMemberStatus" cc $ \db ->
+    ExceptT . firstRow fromOnly ("member not found: " <> show gmId) $
+      DB.query db "SELECT member_status FROM group_members WHERE user_id = ? AND group_id = ? AND group_member_id = ?" (userId, gId, gmId)
 
 setGroupRegOwner :: ChatController -> GroupId -> GroupMember -> IO (Either String ())
 setGroupRegOwner cc gId owner = do
