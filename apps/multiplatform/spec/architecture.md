@@ -356,7 +356,7 @@ Examples from platform files:
 
 [`PlatformInterface`](../common/src/commonMain/kotlin/chat/simplex/common/platform/Platform.kt#L15) is an interface with default no-op implementations. It is assigned at runtime by each platform entry point:
 
-- **Android**: assigned in [`SimplexApp.initMultiplatform()`](../android/src/main/java/chat/simplex/app/SimplexApp.kt#L193)
+- **Android**: assigned in [`SimplexApp.initMultiplatform()`](../android/src/main/java/chat/simplex/app/SimplexApp.kt#L188)
 - **Desktop**: assigned in [`Main.kt initHaskell()`](../desktop/src/jvmMain/kotlin/chat/simplex/desktop/Main.kt#L59)
 
 The global variable is declared at [`Platform.kt line 50`](../common/src/commonMain/kotlin/chat/simplex/common/platform/Platform.kt#L50):
@@ -387,7 +387,6 @@ var platform: PlatformInterface = object : PlatformInterface {}
 | `androidApiLevel` | `null` | `Build.VERSION.SDK_INT` |
 | `androidIsPlayStoreBuild` | `false` | `BuildConfig.PLAY_STORE` |
 | `androidLoadPlayStoreCountry()` | no-op | Request the Play account country (google flavor only) |
-| `androidLockPortraitOrientation()` | no-op | Lock to `SCREEN_ORIENTATION_PORTRAIT` |
 | `androidAskToAllowBackgroundCalls()` | `true` | Show battery restriction dialog |
 | `desktopShowAppUpdateNotice()` | no-op | Show update notice (Desktop only) |
 
