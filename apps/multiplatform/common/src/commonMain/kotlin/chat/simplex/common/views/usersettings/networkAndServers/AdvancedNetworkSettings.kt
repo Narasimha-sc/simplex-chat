@@ -28,6 +28,7 @@ import chat.simplex.common.views.helpers.*
 import chat.simplex.common.model.ChatModel.controller
 import chat.simplex.common.platform.ColumnWithScrollBar
 import chat.simplex.common.platform.chatModel
+import chat.simplex.common.platform.unackedDataTimeoutSupported
 import chat.simplex.common.views.usersettings.PreferenceToggle
 import chat.simplex.common.views.usersettings.SettingsPreferenceItem
 import chat.simplex.res.*
@@ -61,14 +62,17 @@ fun ModalData.AdvancedNetworkSettingsView(showModal: (@Composable ModalData.() -
   val networkTCPKeepIdle: MutableState<Int>
   val networkTCPKeepIntvl: MutableState<Int>
   val networkTCPKeepCnt: MutableState<Int>
+  val networkTCPUserTimeout: MutableState<Boolean>
   if (currentCfgVal.tcpKeepAlive != null) {
     networkTCPKeepIdle = remember { mutableStateOf(currentCfgVal.tcpKeepAlive.keepIdle) }
     networkTCPKeepIntvl = remember { mutableStateOf(currentCfgVal.tcpKeepAlive.keepIntvl) }
     networkTCPKeepCnt = remember { mutableStateOf(currentCfgVal.tcpKeepAlive.keepCnt) }
+    networkTCPUserTimeout = remember { mutableStateOf(currentCfgVal.tcpKeepAlive.unackedDataTimeout == true) }
   } else {
     networkTCPKeepIdle = remember { mutableStateOf(KeepAliveOpts.defaults.keepIdle) }
     networkTCPKeepIntvl = remember { mutableStateOf(KeepAliveOpts.defaults.keepIntvl) }
     networkTCPKeepCnt = remember { mutableStateOf(KeepAliveOpts.defaults.keepCnt) }
+    networkTCPUserTimeout = remember { mutableStateOf(KeepAliveOpts.defaults.unackedDataTimeout == true) }
   }
 
   fun buildCfg(): NetCfg {
@@ -77,7 +81,7 @@ fun ModalData.AdvancedNetworkSettingsView(showModal: (@Composable ModalData.() -
       val keepIdle = networkTCPKeepIdle.value
       val keepIntvl = networkTCPKeepIntvl.value
       val keepCnt = networkTCPKeepCnt.value
-      KeepAliveOpts(keepIdle = keepIdle, keepIntvl = keepIntvl, keepCnt = keepCnt)
+      KeepAliveOpts(keepIdle = keepIdle, keepIntvl = keepIntvl, keepCnt = keepCnt, unackedDataTimeout = if (networkTCPUserTimeout.value) true else null)
     } else {
       null
     }
@@ -123,10 +127,12 @@ fun ModalData.AdvancedNetworkSettingsView(showModal: (@Composable ModalData.() -
       networkTCPKeepIdle.value = cfg.tcpKeepAlive.keepIdle
       networkTCPKeepIntvl.value = cfg.tcpKeepAlive.keepIntvl
       networkTCPKeepCnt.value = cfg.tcpKeepAlive.keepCnt
+      networkTCPUserTimeout.value = cfg.tcpKeepAlive.unackedDataTimeout == true
     } else {
       networkTCPKeepIdle.value = KeepAliveOpts.defaults.keepIdle
       networkTCPKeepIntvl.value = KeepAliveOpts.defaults.keepIntvl
       networkTCPKeepCnt.value = KeepAliveOpts.defaults.keepCnt
+      networkTCPUserTimeout.value = KeepAliveOpts.defaults.unackedDataTimeout == true
     }
   }
 
@@ -180,6 +186,7 @@ fun ModalData.AdvancedNetworkSettingsView(showModal: (@Composable ModalData.() -
       networkTCPKeepIdle,
       networkTCPKeepIntvl,
       networkTCPKeepCnt,
+      networkTCPUserTimeout.takeIf { unackedDataTimeoutSupported && !currentCfg.value.useSocksProxy },
       updateSessionMode = { sessionMode.value = it; currentCfg.value = currentCfg.value.copy(sessionMode = it) },
       updateSMPProxyMode = { smpProxyMode.value = it; currentCfg.value = currentCfg.value.copy(smpProxyMode = it) },
       updateSMPProxyFallback = { smpProxyFallback.value = it; currentCfg.value = currentCfg.value.copy(smpProxyFallback = it) },
@@ -215,6 +222,7 @@ fun ModalData.AdvancedNetworkSettingsView(showModal: (@Composable ModalData.() -
   networkTCPKeepIdle: MutableState<Int>,
   networkTCPKeepIntvl: MutableState<Int>,
   networkTCPKeepCnt: MutableState<Int>,
+  networkTCPUserTimeout: MutableState<Boolean>?,
   updateSessionMode: (TransportSessionMode) -> Unit,
   updateSMPProxyMode: (SMPProxyMode) -> Unit,
   updateSMPProxyFallback: (SMPProxyFallback) -> Unit,
@@ -318,6 +326,9 @@ fun ModalData.AdvancedNetworkSettingsView(showModal: (@Composable ModalData.() -
           SectionItemView {
             IntSettingRow("TCP_KEEPCNT", networkTCPKeepCnt, listOf(1, 2, 4, 6, 8), "")
           }
+          if (networkTCPUserTimeout != null) {
+            PreferenceToggle("TCP_USER_TIMEOUT", checked = networkTCPUserTimeout.value) { networkTCPUserTimeout.value = it }
+          }
         } else {
           SectionItemView {
             Text("TCP_KEEPIDLE", color = MaterialTheme.colors.secondary)
@@ -327,6 +338,11 @@ fun ModalData.AdvancedNetworkSettingsView(showModal: (@Composable ModalData.() -
           }
           SectionItemView {
             Text("TCP_KEEPCNT", color = MaterialTheme.colors.secondary)
+          }
+          if (networkTCPUserTimeout != null) {
+            SectionItemView {
+              Text("TCP_USER_TIMEOUT", color = MaterialTheme.colors.secondary)
+            }
           }
         }
       }
@@ -595,6 +611,7 @@ fun PreviewAdvancedNetworkSettingsLayout() {
       networkTCPKeepIdle = remember { mutableStateOf(10) },
       networkTCPKeepIntvl = remember { mutableStateOf(10) },
       networkTCPKeepCnt = remember { mutableStateOf(10) },
+      networkTCPUserTimeout = remember { mutableStateOf(false) },
       updateSessionMode = {},
       updateSMPProxyMode = {},
       updateSMPProxyFallback = {},

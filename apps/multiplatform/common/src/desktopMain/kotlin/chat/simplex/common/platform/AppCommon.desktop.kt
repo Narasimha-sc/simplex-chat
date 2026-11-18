@@ -13,6 +13,8 @@ actual val appPlatform = AppPlatform.DESKTOP
 
 actual val deviceName = generalGetString(MR.strings.desktop_device)
 
+actual val unackedDataTimeoutSupported = desktopPlatform.isLinux()
+
 actual fun isAppVisibleAndFocused() = simplexWindowState.windowFocused.value
 
 @Suppress("ConstantLocale")

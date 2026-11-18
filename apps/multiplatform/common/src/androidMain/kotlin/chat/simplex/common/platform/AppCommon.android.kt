@@ -18,6 +18,8 @@ actual val appPlatform = AppPlatform.ANDROID
 
 actual val deviceName = android.os.Build.MODEL
 
+actual val unackedDataTimeoutSupported = true
+
 var isAppOnForeground: Boolean = false
 
 @Suppress("ConstantLocale")
