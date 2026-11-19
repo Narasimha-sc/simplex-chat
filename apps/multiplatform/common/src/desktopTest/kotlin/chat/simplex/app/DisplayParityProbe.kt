@@ -94,6 +94,7 @@ class DisplayParityProbe {
     "emoji" to AnnotatedString("Hxg 😀🎉 ok"),
     "cjk" to AnnotatedString("Hxg 東京は ok"),
     "arabic" to AnnotatedString("Hxg مرحبا ok"),
+    "event-span" to buildAnnotatedString { withStyle(SpanStyle(fontSize = 12.sp, fontWeight = FontWeight.Light)) { append("Hxg updated  12:45") } },
   )
 
   private val longText = "The quick brown fox jumps over the lazy dog and keeps running far away from home"
@@ -141,9 +142,9 @@ class DisplayParityProbe {
     chat("quote-sender-13.5", 13.5f)
     chat("time-12", 12f)
     chat("event-16-on-12", 16f, ratioSize = 12f)
-    chat("event-uncompensated-16-on-12", 16f, ratioSize = 12f, compensate = false)
-    chat("event-uncompensated-12", 12f, compensate = false)
-    chat("event-uncompensated-default-14-on-12", 14f, base = TextStyle(color = Color.Black), ratioSize = 12f, compensate = false)
+    chat("event-plain-16-on-12", 16f, ratioSize = 12f)
+    chat("event-plain-12", 12f)
+    chat("event-default-14-on-12", 14f, base = TextStyle(color = Color.Black, fontFamily = FontFamily.Default), ratioSize = 12f)
     chat("code-mono-14", 14f, base = inter.copy(fontFamily = FontFamily.Monospace), factors = listOf(1f))
     for ((level, scale) in listOf(1 to 1.5625f, 2 to 1.25f)) {
       t += Template("heading$level-bubble", inter.copy(fontSize = (16f * scale).sp, fontWeight = FontWeight.Bold, lineHeight = 22.sp, lineHeightStyle = proportionalNone), bubbleRound = true, lineHeightScale = scale)
