@@ -167,6 +167,8 @@ android {
 }
 
 tasks.withType<Test>().configureEach {
+  maxHeapSize = "3g"
+  testLogging.showStandardStreams = true
   testLogging.exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
 }
 

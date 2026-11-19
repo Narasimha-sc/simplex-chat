@@ -22,10 +22,8 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Density
-import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import chat.simplex.common.platform.withDesktopLineHeight
 import chat.simplex.common.ui.theme.HighOrLowlight
 import chat.simplex.common.ui.theme.Inter
 import chat.simplex.common.views.chat.item.*
@@ -155,45 +153,15 @@ class BubbleLayoutTest {
                 buildAnnotatedString { append("11"); withStyle(SpanStyle(fontSize = 12.sp)) { append("11") } },
                 Modifier.alignByBaseline().record(placed, "text"),
                 Color.Black,
-                style = textStyle().withDesktopLineHeight()
+                style = textStyle()
               )
-              Text("11", Modifier.alignByBaseline().record(placed, "time"), Color.Black, style = TextStyle(fontFamily = Inter, fontSize = 12.sp).merge(chatTextStyle(12.sp, HighOrLowlight)).withDesktopLineHeight())
+              Text("11", Modifier.alignByBaseline().record(placed, "time"), Color.Black, style = TextStyle(fontFamily = Inter, fontSize = 12.sp).merge(chatTextStyle(12.sp, HighOrLowlight)))
             }
           }
         }
         assertEquals(lastInkRow(image, placed.getValue("text")), lastInkRow(image, placed.getValue("time")), "text $i at font scale $fontScale")
       }
     }
-  }
-
-  @Test
-  fun linesDrawnWholeLineHeightApart() {
-    val texts = listOf<Pair<TextUnit, @Composable () -> TextStyle>>(
-      22.sp to { TextStyle(fontFamily = Inter, fontSize = 16.sp).merge(bubbleLineHeight(22.sp)).withDesktopLineHeight() },
-      18.sp to { TextStyle(fontFamily = Inter, fontSize = 13.sp).merge(bubbleLineHeight(18.sp)).withDesktopLineHeight() },
-      16.sp * INTER_LINE_HEIGHT to { TextStyle(fontFamily = Inter, fontSize = 16.sp).merge(bubbleLineHeight(16.sp * INTER_LINE_HEIGHT)).withDesktopLineHeight() },
-    )
-    for (fontScale in listOf(0.7f, 0.8f, 0.9f, 1f, 1.1f, 1.2f, 1.3f, 1.4f, 1.5f)) {
-      texts.forEachIndexed { i, (lineHeight, textStyle) ->
-        val image = renderScene {
-          CompositionLocalProvider(LocalBubbleLayout provides true, LocalDensity provides Density(1f, fontScale)) {
-            Box(Modifier.background(Color.White)) {
-              Text("11\n11", Modifier.record(placed, "text"), Color.Black, style = textStyle())
-            }
-          }
-        }
-        val area = placed.getValue("text")
-        val rows = inkRowBottoms(image, area)
-        val expected = with(Density(1f, fontScale)) { lineHeight.toPx().roundToInt() }
-        assertEquals(expected, rows[1] - rows[0], "text $i at font scale $fontScale")
-      }
-    }
-  }
-
-  private fun inkRowBottoms(image: Image, area: Placed): List<Int> {
-    val bitmap = Bitmap.makeFromImage(image)
-    val inked = (area.y until area.y + area.height).filter { y -> (area.x until area.x + area.width).any { x -> Color(bitmap.getColor(x, y)).luminance() < 0.5f } }
-    return inked.filterIndexed { i, y -> i == inked.lastIndex || inked[i + 1] != y + 1 }
   }
 
   private fun lastInkRow(image: Image, area: Placed): Int {
