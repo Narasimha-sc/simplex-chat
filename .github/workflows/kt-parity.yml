@@ -33,7 +33,7 @@ jobs:
           label=$1
           filters=(); for t in $TESTS; do filters+=(--tests "$t"); done
           export PROBE_DIR="$RUNNER_TEMP/exh" PROBE_LABEL=$label SNAPSHOT_DIR="$RUNNER_TEMP/exh/$label/snapshots"
-          (cd apps/multiplatform && ./gradlew --no-daemon --max-workers=2 :common:desktopTest "${filters[@]}") 2>&1 | tee "$RUNNER_TEMP/exh/logs/$label.log"
+          (cd apps/multiplatform && ./gradlew --no-daemon --max-workers=2 :common:desktopTest ${filters[@]+"${filters[@]}"}) 2>&1 | tee "$RUNNER_TEMP/exh/logs/$label.log"
           rc=${PIPESTATUS[0]}
           echo "$label: exit $rc" >> "$RUNNER_TEMP/exh/logs/summary"
           grep -E 'FAILED|PASSED|tests completed' "$RUNNER_TEMP/exh/logs/$label.log" | sed "s/^/$label: /" >> "$RUNNER_TEMP/exh/logs/summary" || true
