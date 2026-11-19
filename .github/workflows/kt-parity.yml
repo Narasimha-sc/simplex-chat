@@ -1,0 +1,67 @@
+name: kt-parity
+run-name: "${{ github.event_name == 'workflow_dispatch' && format('kt-parity {0} base={1} on {2}', inputs.ref, inputs.base, inputs.os) || 'kt-parity: registered by a push to its branch, nothing built' }}"
+on:
+  push:
+    branches: [ci/kt-parity]
+    paths: [.github/workflows/kt-parity.yml]
+  workflow_dispatch:
+    inputs:
+      ref: {description: branch or full sha (code + tests), type: string}
+      base: {description: 'full sha whose app sources render the base half; empty = skip the base half', type: string, default: ''}
+      tests: {description: 'gradle --tests filters, space-separated', type: string}
+      base_paths: {description: 'further paths taken from base in the base half, space-separated', type: string, default: ''}
+      os: {description: 'runner image', type: string, default: ubuntu-22.04}
+permissions: {contents: read}
+jobs:
+  parity:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ${{ inputs.os }}
+    timeout-minutes: 180
+    defaults:
+      run: {shell: bash}
+    steps:
+      - uses: actions/checkout@v4
+        with: {ref: '${{ inputs.ref }}', submodules: recursive, fetch-depth: 0}
+      - uses: actions/setup-java@v4
+        with: {distribution: corretto, java-version: '17'}
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Write test runner
+        run: |
+          mkdir -p "$RUNNER_TEMP/exh/logs"
+          cat > "$RUNNER_TEMP/run.sh" <<'SH'
+          set -u
+          label=$1
+          filters=(); for t in $TESTS; do filters+=(--tests "$t"); done
+          export PROBE_DIR="$RUNNER_TEMP/exh" PROBE_LABEL=$label SNAPSHOT_DIR="$RUNNER_TEMP/exh/$label/snapshots"
+          (cd apps/multiplatform && ./gradlew --no-daemon --max-workers=2 :common:desktopTest "${filters[@]}") 2>&1 | tee "$RUNNER_TEMP/exh/logs/$label.log"
+          rc=${PIPESTATUS[0]}
+          echo "$label: exit $rc" >> "$RUNNER_TEMP/exh/logs/summary"
+          grep -E 'FAILED|PASSED|tests completed' "$RUNNER_TEMP/exh/logs/$label.log" | sed "s/^/$label: /" >> "$RUNNER_TEMP/exh/logs/summary" || true
+          cp -r apps/multiplatform/common/build/test-results/desktopTest "$RUNNER_TEMP/exh/logs/$label-results" 2>/dev/null || true
+          SH
+      - name: Base (app sources from base)
+        if: inputs.base != ''
+        env: {TESTS: '${{ inputs.tests }}', BASE_PATHS: '${{ inputs.base_paths }}'}
+        run: |
+          echo "BASE sources = ${{ inputs.base }}, tests = ${{ inputs.ref }}, base paths = $BASE_PATHS" >> "$RUNNER_TEMP/exh/logs/summary"
+          git checkout ${{ inputs.base }} -- apps/multiplatform/common/src/commonMain apps/multiplatform/common/src/desktopMain apps/multiplatform/common/src/androidMain $BASE_PATHS
+          bash -c 'source "$RUNNER_TEMP/run.sh" base'
+          git checkout HEAD -- apps/multiplatform/common/src $BASE_PATHS
+      - name: Fix (ref as is)
+        env: {TESTS: '${{ inputs.tests }}'}
+        run: |
+          echo "FIX = $(git rev-parse HEAD)" >> "$RUNNER_TEMP/exh/logs/summary"
+          bash -c 'source "$RUNNER_TEMP/run.sh" fix'
+      - name: Summary
+        if: ${{ !cancelled() }}
+        run: cat "$RUNNER_TEMP/exh/logs/summary" | tee -a $GITHUB_STEP_SUMMARY
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: parity-${{ inputs.os }}
+          retention-days: 7
+          path: |
+            ${{ runner.temp }}/exh/logs
+            ${{ runner.temp }}/exh/fix/report
+            ${{ runner.temp }}/exh/base/snapshots
+            ${{ runner.temp }}/exh/fix/snapshots
