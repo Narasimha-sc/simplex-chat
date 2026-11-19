@@ -143,6 +143,7 @@ class DisplayParityProbe {
     chat("time-12", 12f)
     chat("event-16-on-12", 16f, ratioSize = 12f)
     chat("event-plain-16-on-12", 16f, ratioSize = 12f)
+    chat("event-uncompensated-16-on-12", 16f, ratioSize = 12f, compensate = false)
     chat("event-plain-12", 12f)
     chat("event-default-14-on-12", 14f, base = TextStyle(color = Color.Black, fontFamily = FontFamily.Default), ratioSize = 12f)
     chat("code-mono-14", 14f, base = inter.copy(fontFamily = FontFamily.Monospace), factors = listOf(1f))
