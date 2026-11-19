@@ -86,7 +86,7 @@ class DisplayParityProbe {
   private val proportionalNone = LineHeightStyle(LineHeightStyle.Alignment.Proportional, LineHeightStyle.Trim.None)
   private val chatRatio = 22f / 16f
   private val interLineHeight = 3408f / 2816f
-  private val contrastFactors = listOf(1f, 0.95f, 0.9f, 0.8485f)
+  private val contrastFactors = listOf(1f, 0.95f, 0.9f, 0.88f, 0.86f, 0.8485f)
 
   private val geometryContents: List<Pair<String, AnnotatedString>> = listOf(
     "latin" to AnnotatedString("Hxg Hxg"),
