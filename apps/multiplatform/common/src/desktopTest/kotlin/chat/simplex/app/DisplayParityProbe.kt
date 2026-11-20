@@ -267,7 +267,7 @@ class DisplayParityProbe {
       if (spec.lineHeightScale != 1f) style = style.copy(lineHeight = style.lineHeight * spec.lineHeightScale)
       var text = spec.text
       if (spec.compensate && label == "fix" && appLayout != null) {
-        val laidOut = appLayout.invoke(null, text, style, LocalDensity.current)
+        val laidOut = appLayout.invoke(null, text, style, LocalDensity.current, false)
         text = laidOut.javaClass.getMethod("getText").invoke(laidOut) as AnnotatedString
         style = laidOut.javaClass.getMethod("getStyle").invoke(laidOut) as TextStyle
       } else if (spec.compensate && label == "fix") {
