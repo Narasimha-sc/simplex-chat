@@ -100,12 +100,14 @@ fun layOutDesktopText(text: AnnotatedString, style: TextStyle, density: Density)
 
 private fun centeredMarker(text: AnnotatedString, effective: TextStyle, typeface: Typeface, fontSizePx: Float, lineHeightPx: Float, density: Density): SpanStyle? {
   val dominant = dominantTypeface(text.text, typeface)
-  if (SkFont(dominant, fontSizePx).use { it.metrics.leading } > 0f) return null
-  val exactHeight = heightPerPx(dominant) * fontSizePx
+  val metrics = SkFont(dominant, fontSizePx).use { it.metrics }
+  val gapless = metrics.leading > 0f
+  val exactHeight = metrics.descent - metrics.ascent
   val fraction = exactHeight - floor(exactHeight)
   val markerPx = if (fraction >= 0.5f || fraction < 0.05f) fontSizePx else fontSizePx * (ceil(exactHeight) - 0.49f) / exactHeight
   if (lineHeightPx <= markerPx) return null
   val family = when {
+    gapless -> gaplessFamily(dominant) ?: return null
     dominant.uniqueId == typeface.uniqueId -> effective.fontFamily
     desktopPlatform.isWindows() && dominant.familyName == WINDOWS_EMOJI_FAMILY -> flatEmojiFamily
     else -> fontFamilyOf(dominant)
@@ -179,8 +181,15 @@ private fun addFallbackStyles(builder: AnnotatedString.Builder, text: AnnotatedS
     while (i < segEnd) {
       val cp = s.codePointAt(i)
       val n = Character.charCount(cp)
-      val covered = segTypeface != null && covers(segTypeface, cp)
-      val runTypeface = if (covered) segTypeface else if (segTypeface == null) null else fallbackTypeface(cp)
+      val presentationFallback = segTypeface != null && i + n < s.length && s.codePointAt(i + n) == EMOJI_PRESENTATION &&
+        covers(segTypeface, cp) && !covers(segTypeface, EMOJI_PRESENTATION)
+      val covered = segTypeface != null && covers(segTypeface, cp) && !presentationFallback
+      val runTypeface = when {
+        covered -> segTypeface
+        segTypeface == null -> null
+        presentationFallback -> fallbackTypeface(EMOJI_PRESENTATION)
+        else -> fallbackTypeface(cp)
+      }
       if (desktopPlatform.isWindows()) {
         val emoji = if (isEmojiJoiner(cp)) emojiStart >= 0 else !covered && runTypeface?.familyName == WINDOWS_EMOJI_FAMILY
         if (emoji && emojiStart < 0) emojiStart = i
@@ -201,6 +210,8 @@ private fun addFallbackStyles(builder: AnnotatedString.Builder, text: AnnotatedS
   }
   endEmoji(s.length)
 }
+
+private const val EMOJI_PRESENTATION = 0xFE0F
 
 private fun isEmojiJoiner(cp: Int) = cp == 0x200D || cp in 0xFE00..0xFE0F || cp == 0x20E3 || cp in 0xE0020..0xE007F
 
@@ -236,17 +247,35 @@ private fun trackingPx(typeface: Typeface, cp: Int, fontSizePx: Float): Float =
   }
 
 private val flatEmojiFamily: FontFamily? by lazy {
-  colrVersion0Copy(WINDOWS_EMOJI_FAMILY)?.let { FontFamily(Font("$WINDOWS_EMOJI_FAMILY COLR v0", it)) }
-}
-
-private fun colrVersion0Copy(family: String): ByteArray? {
-  val typeface = FontMgr.default.matchFamilyStyle(family, FontStyle.NORMAL) ?: return null
-  val tables = typeface.tableTags.sorted().map { tag ->
-    val data = typeface.getTableData(tag)?.bytes ?: return null
+  val typeface = FontMgr.default.matchFamilyStyle(WINDOWS_EMOJI_FAMILY, FontStyle.NORMAL) ?: return@lazy null
+  fontCopy(typeface) { tag, data ->
     if (tag == "COLR" && data.size >= 2) {
       data[0] = 0
       data[1] = 0
     }
+  }?.let { FontFamily(Font("$WINDOWS_EMOJI_FAMILY COLR v0", it)) }
+}
+
+private val gaplessFamilies = ConcurrentHashMap<Int, Any>()
+
+private fun gaplessFamily(typeface: Typeface): FontFamily? =
+  gaplessFamilies.getOrPut(typeface.uniqueId) {
+    fontCopy(typeface) { tag, data ->
+      if (tag == "hhea" && data.size >= 10) {
+        data[8] = 0
+        data[9] = 0
+      }
+      if (tag == "OS/2" && data.size >= 74) {
+        data[72] = 0
+        data[73] = 0
+      }
+    }?.let { FontFamily(Font("${typeface.familyName} ${typeface.uniqueId} gapless", it)) } ?: Unit
+  } as? FontFamily
+
+private fun fontCopy(typeface: Typeface, patch: (String, ByteArray) -> Unit): ByteArray? {
+  val tables = typeface.tableTags.sorted().map { tag ->
+    val data = typeface.getTableData(tag)?.bytes ?: return null
+    patch(tag, data)
     tag to data
   }
   val out = ByteArrayOutputStream()
@@ -257,7 +286,7 @@ private fun colrVersion0Copy(family: String): ByteArray? {
     searchRange *= 2
     entrySelector++
   }
-  d.writeInt(0x00010000)
+  d.writeInt(if (tables.any { it.first == "CFF " || it.first == "CFF2" }) 0x4F54544F else 0x00010000)
   d.writeShort(tables.size)
   d.writeShort(searchRange * 16)
   d.writeShort(entrySelector)
