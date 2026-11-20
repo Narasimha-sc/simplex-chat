@@ -200,6 +200,9 @@ class DisplayParityProbe {
           out += f(Spec("unspecified", "inter-$size", name, scale, text, inter.copy(fontSize = size.sp)))
         }
       }
+      for ((name, text) in geometryContents) {
+        out += Spec("unspecified", "inter-16-uncompensated", name, scale, text, inter.copy(fontSize = 16.sp), compensate = false)
+      }
       for (size in listOf(14f, 16f, 18f)) for ((name, text) in geometryContents) {
         out += Spec("unspecified", "default-$size", name, scale, text, TextStyle(color = Color.Black, fontSize = size.sp))
       }
@@ -293,19 +296,24 @@ class DisplayParityProbe {
   @Composable
   private fun desktopParagraph(text: AnnotatedString, style: TextStyle): Pair<AnnotatedString, TextStyle> {
     val s = text.text
-    if (s.isEmpty() || s.startsWith("\n") || s.endsWith("\n") || s.contains("\n\n")) return text to compensated(style)
+    val leading = text.spanStyles.filter { it.start == 0 }.fold(style.toSpanStyle()) { acc, r -> acc.merge(r.item) }
+    val effective = style.merge(leading)
+    if (s.isEmpty() || s.startsWith("\n") || s.endsWith("\n") || s.contains("\n\n")) return text to style.copy(lineHeight = compensated(effective).lineHeight)
     val density = LocalDensity.current
-    val fontPx = with(density) { style.fontSize.takeOrElse { 14.sp }.toPx() }
+    val fontPx = with(density) { effective.fontSize.takeOrElse { 14.sp }.toPx() }
     val trimBoth = (style.lineHeightStyle ?: LineHeightStyle.Default).trim == LineHeightStyle.Trim.Both
     val tinyPx = if (style.lineHeight.isSpecified) {
       val linePx = with(density) { style.lineHeight.toPx() }
-      val typeface = typefaceOf(style.fontFamily)
-      if (typeface == null || (linePx <= fontPx && !trimBoth)) return text to compensated(style)
+      val typeface = typefaceOf(effective.fontFamily)
+      if (typeface == null || (linePx <= fontPx && !trimBoth)) return text to style.copy(lineHeight = compensated(effective).lineHeight)
       val unit = org.jetbrains.skia.Font(typeface, 100f).use { it.metrics }.let { (it.descent - it.ascent + it.leading) / 100f }
       0.52f / unit
     } else 0.2f
-    val wrapped = buildAnnotatedString { withStyle(style.toSpanStyle()) { append(text) } }
-    return wrapped to style.copy(fontSize = with(density) { tinyPx.toSp() })
+    val marked = buildAnnotatedString {
+      append(text)
+      addStyle(SpanStyle(fontSize = with(density) { tinyPx.toSp() }), 0, 0)
+    }
+    return marked to style
   }
 
   private fun f(v: Float) = if (v.isNaN()) "nan" else ((v * 100).roundToInt() / 100f).toString()
@@ -499,7 +507,7 @@ class DisplayParityProbe {
           val key = "${s.group}\t${s.template}\t${s.content}\t$cls"
           counts.getOrPut(key) { IntArray(1) }[0]++
           if (cls != "same") {
-            rows!!.println("${s.group}\t${s.template}\t${s.content}\t${s.scale}\t${f(s.fontPx)}\t${f(b.linePx)}\t${f(x.linePx)}\t$cls\t$diffPx\t$maxDiff\t${inkB.joinToString(",")}\t${inkF.joinToString(",")}\t${chars.joinToString("")}\t${b.geometry}\t${x.geometry}")
+            rows!!.println("${s.group}\t${s.template}\t${s.content}\t${s.scale}\t${f(s.fontPx)}\t${f(b.linePx)}\t${f(x.linePx)}\t$cls\t$diffPx\t$maxDiff\t${inkB.joinToString(",")}\t${inkF.joinToString(",")}\t${chars.joinToString("").replace("\n", "\\n").replace("\t", "\\t").replace("\r", "\\r")}\t${b.geometry}\t${x.geometry}")
             val e = examples.merge(key, 1, Int::plus)!!
             if (e <= 2 && images < 2500) {
               images++
