@@ -61,8 +61,11 @@ class EmojiColrProbe {
 
   private fun isJoiner(cp: Int) = cp == 0x200D || cp in 0xFE00..0xFE0F || cp == 0x20E3 || cp in 0xE0020..0xE007F
 
+  private val interTypeface by lazy { FontMgr.default.makeFromFile("src/commonMain/moko-resources/fonts/Inter-Regular.ttf")!! }
+
   private fun fallsBackToEmoji(cp: Int) =
-    FontMgr.default.matchFamilyStyleCharacter(null, FontStyle.NORMAL, null, cp)?.familyName == emojiFamily
+    interTypeface.getUTF32Glyph(cp).toInt() == 0 &&
+      FontMgr.default.matchFamilyStyleCharacter(null, FontStyle.NORMAL, null, cp)?.familyName == emojiFamily
 
   private fun emojiRanges(s: String): List<IntRange> {
     val out = mutableListOf<IntRange>()
