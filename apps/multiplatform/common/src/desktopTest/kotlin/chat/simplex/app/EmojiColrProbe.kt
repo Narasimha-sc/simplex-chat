@@ -57,6 +57,13 @@ class EmojiColrProbe {
 
   private val samples = listOf("Hxg 😀🎉 ok", "💻 desktop", "🚀❤️👍🏽", "👨‍👩‍👧 🇺🇸")
 
+  private val emojiFamily = "Segoe UI Emoji"
+
+  private fun isJoiner(cp: Int) = cp == 0x200D || cp in 0xFE00..0xFE0F || cp == 0x20E3 || cp in 0xE0020..0xE007F
+
+  private fun fallsBackToEmoji(cp: Int) =
+    FontMgr.default.matchFamilyStyleCharacter(null, FontStyle.NORMAL, null, cp)?.familyName == emojiFamily
+
   private fun emojiRanges(s: String): List<IntRange> {
     val out = mutableListOf<IntRange>()
     var i = 0
@@ -64,7 +71,7 @@ class EmojiColrProbe {
     while (i < s.length) {
       val cp = s.codePointAt(i)
       val n = Character.charCount(cp)
-      val emoji = cp >= 0x2600 && cp != 0x20 && (cp >= 0x1F000 || cp in 0x2600..0x27BF || cp == 0x200D || cp in 0xFE00..0xFE0F)
+      val emoji = if (isJoiner(cp)) start >= 0 else fallsBackToEmoji(cp)
       if (emoji && start < 0) start = i
       if (!emoji && start >= 0) { out += start until i; start = -1 }
       i += n
