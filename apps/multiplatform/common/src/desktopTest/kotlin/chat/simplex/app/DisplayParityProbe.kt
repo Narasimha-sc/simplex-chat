@@ -73,6 +73,12 @@ class DisplayParityProbe {
     null
   }
 
+  private val appLayout = try {
+    Class.forName("chat.simplex.common.platform.Text_desktopKt").methods.firstOrNull { it.name == "layOutDesktopText" }
+  } catch (e: ClassNotFoundException) {
+    null
+  }
+
   @Composable
   private fun compensated(style: TextStyle): TextStyle =
     compensation?.invoke(null, style, currentComposer, 0) as TextStyle? ?: style
@@ -258,7 +264,11 @@ class DisplayParityProbe {
       }
       if (spec.lineHeightScale != 1f) style = style.copy(lineHeight = style.lineHeight * spec.lineHeightScale)
       var text = spec.text
-      if (spec.compensate && label == "fix") {
+      if (spec.compensate && label == "fix" && appLayout != null) {
+        val laidOut = appLayout.invoke(null, text, style, LocalDensity.current)
+        text = laidOut.javaClass.getMethod("getText").invoke(laidOut) as AnnotatedString
+        style = laidOut.javaClass.getMethod("getStyle").invoke(laidOut) as TextStyle
+      } else if (spec.compensate && label == "fix") {
         val (t, s) = desktopParagraph(text, style)
         text = t
         style = s
@@ -454,7 +464,7 @@ class DisplayParityProbe {
 
   private fun run(kind: String, specs: List<Spec>) {
     if (probeDir == null || label == null) return
-    if (label == "fix") assertNotNull(compensation, "withDesktopLineHeight not found in the fix half")
+    if (label == "fix") assertNotNull(appLayout, "layOutDesktopText not found in the fix half")
     val baseDir = File(probeDir, "base/$kind").apply { mkdirs() }
     val reportDir = File(probeDir, "fix/report").apply { mkdirs() }
     val diffDir = File(reportDir, "diff-$kind").apply { mkdirs() }
