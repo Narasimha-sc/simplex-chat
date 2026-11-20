@@ -44,6 +44,7 @@ jobs:
         env: {TESTS: '${{ inputs.tests }}', BASE_PATHS: '${{ inputs.base_paths }}'}
         run: |
           echo "BASE sources = ${{ inputs.base }}, tests = ${{ inputs.ref }}, base paths = $BASE_PATHS" >> "$RUNNER_TEMP/exh/logs/summary"
+          git diff --name-only --diff-filter=A ${{ inputs.base }} HEAD -- apps/multiplatform/common/src/commonMain apps/multiplatform/common/src/desktopMain apps/multiplatform/common/src/androidMain | xargs -r rm -f
           git checkout ${{ inputs.base }} -- apps/multiplatform/common/src/commonMain apps/multiplatform/common/src/desktopMain apps/multiplatform/common/src/androidMain $BASE_PATHS
           bash -c 'source "$RUNNER_TEMP/run.sh" base'
           git checkout HEAD -- apps/multiplatform/common/src $BASE_PATHS
