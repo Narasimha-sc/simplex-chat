@@ -92,6 +92,7 @@ class DisplayParityProbe {
 
   private val inter = TextStyle(fontFamily = Inter, color = Color.Black)
   private val proportionalNone = LineHeightStyle(LineHeightStyle.Alignment.Proportional, LineHeightStyle.Trim.None)
+  private val centerNone = LineHeightStyle(LineHeightStyle.Alignment.Center, LineHeightStyle.Trim.None)
   private val chatRatio = 22f / 16f
   private val interLineHeight = 3408f / 2816f
   private val contrastFactors = listOf(1f, 0.95f, 0.9f, 0.88f, 0.86f, 0.8485f)
@@ -167,9 +168,9 @@ class DisplayParityProbe {
       t += Template("heading$level-terminal", inter.copy(fontSize = (16f * scale).sp, fontWeight = FontWeight.Bold, lineHeight = (22f * scale).sp, lineHeightStyle = proportionalNone))
     }
     for ((level, scale) in listOf(1 to 1.5f, 2 to 1.3f, 3 to 1.15f)) {
-      t += Template("heading$level-plain", inter.copy(fontSize = (16f * scale).sp, fontWeight = FontWeight.Bold, lineHeight = (22f * scale).sp))
+      t += Template("heading$level-plain", inter.copy(fontSize = (16f * scale).sp, fontWeight = FontWeight.Bold, lineHeight = (22f * scale).sp, lineHeightStyle = centerNone))
     }
-    t += Template("code-mono-plain", inter.copy(fontFamily = FontFamily.Monospace, fontSize = 14.sp, lineHeight = 19.8.sp))
+    t += Template("code-mono-plain", inter.copy(fontFamily = FontFamily.Monospace, fontSize = 14.sp, lineHeight = 19.8.sp, lineHeightStyle = centerNone))
     t += Template("invitation-16-inter", inter.copy(fontSize = 16.sp, lineHeight = (16f * interLineHeight).sp, lineHeightStyle = proportionalNone), bubbleRound = true)
     t += Template("invitation-13-18", inter.copy(fontSize = 13.sp, lineHeight = 18.sp, lineHeightStyle = proportionalNone), bubbleRound = true)
     t += Template("file-14-inter", inter.copy(fontSize = 14.sp, lineHeight = (14f * interLineHeight).sp, lineHeightStyle = proportionalNone), bubbleRound = true)
@@ -179,7 +180,8 @@ class DisplayParityProbe {
       Triple(14f, 20f, FontWeight.Normal), Triple(15f, 24f, FontWeight.Normal), Triple(14f, 22f, FontWeight.Normal), Triple(16f, 24f, FontWeight.Normal),
       Triple(17.5f, 20f, FontWeight.Normal), Triple(18.5f, 25f, FontWeight.Medium), Triple(33.5f, 42f, FontWeight.Bold), Triple(24f, 22f, FontWeight.Normal),
     )) {
-      t += Template("plain-$size-$lh-$weight", inter.copy(fontSize = size.sp, lineHeight = lh.sp, fontWeight = weight), features = size == 16f && lh == 22f || size == 14f && lh == 21f)
+      t += Template("plain-$size-$lh-$weight", inter.copy(fontSize = size.sp, lineHeight = lh.sp, fontWeight = weight, lineHeightStyle = centerNone), features = size == 16f && lh == 22f || size == 14f && lh == 21f)
+      t += Template("plainDefault-$size-$lh-$weight", inter.copy(fontSize = size.sp, lineHeight = lh.sp, fontWeight = weight))
     }
     return t
   }
