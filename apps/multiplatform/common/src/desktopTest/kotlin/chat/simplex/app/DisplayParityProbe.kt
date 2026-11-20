@@ -25,6 +25,8 @@ import org.jetbrains.skia.Bitmap
 import org.jetbrains.skia.ColorAlphaType
 import org.jetbrains.skia.ColorType
 import org.jetbrains.skia.EncodedImageFormat
+import org.jetbrains.skia.FontMgr
+import org.jetbrains.skia.Typeface
 import org.jetbrains.skia.Image
 import org.jetbrains.skia.ImageInfo
 import java.io.*
@@ -95,6 +97,13 @@ class DisplayParityProbe {
     "cjk" to AnnotatedString("Hxg 東京は ok"),
     "arabic" to AnnotatedString("Hxg مرحبا ok"),
     "event-span" to buildAnnotatedString { withStyle(SpanStyle(fontSize = 12.sp, fontWeight = FontWeight.Light)) { append("Hxg updated  12:45") } },
+    "cjk-only" to AnnotatedString("東京は今日も晴れ"),
+    "arabic-only" to AnnotatedString("مرحبا بالعالم"),
+    "emoji-only" to AnnotatedString("😀🎉❤️"),
+    "thai-only" to AnnotatedString("สวัสดีครับ"),
+    "cjk-two-lines" to AnnotatedString("東京は\n今日も"),
+    "blank-line" to AnnotatedString("Hxg\n\nHxg"),
+    "leading-newline" to AnnotatedString("\nHxg"),
   )
 
   private val longText = "The quick brown fox jumps over the lazy dog and keeps running far away from home"
@@ -245,15 +254,58 @@ class DisplayParityProbe {
         style = style.copy(lineHeight = with(LocalDensity.current) { style.lineHeight.toPx().roundToInt().toSp() })
       }
       if (spec.lineHeightScale != 1f) style = style.copy(lineHeight = style.lineHeight * spec.lineHeightScale)
-      if (spec.compensate) style = compensated(style)
+      var text = spec.text
+      if (spec.compensate && label == "fix") {
+        val (t, s) = desktopParagraph(text, style)
+        text = t
+        style = s
+      } else if (spec.compensate) {
+        style = compensated(style)
+      }
       val linePx = if (style.lineHeight.isSp) with(LocalDensity.current) { style.lineHeight.toPx() } else 0f
       val m = if (spec.width != null) Modifier.width(spec.width.dp) else Modifier
       BasicText(
-        spec.text, m.record(into, key), style,
+        text, m.record(into, key), style,
         onTextLayout = { layouts[key] = it to linePx },
         overflow = spec.overflow, maxLines = spec.maxLines
       )
     }
+  }
+
+  private val interTypeface by lazy { FontMgr.default.makeFromFile("src/commonMain/moko-resources/fonts/Inter-Regular.ttf") }
+  private val osName = System.getProperty("os.name").lowercase()
+
+  private fun firstInstalled(linux: List<String>, windows: List<String>, mac: List<String>): Typeface? =
+    (if (osName.contains("linux")) linux else if (osName.contains("win")) windows else mac).firstNotNullOfOrNull { n ->
+      FontMgr.default.matchFamily(n).use { s -> if (s.count() > 0) s.matchStyle(org.jetbrains.skia.FontStyle.NORMAL) else null }
+    }
+
+  private val monoTypeface by lazy { firstInstalled(listOf("Noto Sans Mono", "DejaVu Sans Mono", "Consolas"), listOf("Consolas"), listOf(".AppleSystemUIFontMonospaced", "Menlo", "Courier")) }
+  private val sansTypeface by lazy { firstInstalled(listOf("Noto Sans", "DejaVu Sans", "Arial"), listOf("Segoe UI", "Arial"), listOf(".AppleSystemUIFont", "Helvetica Neue", "Helvetica")) }
+
+  private fun typefaceOf(family: FontFamily?): Typeface? = when (family) {
+    null, Inter -> interTypeface
+    FontFamily.Monospace -> monoTypeface
+    FontFamily.Default, FontFamily.SansSerif -> sansTypeface
+    else -> null
+  }
+
+  @Composable
+  private fun desktopParagraph(text: AnnotatedString, style: TextStyle): Pair<AnnotatedString, TextStyle> {
+    val s = text.text
+    if (s.isEmpty() || s.startsWith("\n") || s.endsWith("\n") || s.contains("\n\n")) return text to compensated(style)
+    val density = LocalDensity.current
+    val fontPx = with(density) { style.fontSize.takeOrElse { 14.sp }.toPx() }
+    val trimBoth = (style.lineHeightStyle ?: LineHeightStyle.Default).trim == LineHeightStyle.Trim.Both
+    val tinyPx = if (style.lineHeight.isSpecified) {
+      val linePx = with(density) { style.lineHeight.toPx() }
+      val typeface = typefaceOf(style.fontFamily)
+      if (typeface == null || (linePx <= fontPx && !trimBoth)) return text to compensated(style)
+      val unit = org.jetbrains.skia.Font(typeface, 100f).use { it.metrics }.let { (it.descent - it.ascent + it.leading) / 100f }
+      0.52f / unit
+    } else 0.2f
+    val wrapped = buildAnnotatedString { withStyle(style.toSpanStyle()) { append(text) } }
+    return wrapped to style.copy(fontSize = with(density) { tinyPx.toSp() })
   }
 
   private fun f(v: Float) = if (v.isNaN()) "nan" else ((v * 100).roundToInt() / 100f).toString()
