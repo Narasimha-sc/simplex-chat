@@ -65,10 +65,10 @@ jobs:
           echo "    extra-include-dirs: $openssl_windows_style_path\include" >> cabal.project.local
           echo "    extra-lib-dirs: $openssl_windows_style_path" >> cabal.project.local
 
-          rm -rf dist-newstyle/src/direct-sq* dist-newstyle/src/simplexmq*
+          rm -rf dist-newstyle/src/direct-sq* dist-newstyle/src/simplexmq* dist-newstyle/src/hs-jpeg-t* dist-newstyle/src/JuicyPixe*
           sed -i "s/, unix /--, unix /" simplex-chat.cabal
           cabal build -j
-          rm -rf dist-newstyle/src/direct-sq* dist-newstyle/src/simplexmq*
+          rm -rf dist-newstyle/src/direct-sq* dist-newstyle/src/simplexmq* dist-newstyle/src/hs-jpeg-t* dist-newstyle/src/JuicyPixe*
 
       - name: Build Desktop MSI
         shell: msys2 {0}
@@ -85,3 +85,4 @@ jobs:
           path: apps/multiplatform/release/main/msi/*.msi
           if-no-files-found: error
           retention-days: 30
+
