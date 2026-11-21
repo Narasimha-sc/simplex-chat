@@ -20,8 +20,8 @@ struct MemberSupportView: View {
     var body: some View {
         viewBody()
             .onAppear {
-                Task {
-                    await chatModel.loadGroupMembers(groupInfo)
+                if !chatModel.membersLoaded || chatModel.groupMembers.first.map({ $0.wrapped.groupId != groupInfo.groupId }) == true {
+                    Task { await chatModel.loadGroupMembers(groupInfo) }
                 }
             }
             .toolbar {
@@ -92,8 +92,8 @@ struct MemberSupportView: View {
                 .frame(width: 1, height: 1)
                 .hidden()
             }
-            .if(!memberWithChat.wrapped.memberPending && memberWithChat.wrapped.supportChatNotRead) { v in
-                v.swipeActions(edge: .leading, allowsFullSwipe: true) {
+            .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                if !memberWithChat.wrapped.memberPending && memberWithChat.wrapped.supportChatNotRead {
                     Button {
                         Task { await markSupportChatRead(groupInfo, memberWithChat.wrapped) }
                     } label: {
