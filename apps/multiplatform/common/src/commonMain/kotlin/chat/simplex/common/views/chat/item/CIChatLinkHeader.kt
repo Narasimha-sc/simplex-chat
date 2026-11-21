@@ -2,6 +2,7 @@ package chat.simplex.common.views.chat.item
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.*
+import chat.simplex.common.platform.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -11,6 +12,7 @@ import androidx.compose.ui.unit.sp
 import chat.simplex.common.model.*
 import chat.simplex.common.ui.theme.*
 import chat.simplex.common.views.helpers.ProfileImage
+import chat.simplex.common.views.helpers.centeredIn
 import chat.simplex.res.*
 import dev.icerock.moko.resources.compose.stringResource
 
@@ -29,10 +31,11 @@ fun CIChatLinkHeader(
       Modifier.defaultMinSize(minWidth = 220.dp)
     ) {
       ProfileImage(
-        size = 54.dp,
+        size = 45.dp,
         image = chatLink.image,
         icon = chatLink.iconRes,
-        color = if (isInDarkTheme()) FileDark else FileLight
+        color = if (isInDarkTheme()) FileDark else FileLight,
+        modifier = Modifier.centeredIn(54.dp)
       )
       Spacer(Modifier.width(8.dp))
       Column(

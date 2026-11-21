@@ -9,6 +9,7 @@ import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.*
+import chat.simplex.common.platform.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -188,7 +189,7 @@ fun ChatItemInfoView(chatRh: Long?, ci: ChatItem, ciInfo: ChatItemInfo, devTools
     }
 
     Row(verticalAlignment = Alignment.CenterVertically) {
-      ChatInfoImage(forwardedFromItem.chatInfo, size = 57.dp)
+      ChatInfoImage(forwardedFromItem.chatInfo, size = 47.5.dp, modifier = Modifier.centeredIn(57.dp))
       Column(
         modifier = Modifier
           .padding(start = 15.dp)
@@ -377,7 +378,7 @@ fun ChatItemInfoView(chatRh: Long?, ci: ChatItem, ciInfo: ChatItemInfo, devTools
     SectionItemView(
       padding = PaddingValues(horizontal = 0.dp)
     ) {
-      MemberProfileImage(size = 36.dp, member)
+      MemberProfileImage(size = 30.dp, member, modifier = Modifier.centeredIn(36.dp))
       Spacer(Modifier.width(DEFAULT_SPACE_AFTER_ICON))
       NameWithBadge(
         member.chatViewName,

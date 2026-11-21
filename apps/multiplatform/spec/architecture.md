@@ -130,13 +130,13 @@ All JNI declarations reside in [`Core.kt`](../common/src/commonMain/kotlin/chat/
 | 2 | [`pipeStdOutToSocket()`](../common/src/commonMain/kotlin/chat/simplex/common/platform/Core.kt#L20) | `external fun pipeStdOutToSocket(socketName: String): Int` | 20 | Redirect Haskell stdout to Android local socket for logging |
 | 3 | [`chatMigrateInit()`](../common/src/commonMain/kotlin/chat/simplex/common/platform/Core.kt#L25) | `external fun chatMigrateInit(dbPath: String, dbKey: String, confirm: String): Array<Any>` | 25 | Initialize database with migration; returns `[jsonResult, chatCtrl]` |
 | 4 | [`chatCloseStore()`](../common/src/commonMain/kotlin/chat/simplex/common/platform/Core.kt#L26) | `external fun chatCloseStore(ctrl: ChatCtrl): String` | 26 | Close database store |
-| 5 | [`chatSendCmdRetry()`](../common/src/commonMain/kotlin/chat/simplex/common/platform/Core.kt#L27) | `external fun chatSendCmdRetry(ctrl: ChatCtrl, msg: String, retryNum: Int): String` | 27 | Send command to core with retry count |
+| 5 | [`chatSendCmdRetry()`](../common/src/commonMain/kotlin/chat/simplex/common/platform/Core.kt#L27) | `@JvmName("chatSendCmdRetry") external fun nativeChatSendCmdRetry(ctrl: ChatCtrl, msg: String, retryNum: Int): String`, called through [`var chatSendCmdRetry`](../common/src/commonMain/kotlin/chat/simplex/common/platform/Core.kt#L48), which tests replace | 27 | Send command to core with retry count |
 | 6 | [`chatSendRemoteCmdRetry()`](../common/src/commonMain/kotlin/chat/simplex/common/platform/Core.kt#L28) | `external fun chatSendRemoteCmdRetry(ctrl: ChatCtrl, rhId: Int, msg: String, retryNum: Int): String` | 28 | Send command to remote host |
 | 7 | [`chatRecvMsg()`](../common/src/commonMain/kotlin/chat/simplex/common/platform/Core.kt#L29) | `external fun chatRecvMsg(ctrl: ChatCtrl): String` | 29 | Receive message (non-blocking) |
 | 8 | [`chatRecvMsgWait()`](../common/src/commonMain/kotlin/chat/simplex/common/platform/Core.kt#L30) | `external fun chatRecvMsgWait(ctrl: ChatCtrl, timeout: Int): String` | 30 | Receive message with timeout (blocking up to `timeout` microseconds) |
-| 9 | [`chatParseMarkdown()`](../common/src/commonMain/kotlin/chat/simplex/common/platform/Core.kt#L31) | `external fun chatParseMarkdown(str: String): String` | 31 | Parse markdown formatting |
+| 9 | [`chatParseMarkdown()`](../common/src/commonMain/kotlin/chat/simplex/common/platform/Core.kt#L31) | `@JvmName("chatParseMarkdown") external fun nativeChatParseMarkdown(str: String): String`, called through [`var chatParseMarkdown`](../common/src/commonMain/kotlin/chat/simplex/common/platform/Core.kt#L49), which tests replace | 31 | Parse markdown formatting |
 | 10 | [`chatParseServer()`](../common/src/commonMain/kotlin/chat/simplex/common/platform/Core.kt#L32) | `external fun chatParseServer(str: String): String` | 32 | Parse SMP/XFTP server address |
-| 11 | [`chatParseUri()`](../common/src/commonMain/kotlin/chat/simplex/common/platform/Core.kt#L33) | `external fun chatParseUri(str: String, safe: Int): String` | 33 | Parse SimpleX connection URI |
+| 11 | [`chatParseUri()`](../common/src/commonMain/kotlin/chat/simplex/common/platform/Core.kt#L33) | `@JvmName("chatParseUri") external fun nativeChatParseUri(str: String, safe: Int): String`, called through [`var chatParseUri`](../common/src/commonMain/kotlin/chat/simplex/common/platform/Core.kt#L50), which tests replace | 33 | Parse SimpleX connection URI |
 | 12 | [`chatPasswordHash()`](../common/src/commonMain/kotlin/chat/simplex/common/platform/Core.kt#L34) | `external fun chatPasswordHash(pwd: String, salt: String): String` | 34 | Hash password with salt |
 | 13 | [`chatValidName()`](../common/src/commonMain/kotlin/chat/simplex/common/platform/Core.kt#L35) | `external fun chatValidName(name: String): String` | 35 | Validate/sanitize display name |
 | 14 | [`chatParseBadgeCode()`](../common/src/commonMain/kotlin/chat/simplex/common/platform/Core.kt#L36) | `external fun chatParseBadgeCode(code: String): String` | 36 | Canonical form of a badge code, or an empty string |
@@ -248,9 +248,9 @@ main(args)
   +-- showApp()                          // Compose window with AppScreen()
 ```
 
-[`showApp()`](../common/src/desktopMain/kotlin/chat/simplex/common/DesktopApp.kt#L33) creates a Compose `Window` with error recovery -- if a crash occurs, it closes the offending modal/view and re-opens the window.
+[`showApp()`](../common/src/desktopMain/kotlin/chat/simplex/common/DesktopApp.kt#L34) creates a Compose `Window` with error recovery -- if a crash occurs, it closes the offending modal/view and re-opens the window.
 
-[`showWindow()`](../common/src/desktopMain/kotlin/chat/simplex/common/DesktopApp.kt#L258) un-minimizes and raises the window when a second launch or a link reaches the running app. On Linux it also sends `_NET_ACTIVE_WINDOW` through [`requestX11Activation()`](../common/src/desktopMain/kotlin/chat/simplex/common/WindowActivation.kt#L17), because wlroots compositors such as Sway ignore the raise that AWT's `toFront()` sends under XWayland. On Windows the second process, which the browser left holding the foreground right, calls `AllowSetForegroundWindow` before it signals so that the running instance may raise its window. During a crash restart `showWindow()` skips the disposed window, so it does not come back; the new window opens visible.
+[`showWindow()`](../common/src/desktopMain/kotlin/chat/simplex/common/DesktopApp.kt#L259) un-minimizes and raises the window when a second launch or a link reaches the running app. On Linux it also sends `_NET_ACTIVE_WINDOW` through [`requestX11Activation()`](../common/src/desktopMain/kotlin/chat/simplex/common/WindowActivation.kt#L17), because wlroots compositors such as Sway ignore the raise that AWT's `toFront()` sends under XWayland. On Windows the second process, which the browser left holding the foreground right, calls `AllowSetForegroundWindow` before it signals so that the running instance may raise its window. During a crash restart `showWindow()` skips the disposed window, so it does not come back; the new window opens visible.
 
 [`initApp()`](../common/src/desktopMain/kotlin/chat/simplex/common/platform/AppCommon.desktop.kt#L21) sets the `ntfManager` implementation (desktop notifications via `NtfManager` in `common/model/`) and calls `initChatControllerOnStart()`.
 
@@ -260,10 +260,10 @@ main(args)
 
 ### Receiver Coroutine
 
-[`ChatController.startReceiver()`](../common/src/commonMain/kotlin/chat/simplex/common/model/SimpleXAPI.kt#L660) launches a coroutine on `Dispatchers.IO` that continuously polls for events from the Haskell core:
+[`ChatController.startReceiver()`](../common/src/commonMain/kotlin/chat/simplex/common/model/SimpleXAPI.kt#L661) launches a coroutine on `Dispatchers.IO` that continuously polls for events from the Haskell core:
 
 ```kotlin
-// SimpleXAPI.kt line 660
+// SimpleXAPI.kt line 661
 private fun startReceiver() {
     if (receiverJob != null || chatCtrl == null) return  // guard against double-start
     receiverJob = CoroutineScope(Dispatchers.IO).launch {
@@ -297,15 +297,15 @@ private fun startReceiver() {
 
 ### Message Reception
 
-[`recvMsg()`](../common/src/commonMain/kotlin/chat/simplex/common/model/SimpleXAPI.kt#L829) calls `chatRecvMsgWait(ctrl, MESSAGE_TIMEOUT)` where `MESSAGE_TIMEOUT = 300_000_000` microseconds (300 seconds). Returns `null` on timeout (empty string from Haskell), otherwise deserializes the JSON response to an `API` instance.
+[`recvMsg()`](../common/src/commonMain/kotlin/chat/simplex/common/model/SimpleXAPI.kt#L830) calls `chatRecvMsgWait(ctrl, MESSAGE_TIMEOUT)` where `MESSAGE_TIMEOUT = 300_000_000` microseconds (300 seconds). Returns `null` on timeout (empty string from Haskell), otherwise deserializes the JSON response to an `API` instance.
 
 ### Command Sending
 
-[`sendCmd()`](../common/src/commonMain/kotlin/chat/simplex/common/model/SimpleXAPI.kt#L804) runs on `Dispatchers.IO`, serializes the command via `CC.cmdString`, calls `chatSendCmdRetry()` (or `chatSendRemoteCmdRetry()` for remote hosts), deserializes the response, and logs terminal items.
+[`sendCmd()`](../common/src/commonMain/kotlin/chat/simplex/common/model/SimpleXAPI.kt#L805) runs on `Dispatchers.IO`, serializes the command via `CC.cmdString`, calls `chatSendCmdRetry()` (or `chatSendRemoteCmdRetry()` for remote hosts), deserializes the response, and logs terminal items.
 
 ### Event Processing
 
-[`processReceivedMsg()`](../common/src/commonMain/kotlin/chat/simplex/common/model/SimpleXAPI.kt#L2568) is a large `when` block that dispatches on the `CR` (ChatResponse) type:
+[`processReceivedMsg()`](../common/src/commonMain/kotlin/chat/simplex/common/model/SimpleXAPI.kt#L2569) is a large `when` block that dispatches on the `CR` (ChatResponse) type:
 
 - `CR.ContactConnected` -- update contact in `ChatModel`
 - `CR.NewChatItems` -- add items to chat, trigger notifications

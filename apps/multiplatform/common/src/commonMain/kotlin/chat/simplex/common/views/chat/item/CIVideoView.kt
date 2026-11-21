@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CornerSize
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.*
+import chat.simplex.common.platform.Text
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.*
@@ -43,10 +44,12 @@ fun CIVideoView(
     Modifier.layoutId(CHAT_IMAGE_LAYOUT_ID)
       .then(
         if (!smallView) {
-          val w = if (preview.width * 0.97 <= preview.height) videoViewFullWidth(LocalWindowWidth()) * 0.75f else DEFAULT_MAX_IMAGE_WIDTH
+          val tall = isTallMedia(preview.width, preview.height)
+          val fixed = fixedMediaWidth(tall)
+          val w = fixed ?: DEFAULT_MAX_IMAGE_WIDTH
           // Size the media box from the preview aspect ratio (as CIImageView does), else the unprepared player surface
           // expands to PriorityLayout's max height and shows as a black strip; height tracks the clamped width (#7223).
-          Modifier.width(w).layout { measurable, constraints ->
+          Modifier.mediaWidth(fixed, tall).layout { measurable, constraints ->
             val width = constraints.maxWidth.coerceAtMost(w.roundToPx().coerceAtLeast(0))
             val height = (width * (preview.height.toFloat() / preview.width.toFloat()).coerceAtMost(2.33f)).roundToInt().coerceAtMost(constraints.maxHeight)
             val placeable = measurable.measure(Constraints.fixed(width, height))
@@ -236,10 +239,10 @@ private fun SmallVideoView(
   val brokenVideo by rememberSaveable(uri.path) { player.brokenVideo }
   Box {
     val windowWidth = LocalWindowWidth()
-    val width = remember(preview) { if (preview.width * 0.97 <= preview.height) videoViewFullWidth(windowWidth) * 0.75f else DEFAULT_MAX_IMAGE_WIDTH }
+    val fullWidth = remember(preview) { videoViewFullWidth(windowWidth) }
     PlayerView(
       player,
-      width,
+      Modifier.mediaContentWidth(fixedMediaWidth(isTallMedia(preview.width, preview.height), fullWidth)),
       onClick = openFullscreen,
       onLongClick = {},
       {}
@@ -296,10 +299,10 @@ private fun VideoView(
   val onLongClick = { showMenu.value = true }
   Box {
     val windowWidth = LocalWindowWidth()
-    val width = remember(preview) { if (preview.width * 0.97 <= preview.height) videoViewFullWidth(windowWidth) * 0.75f else DEFAULT_MAX_IMAGE_WIDTH }
+    val fullWidth = remember(preview) { videoViewFullWidth(windowWidth) }
     PlayerView(
       player,
-      width,
+      Modifier.mediaContentWidth(fixedMediaWidth(isTallMedia(preview.width, preview.height), fullWidth)),
       onClick = openFullscreen,
       onLongClick = onLongClick,
       stop
@@ -315,7 +318,7 @@ private fun VideoView(
 }
 
 @Composable
-expect fun PlayerView(player: VideoPlayer, width: Dp, onClick: () -> Unit, onLongClick: () -> Unit, stop: () -> Unit)
+expect fun PlayerView(player: VideoPlayer, modifier: Modifier, onClick: () -> Unit, onLongClick: () -> Unit, stop: () -> Unit)
 
 @Composable
 private fun BoxScope.PlayButton(error: Boolean = false, sizeMultiplier: Float = 1f, onLongClick: () -> Unit, onClick: () -> Unit) {
@@ -421,12 +424,12 @@ fun VideoPreviewImageView(
   onLongClick: () -> Unit
 ) {
   val windowWidth = LocalWindowWidth()
-  val width = remember(preview) { if (preview.width * 0.97 <= preview.height) videoViewFullWidth(windowWidth) * 0.75f else DEFAULT_MAX_IMAGE_WIDTH }
+  val fullWidth = remember(preview) { videoViewFullWidth(windowWidth) }
   Image(
     preview,
     contentDescription = stringResource(MR.strings.video_descr),
     modifier = Modifier
-      .width(width)
+      .mediaContentWidth(fixedMediaWidth(isTallMedia(preview.width, preview.height), fullWidth))
       .combinedClickable(
         onLongClick = onLongClick,
         onClick = onClick

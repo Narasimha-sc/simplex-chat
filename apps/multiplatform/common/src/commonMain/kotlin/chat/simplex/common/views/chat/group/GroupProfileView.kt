@@ -6,6 +6,7 @@ import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.*
+import chat.simplex.common.platform.Text
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
@@ -119,7 +120,7 @@ fun GroupProfileLayout(
             ) {
               Box(contentAlignment = Alignment.TopEnd) {
                 Box(contentAlignment = Alignment.Center) {
-                  ProfileImage(108.dp, profileImage.value, icon = groupInfo.chatIconName, color = MaterialTheme.colors.secondary.copy(alpha = 0.1f))
+                  ProfileImage(90.dp, profileImage.value, icon = groupInfo.chatIconName, color = MaterialTheme.colors.secondary.copy(alpha = 0.1f), modifier = Modifier.centeredIn(108.dp))
                   EditImageButton { scope.launch { bottomSheetModalState.show() } }
                 }
                 if (profileImage.value != null) {

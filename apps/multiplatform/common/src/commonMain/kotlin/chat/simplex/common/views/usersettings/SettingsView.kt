@@ -11,6 +11,7 @@ import androidx.compose.desktop.ui.tooling.preview.Preview
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.*
+import chat.simplex.common.platform.Text
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
@@ -365,7 +366,7 @@ fun AppVersionItem(showVersion: () -> Unit, versionInfo: Pair<String, Int?> = ap
 }
 
 @Composable fun ProfilePreview(profileOf: NamedChat, size: Dp = 60.dp, iconColor: Color = MaterialTheme.colors.secondaryVariant, textColor: Color = MaterialTheme.colors.onBackground, stopped: Boolean = false, badge: LocalBadge? = null) {
-  ProfileImage(size = size, image = profileOf.image, color = iconColor)
+  ProfileImage(size = size - 10.dp, image = profileOf.image, color = iconColor, modifier = Modifier.centeredIn(size))
   Spacer(Modifier.padding(horizontal = 8.dp))
   Column(Modifier.height(size), verticalArrangement = Arrangement.Center) {
     NameWithBadge(

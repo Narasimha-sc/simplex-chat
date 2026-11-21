@@ -2,7 +2,7 @@ package chat.simplex.common.views.chatlist
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.MaterialTheme
-import androidx.compose.material.Text
+import chat.simplex.common.platform.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
@@ -21,7 +21,7 @@ import chat.simplex.res.*
 @Composable
 fun ContactRequestView(contactRequest: ChatInfo.ContactRequest) {
   Row {
-    ChatInfoImage(contactRequest, size = 72.dp * fontSizeSqrtMultiplier)
+    ChatInfoImage(contactRequest, size = 60.dp * fontSizeSqrtMultiplier, modifier = Modifier.centeredIn(72.dp * fontSizeSqrtMultiplier))
     Column(
       modifier = Modifier
         .padding(start = 8.dp, end = 8.sp.toDp())

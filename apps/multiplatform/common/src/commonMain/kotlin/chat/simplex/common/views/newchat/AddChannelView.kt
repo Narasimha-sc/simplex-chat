@@ -8,6 +8,7 @@ import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.*
+import chat.simplex.common.platform.Text
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
@@ -277,7 +278,7 @@ private fun ProfileStepView(
           ) {
             Box(contentAlignment = Alignment.TopEnd) {
               Box(contentAlignment = Alignment.Center) {
-                ProfileImage(128.dp, image = profileImage.value, icon = MR.images.ic_bigtop_updates_circle_filled)
+                ProfileImage(107.dp, image = profileImage.value, icon = MR.images.ic_avatar_channel, modifier = Modifier.centeredIn(128.dp))
                 EditImageButton { scope.launch { bottomSheetModalState.show() } }
               }
               if (profileImage.value != null) {
@@ -415,7 +416,7 @@ private fun ProgressStepView(
         Modifier.fillMaxWidth().padding(bottom = 8.dp),
         contentAlignment = Alignment.Center
       ) {
-        ProfileImage(108.dp, image = gInfo.groupProfile.image, icon = MR.images.ic_bigtop_updates_circle_filled)
+        ProfileImage(90.dp, image = gInfo.groupProfile.image, icon = MR.images.ic_avatar_channel, modifier = Modifier.centeredIn(108.dp))
       }
       Text(
         gInfo.groupProfile.displayName,

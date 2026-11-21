@@ -18,6 +18,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.*
+import androidx.compose.material.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -381,9 +382,9 @@ fun IncomingCallLockScreenAlertLayout(
     Spacer(Modifier.fillMaxHeight().weight(1f))
     if (callOnLockScreen == CallOnLockScreen.ACCEPT) {
       if (chatModel.controller.appPrefs.notificationPreviewMode.get() == NotificationPreviewMode.HIDDEN.name) {
-        ProfileImage(size = 192.dp)
+        ProfileImage(size = 160.dp, modifier = Modifier.centeredIn(192.dp))
       } else {
-        ProfileImage(size = 192.dp, image = invitation.contact.profile.image, icon = invitation.contact.chatIconName)
+        ProfileImage(size = 160.dp, image = invitation.contact.profile.image, icon = invitation.contact.chatIconName, modifier = Modifier.centeredIn(192.dp))
         Text(invitation.contact.chatViewName, style = MaterialTheme.typography.h2)
       }
       Spacer(Modifier.fillMaxHeight().weight(1f))

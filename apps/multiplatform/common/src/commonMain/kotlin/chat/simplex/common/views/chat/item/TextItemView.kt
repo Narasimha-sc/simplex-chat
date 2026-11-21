@@ -7,7 +7,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.material.MaterialTheme
-import androidx.compose.material.Text
+import chat.simplex.common.platform.Text
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
@@ -211,14 +211,16 @@ fun MarkdownText (
     if (isRtl(text.subSequence(0, kotlin.math.min(50, text.length)))) LayoutDirection.Rtl else LayoutDirection.Ltr
   }
   val metaCopy = if (meta != null) {
-    metaReserveCopy(meta, chatTTL, encrypted, signedFileVerified, MaterialTheme.colors.secondary, showViaProxy = showViaProxy, showTimestamp = showTimestamp, breakBefore = !LocalTerminalLayout.current && range?.isEmpty() != true)
+    metaReserveCopy(meta, chatTTL, encrypted, signedFileVerified, MaterialTheme.colors.secondary, showViaProxy = showViaProxy, showTimestamp = showTimestamp, breakBefore = range?.isEmpty() != true)
   } else null
   if (blockLayout && formattedText != null && markdownBlocks != null && range == null && (prefix == null || blockTextRanges(markdownBlocks).isNotEmpty())) {
     val direction = LocalLayoutDirection.current
     val terminal = LocalTerminalLayout.current
-    val trailingEmptyLines = trailingEmptyLines(text, formattedText, markdownBlocks)
-    val ruleMinWidth = if (terminal && metaCopy != null && markdownBlocks.isNotEmpty() && markdownBlocks.all { it is MarkdownBlock.Rule }) {
-      with(LocalDensity.current) { rememberTextMeasurer().measure(metaCopy, style).size.width.toDp() }
+    val trailingEmptyLines = if (terminal) 0 else trailingEmptyLines(text, formattedText, markdownBlocks)
+    val ruleMinWidth = if (terminal && meta != null && markdownBlocks.isNotEmpty() && markdownBlocks.all { it is MarkdownBlock.Rule }) {
+      val copy = metaReserveCopy(meta, chatTTL, encrypted, signedFileVerified, MaterialTheme.colors.secondary, showViaProxy = showViaProxy, showTimestamp = showTimestamp)
+      val laidOut = platformText(copy, style)
+      with(LocalDensity.current) { rememberTextMeasurer().measure(laidOut.text, laidOut.style).size.width.toDp() }
     } else 0.dp
     CompositionLocalProvider(LocalLayoutDirection provides textLayoutDirection) {
       MarkdownBlocks(
@@ -626,11 +628,12 @@ fun ClickableText(
     }
   }
 
+  val laidOut = platformText(text, style)
   BasicText(
-    text = text,
+    text = laidOut.text,
     modifier = modifier.then(selectionHighlight(selectionRange, text.length, layoutResult)).then(pressIndicator)
       .onGloballyPositioned { textCoordinates.value = it },
-    style = style,
+    style = laidOut.style,
     softWrap = softWrap,
     overflow = overflow,
     maxLines = maxLines,
@@ -653,11 +656,12 @@ private fun SelectableText(
   onTextLayoutResult: ((TextLayoutResult) -> Unit)? = null
 ) {
   val layoutResult = remember { mutableStateOf<TextLayoutResult?>(null) }
+  val laidOut = platformText(text, style)
 
   BasicText(
-    text = text,
+    text = laidOut.text,
     modifier = modifier.pointerHoverIcon(PointerIcon.Text).then(selectionHighlight(selectionRange, text.length, layoutResult)),
-    style = style,
+    style = laidOut.style,
     softWrap = softWrap,
     maxLines = maxLines,
     overflow = overflow,

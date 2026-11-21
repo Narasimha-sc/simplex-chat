@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CornerSize
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.*
+import chat.simplex.common.platform.Text
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
@@ -223,9 +224,10 @@ fun CIFileView(
     if (!smallView) {
       val secondaryColor = MaterialTheme.colors.secondary
       val encrypted = if (file?.fileSource == null) null else file.fileSource.cryptoArgs != null
+      val showStatus = shownStatus(true, meta, showTimestamp)
       val metaReserve = buildAnnotatedString {
         withStyle(reserveTimestampStyle) {
-          append(reserveSpaceForMeta(meta, chatTTL, encrypted, secondaryColor = secondaryColor, showViaProxy = showViaProxy, showTimestamp = showTimestamp, signedFileVerified = file?.loaded))
+          append(reserveSpaceForMeta(meta, chatTTL, encrypted, secondaryColor = secondaryColor, showStatus = showStatus, showViaProxy = showViaProxy, showTimestamp = showTimestamp, signedFileVerified = file?.loaded))
         }
       }
       if (file != null) {

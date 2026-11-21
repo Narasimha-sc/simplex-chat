@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.*
+import androidx.compose.material.Text
 import androidx.compose.runtime.*
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
@@ -395,7 +396,7 @@ private fun ActiveCallOverlayLayout(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
           ) {
-            ProfileImage(size = 192.dp, image = call.contact.profile.image, icon = call.contact.chatIconName)
+            ProfileImage(size = 160.dp, image = call.contact.profile.image, icon = call.contact.chatIconName, modifier = Modifier.centeredIn(192.dp))
             AudioCallInfoView(call)
           }
         }

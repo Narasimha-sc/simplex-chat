@@ -8,6 +8,7 @@ import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.*
+import chat.simplex.common.platform.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -320,7 +321,9 @@ class AlertManager {
                 Modifier.fillMaxWidth().padding(horizontal = DEFAULT_PADDING),
                 horizontalAlignment = Alignment.CenterHorizontally
               ) {
-                profileImage()
+                Box(Modifier.centeredIn(138.dp)) {
+                  profileImage()
+                }
                 Spacer(Modifier.height(DEFAULT_PADDING_HALF))
                 val nameFontSize = MaterialTheme.typography.h4.fontSize
                 Text(

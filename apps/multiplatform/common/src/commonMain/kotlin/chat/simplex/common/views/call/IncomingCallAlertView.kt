@@ -5,6 +5,7 @@ import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.*
+import chat.simplex.common.platform.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -19,6 +20,7 @@ import chat.simplex.common.platform.*
 import chat.simplex.common.ui.theme.*
 import chat.simplex.common.views.chat.item.previewDate
 import chat.simplex.common.views.helpers.ProfileImage
+import chat.simplex.common.views.helpers.centeredIn
 import chat.simplex.common.views.usersettings.ProfilePreview
 import chat.simplex.res.*
 
@@ -75,7 +77,7 @@ fun IncomingCallInfo(invitation: RcvCallInvitation, chatModel: ChatModel) {
   @Composable fun CallIcon(icon: Painter, descr: String) = Icon(icon, descr, tint = SimplexGreen)
   Row(verticalAlignment = Alignment.CenterVertically) {
     if (chatModel.users.size > 1) {
-      ProfileImage(size = 32.dp, image = invitation.user.profile.image, color = MaterialTheme.colors.secondaryVariant)
+      ProfileImage(size = 27.dp, image = invitation.user.profile.image, color = MaterialTheme.colors.secondaryVariant, modifier = Modifier.centeredIn(32.dp))
       Spacer(Modifier.width(4.dp))
     }
     if (invitation.callType.media == CallMediaType.Video) CallIcon(painterResource(MR.images.ic_videocam_filled), stringResource(MR.strings.icon_descr_video_call))

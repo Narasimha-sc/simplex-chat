@@ -5,7 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.MaterialTheme
-import androidx.compose.material.Text
+import chat.simplex.common.platform.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -59,7 +59,7 @@ actual fun UserPickerUsersSection(
               ) {
                 val user = u.user
                 Box {
-                  ProfileImage(size = 55.dp, image = user.profile.image, color = iconColor)
+                  ProfileImage(size = 46.dp, image = user.profile.image, color = iconColor, modifier = Modifier.centeredIn(55.dp))
 
                   if (u.unreadCount > 0 && !user.activeUser) {
                     userUnreadBadge(u.unreadCount, user.showNtfs, true)

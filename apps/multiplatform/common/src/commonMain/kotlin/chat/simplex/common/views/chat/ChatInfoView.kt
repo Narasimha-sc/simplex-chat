@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.*
 import androidx.compose.material.*
+import chat.simplex.common.platform.Text
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
@@ -715,7 +716,7 @@ fun ChatInfoHeader(cInfo: ChatInfo, contact: Contact) {
     Modifier.padding(horizontal = DEFAULT_PADDING),
     horizontalAlignment = Alignment.CenterHorizontally
   ) {
-    ChatInfoImage(cInfo, size = 192.dp, iconColor = if (isInDarkTheme()) GroupDark else SettingsSecondaryLight)
+    ChatInfoImage(cInfo, size = 160.dp, iconColor = if (isInDarkTheme()) GroupDark else SettingsSecondaryLight, modifier = Modifier.centeredIn(192.dp))
     val displayName = contact.profile.displayName.trim()
     val badge = cInfo.nameBadge
     val text = buildAnnotatedString {

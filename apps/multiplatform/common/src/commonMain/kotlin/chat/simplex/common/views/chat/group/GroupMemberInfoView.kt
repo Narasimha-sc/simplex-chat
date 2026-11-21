@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.material.*
+import chat.simplex.common.platform.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -753,7 +754,7 @@ fun GroupMemberInfoHeader(member: GroupMember) {
     Modifier.padding(horizontal = 16.dp),
     horizontalAlignment = Alignment.CenterHorizontally
   ) {
-    MemberProfileImage(size = 192.dp, member, color = if (isInDarkTheme()) GroupDark else SettingsSecondaryLight)
+    MemberProfileImage(size = 160.dp, member, color = if (isInDarkTheme()) GroupDark else SettingsSecondaryLight, modifier = Modifier.centeredIn(192.dp))
     val displayName = member.displayName.trim() // alias if set
     val badge = member.nameBadge
     val text = buildAnnotatedString {
@@ -934,7 +935,8 @@ fun MemberProfileImage(
   mem: GroupMember,
   color: Color = MaterialTheme.colors.secondaryVariant,
   backgroundColor: Color? = null,
-  async: Boolean = false
+  async: Boolean = false,
+  modifier: Modifier = Modifier
 ) {
   ProfileImage(
     size = size,
@@ -943,7 +945,8 @@ fun MemberProfileImage(
     color = color,
     backgroundColor = backgroundColor,
     blurred = mem.blocked,
-    async = async
+    async = async,
+    modifier = modifier
   )
 }
 
@@ -954,11 +957,10 @@ fun PreviewPeerTypePlaceholders() {
     val peerTypes = listOf(null, ChatPeerType.Human, ChatPeerType.Agent, ChatPeerType.Bot)
     fun contactLink(peerType: ChatPeerType?) = MsgChatLink.Contact("", Profile.sampleData.copy(peerType = peerType), false)
     Column(Modifier.background(MaterialTheme.colors.background)) {
-      Row { peerTypes.forEach { MemberImage(GroupMember.sampleData.copy(memberProfile = LocalProfile.sampleData.copy(peerType = it))) } }
-      Row { peerTypes.forEach { ChatInfoImage(ChatInfo.ContactRequest(UserContactRequest(1, VersionRange(1, 1), "alice", LocalProfile.sampleData.copy(peerType = it), Clock.System.now(), Clock.System.now())), MEMBER_IMAGE_SIZE) } }
-      Row { peerTypes.forEach { ProfileImage(MEMBER_IMAGE_SIZE, null, contactLink(it).iconRes) } }
+      Row { peerTypes.forEach { MemberImage(GroupMember.sampleData.copy(memberProfile = LocalProfile.sampleData.copy(peerType = it)), 31.dp, Modifier.centeredIn(MEMBER_IMAGE_SIZE)) } }
+      Row { peerTypes.forEach { ChatInfoImage(ChatInfo.ContactRequest(UserContactRequest(1, VersionRange(1, 1), "alice", LocalProfile.sampleData.copy(peerType = it), Clock.System.now(), Clock.System.now())), 31.dp, modifier = Modifier.centeredIn(MEMBER_IMAGE_SIZE)) } }
+      Row { peerTypes.forEach { ProfileImage(31.dp, null, contactLink(it).iconRes, modifier = Modifier.centeredIn(MEMBER_IMAGE_SIZE)) } }
       Row { peerTypes.forEach { Icon(painterResource(contactLink(it).smallIconRes), null, Modifier.size(MEMBER_IMAGE_SIZE), MaterialTheme.colors.secondary) } }
-      Row { peerTypes.forEach { ProfileImageForActiveCall(MEMBER_IMAGE_SIZE, icon = peerTypeIcon(it)) } }
     }
   }
 }

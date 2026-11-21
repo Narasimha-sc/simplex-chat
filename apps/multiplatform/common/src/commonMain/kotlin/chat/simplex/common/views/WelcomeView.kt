@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.*
+import chat.simplex.common.platform.Text
 import androidx.compose.material.MaterialTheme.colors
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -102,7 +103,7 @@ fun CreateProfile(chatModel: ChatModel, close: () -> Unit) {
           ) {
             Box(contentAlignment = Alignment.TopEnd) {
               Box(contentAlignment = Alignment.Center) {
-                ProfileImage(128.dp, image = profileImage.value)
+                ProfileImage(107.dp, image = profileImage.value, modifier = Modifier.centeredIn(128.dp))
                 EditImageButton { scope.launch { bottomSheetModalState.show() } }
               }
               if (profileImage.value != null) {
@@ -435,11 +436,13 @@ fun ProfileNameField(name: MutableState<String>, placeholder: String = "", isVal
       .fillMaxWidth(),
     horizontalAlignment = Alignment.CenterHorizontally
   ) {
+    val field = platformTextFieldStyle(name.value, TextStyle(fontSize = 18.sp, color = colors.onBackground))
     BasicTextField(
       value = name.value,
       onValueChange = { name.value = it },
       modifier = if (focusRequester == null) modifier else modifier.focusRequester(focusRequester),
-      textStyle = TextStyle(fontSize = 18.sp, color = colors.onBackground),
+      textStyle = field.style,
+      visualTransformation = field.visualTransformation,
       singleLine = true,
       cursorBrush = SolidColor(MaterialTheme.colors.secondary),
       decorationBox = @Composable { innerTextField ->

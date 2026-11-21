@@ -3,6 +3,7 @@ package chat.simplex.common.views.chat.item
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.*
+import chat.simplex.common.platform.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -280,7 +281,7 @@ fun FramedItemView(
         val tailRendered = chatItemTailRendered(ci, tailVisible, revealed = true)
         Column(
           Modifier
-            .width(IntrinsicSize.Max)
+            .then(if (terminal && captionlessMedia) Modifier else Modifier.width(IntrinsicSize.Max))
             .padding(start = if (!sent && tailRendered) msgTailWidthDp else 0.dp, end = if (sent && tailRendered) msgTailWidthDp else 0.dp)
         ) {
           PriorityLayout(Modifier, CHAT_IMAGE_LAYOUT_ID, limitToPriorityWidth = !terminal || captionlessMedia) {
